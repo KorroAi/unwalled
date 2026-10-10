@@ -1,0 +1,11 @@
+asyncapi: '2.6.0'
+info: { title: Binance public market streams, version: '1' }
+servers:
+  public: { url: 'wss://stream.binance.com:9443', protocol: wss }
+channels:
+  /ws/btcusdt@trade:
+    subscribe:
+      message:
+        payload:
+          type: object
+          properties: { e: { type: string }, s: { type: string }, p: { type: string }, q: { type: string }, T: { type: integer } }

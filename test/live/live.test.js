@@ -90,4 +90,13 @@ describe("live websites", { skip: !enabled && "set UNIVERSAL_MCP_LIVE=1 to run" 
     const result = await call(search.name, { body: { query: "rust", hitsPerPage: 3 }, pick: "hits[*].title" });
     assert.match(result.text, /HTTP 200/, result.text);
   });
+
+  it("Binance public trade stream (AsyncAPI, WebSocket)", TIMEOUT, async () => {
+    const path = fileURLToPath(new URL("../fixtures/binance.asyncapi.yaml", import.meta.url));
+    const imported = await call("import_file", { name: "binance", path });
+    assert.equal(imported.isError, false, imported.text);
+    const prices = await call("binance__stream_ws_btcusdt_trade", { duration_seconds: 10, max_messages: 3, pick: "p" });
+    assert.equal(prices.isError, false, prices.text);
+    assert.equal(prices.text.split("\n").filter((line) => /^\[\+\d+ms\] "\d+\.\d+"$/.test(line)).length, 3, prices.text);
+  });
 });
