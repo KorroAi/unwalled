@@ -25,6 +25,7 @@ agent:  crates__get_api_v1_crates_crate(path={"crate": "tokio"}, pick="crate.max
 
 - **Many sources**: live browser capture, HAR files (devtools, mitmproxy, Charles, Proxyman: mobile and desktop apps too), OpenAPI 3 / Swagger 2 (JSON or YAML, found automatically, including behind a Swagger UI page),
   Google Discovery documents (YouTube Data and Analytics, Drive, Gmail, Sheets, Calendar and every other Google API), and local files: Postman collections, Insomnia exports, Bruno collection folders, shared recipes.
+- **cURL and JSON-RPC**: paste "Copy as cURL" commands to get tools without a browser (`import_curl`); JSON-RPC calls (Ethereum and Bitcoin nodes, Kodi, Transmission, Odoo...) become one tool per method.
 - **Realtime streams**: WebSocket and Server-Sent Events connections opened by the page are captured with their protocol (subscribe and auth frames, in order) and become tools that connect, replay the handshake and return the messages received for a chosen duration.
 - **REST and GraphQL**: GraphQL operations become one tool each, with typed variables; batched and persisted (hash-only) queries are supported. A raw `graphql` tool is added as well.
 - **Smart path templates**: `/api/users/42` → `/api/users/{user}`; a page you visited (`/crates/serde`) turns `/api/v1/crates/serde` into `/api/v1/crates/{crate}`; sibling URLs returning the same kind of data are merged.
@@ -89,6 +90,7 @@ The agent calls the management tools below, then the generated ones.
 | `discover` | Creates a recipe from a URL. Options: `mode` (`auto`, `openapi`, `browser`), `actions`, `interactive`, `duration_seconds`, `hosts` (extra API hosts), `include` (OpenAPI operation filter), `max_endpoints`, `merge`. |
 | `discover_har` | Creates a recipe from a `.har` file (absolute path). |
 | `import_file` | Creates a recipe from a local file or folder: OpenAPI / Swagger, Google Discovery document, Postman collection, Insomnia export, Bruno collection, HAR, or a recipe shared with `export_recipe`. Options: `base_url`, `variables`, `environment` (Bruno), `include`. |
+| `import_curl` | Creates tools from cURL commands (devtools "Copy as cURL", bash or Windows cmd). Nothing is sent while importing; credentials go to local secrets. |
 | `export_recipe` | Writes a recipe (never its secrets) to a JSON file. |
 | `watch` | Calls a read-only generated tool every `interval_seconds` for up to `duration_seconds`, and returns the changes (field by field for JSON); `until` stops early. |
 | `login` | Opens a visible browser on the recipe's profile so you can sign in; cookies are kept. |
@@ -122,6 +124,7 @@ For flows that are hard to script, use `interactive: true`: a window opens, you 
 | --- | --- |
 | Browser / HAR | one tool per REST endpoint (`<recipe>__get_api_items_item`), one per GraphQL operation (`<recipe>__gql_GetCart`), `<recipe>__graphql` when GraphQL is used, and `<recipe>__request` |
 | OpenAPI / imported files | one tool per operation (up to 60 by default), `<recipe>__routes` to list every route, and `<recipe>__request` |
+| Recipes with JSON-RPC | one tool per method (`<recipe>__rpc_eth_getBalance`) taking `params`, and `<recipe>__rpc` for any method |
 | Recipes with streams | one tool per WebSocket / event stream (`<recipe>__stream_ws_prices`) and `<recipe>__stream` for any `ws(s)://` or event-stream URL |
 
 Generated tools take `path`, `query` and `body` (or `variables` for GraphQL), plus:
@@ -181,6 +184,7 @@ universal-mcp discover crates "https://crates.io/search?q=serde" --actions '[{"g
 universal-mcp har myapp ./capture.har --host api.myapp.com
 universal-mcp import team-api ./Team.postman_collection.json --base-url https://api.example.com
 universal-mcp export crates ./crates-recipe.json
+universal-mcp curl myapi ./commands.txt
 universal-mcp login github https://github.com/login
 universal-mcp list
 universal-mcp inspect crates

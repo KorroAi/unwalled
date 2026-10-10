@@ -6,7 +6,9 @@ import { captureTraffic, validateActions } from "./discovery/capture.js";
 import { observationsFromHar } from "./discovery/har.js";
 import { inferEndpoints, navigationVariables } from "./discovery/infer.js";
 import { brunoToOpenApi, isBrunoCollection } from "./discovery/bruno.js";
+import { parseCurl, splitCurlCommands } from "./discovery/curl.js";
 import { describeFile } from "./discovery/files.js";
+import { inferJsonRpc } from "./discovery/jsonrpc.js";
 import { findOpenApi, normalizeOpenApi } from "./discovery/openapi.js";
 import { inferStreams, SECRET_FRAME_HOST, streamsFromHar } from "./realtime/infer.js";
 import { describeStreams } from "./realtime/tools.js";
@@ -38,6 +40,13 @@ function mergeByKey(older, newer, key) {
 }
 const restKey = (e) => `${e.method} ${e.origin}${e.pathTemplate}`;
 const streamKey = (s) => `${s.kind} ${s.url}`;
+const rpcKey = (m) => `${m.url} ${m.method}`;
+
+/** JSON-RPC methods of the observations; plain endpoints that only carried JSON-RPC are dropped. */
+function withJsonRpc(observations, endpoints) {
+  const { methods, rpcUrls } = inferJsonRpc(observations);
+  return { methods, endpoints: endpoints.filter((e) => !(e.method === "POST" && rpcUrls.has(`${e.origin}${e.pathTemplate}`))) };
+}
 const graphqlKey = (e) => `${e.method} ${e.url} ${e.operationName ?? e.query ?? JSON.stringify(e.extensions)}`;
 
 /** @param {Record<string, Record<string, string>>[]} sources */
@@ -221,15 +230,17 @@ export class Engine {
         variables: navigationVariables(capture.pageUrls, capture.typedTexts), maxEndpoints, secretCookies: false,
       });
       const realtime = inferStreams(capture.streams, { secretCookies: false });
+      const rpc = withJsonRpc(capture.observations, inferred.endpoints);
       const previous = this.recipes.get(name);
       const now = new Date().toISOString();
       const canMerge = merge && previous?.kind === "browser";
       const recipe = {
         schemaVersion: RECIPE_SCHEMA_VERSION, name, kind: "browser", source: { url },
         baseUrl: new URL(url).origin, createdAt: previous?.createdAt ?? now, updatedAt: now,
-        endpoints: canMerge ? mergeByKey(previous.endpoints, inferred.endpoints, restKey) : inferred.endpoints,
+        endpoints: canMerge ? mergeByKey(previous.endpoints, rpc.endpoints, restKey) : rpc.endpoints,
         graphql: canMerge ? mergeByKey(previous.graphql, inferred.graphql, graphqlKey) : inferred.graphql,
         streams: canMerge ? mergeByKey(previous.streams ?? [], realtime.streams, streamKey) : realtime.streams,
+        jsonrpc: canMerge ? mergeByKey(previous.jsonrpc ?? [], rpc.methods, rpcKey) : rpc.methods,
         warnings: [...capture.actionErrors, ...inferred.warnings],
         stats: inferred.stats,
       };
@@ -251,15 +262,17 @@ export class Engine {
     const inferred = inferEndpoints(har.observations, {
       variables: navigationVariables(har.pageUrls), maxEndpoints: maxEndpoints ?? this.config.maxEndpoints, secretCookies: true,
     });
+    const rpc = withJsonRpc(har.observations, inferred.endpoints);
     const previous = this.recipes.get(name);
     const now = new Date().toISOString();
     const canMerge = merge && previous?.kind === "har";
     const recipe = {
       schemaVersion: RECIPE_SCHEMA_VERSION, name, kind: "har", source: { harFile: harPath, domains: har.domains },
       baseUrl: har.baseUrl, createdAt: previous?.createdAt ?? now, updatedAt: now,
-      endpoints: canMerge ? mergeByKey(previous.endpoints, inferred.endpoints, restKey) : inferred.endpoints,
+      endpoints: canMerge ? mergeByKey(previous.endpoints, rpc.endpoints, restKey) : rpc.endpoints,
       graphql: canMerge ? mergeByKey(previous.graphql, inferred.graphql, graphqlKey) : inferred.graphql,
       streams: canMerge ? mergeByKey(previous.streams ?? [], realtime.streams, streamKey) : realtime.streams,
+      jsonrpc: canMerge ? mergeByKey(previous.jsonrpc ?? [], rpc.methods, rpcKey) : rpc.methods,
       warnings: inferred.warnings,
       stats: inferred.stats,
     };
@@ -310,6 +323,39 @@ export class Engine {
       await this.closeBrowser(name);
       return this.saveRecipe(recipe);
     });
+  }
+
+  /**
+   * Creates (or extends, with merge) a recipe from cURL commands, e.g. "Copy as cURL" from browser devtools.
+   * Nothing is sent while importing; credentials found in the commands are stored as host-scoped secrets.
+   * @param {{ name: string, commands: string | string[], merge?: boolean, maxEndpoints?: number }} options
+   */
+  async importCurl({ name, commands, merge = false, maxEndpoints }) {
+    assertRecipeName(name);
+    const list = splitCurlCommands(commands);
+    if (!list.length) throw new Error("No cURL command given.");
+    const warnings = [];
+    const observations = list.map((command, index) => {
+      const { observation, warnings: own } = parseCurl(command);
+      warnings.push(...own.map((w) => `command ${index + 1}: ${w}`));
+      return observation;
+    });
+    const inferred = inferEndpoints(observations, { variables: navigationVariables([]), maxEndpoints: maxEndpoints ?? this.config.maxEndpoints, secretCookies: true });
+    const rpc = withJsonRpc(observations, inferred.endpoints);
+    const previous = this.recipes.get(name);
+    const now = new Date().toISOString();
+    const canMerge = merge && previous?.kind === "har";
+    const recipe = {
+      schemaVersion: RECIPE_SCHEMA_VERSION, name, kind: "har", source: { curl: list.length + (canMerge ? (previous.source?.curl ?? 0) : 0) },
+      baseUrl: new URL(observations[0].url).origin, createdAt: previous?.createdAt ?? now, updatedAt: now,
+      endpoints: canMerge ? mergeByKey(previous.endpoints, rpc.endpoints, restKey) : rpc.endpoints,
+      graphql: canMerge ? mergeByKey(previous.graphql, inferred.graphql, graphqlKey) : inferred.graphql,
+      streams: canMerge ? (previous.streams ?? []) : [],
+      jsonrpc: canMerge ? mergeByKey(previous.jsonrpc ?? [], rpc.methods, rpcKey) : rpc.methods,
+      warnings: [...warnings, ...inferred.warnings],
+      stats: inferred.stats,
+    };
+    return this.withLock(name, async () => this.saveRecipe(recipe, inferred.secrets));
   }
 
   /**
@@ -397,6 +443,7 @@ export function describeRecipe(recipe, toolNames) {
     if (recipe.stats) lines.push(`Captured ${recipe.stats.observed} requests, ${recipe.stats.usable} usable.`);
     for (const op of recipe.graphql) lines.push(`  GraphQL ${op.operationType} ${op.operationName ?? "(anonymous)"} @ ${op.url} (${op.observed}×)`);
     lines.push(...describeStreams(recipe));
+    for (const m of recipe.jsonrpc ?? []) lines.push(`  JSON-RPC ${m.method} @ ${m.url} (${m.observed}×)`);
     for (const e of recipe.endpoints) lines.push(`  ${e.method} ${e.origin}${e.pathTemplate}${Object.keys(e.query).length ? `?${Object.keys(e.query).join("&")}` : ""} (${e.observed}×)`);
   }
   for (const warning of recipe.warnings ?? []) lines.push(`Warning: ${warning}`);

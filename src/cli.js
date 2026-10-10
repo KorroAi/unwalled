@@ -17,6 +17,7 @@ Usage:
                                                 OpenAPI, Swagger, Google Discovery, Postman, Insomnia, HAR,
                                                 exported recipe, or Bruno collection folder
   universal-mcp login <name> <url> [--duration <seconds>]
+  universal-mcp curl <name> <file.txt> [--merge] Create tools from cURL commands saved in a text file
   universal-mcp export <name> <file.json>       Write a recipe (no secrets) to share it; import it with "import"
   universal-mcp list                            List recipes
   universal-mcp inspect <name>                  Show a recipe as JSON
@@ -97,6 +98,13 @@ export async function main(argv) {
         expect(rest, 2, "import <name> <file>");
         const { resolve } = await import("node:path");
         const recipe = await engine.importFile({ name: rest[0], path: resolve(rest[1]), baseUrl: values["base-url"], include: values.include, hosts: values.host, merge: values.merge });
+        console.log(describeRecipe(recipe, toolNames(recipe.name)));
+        break;
+      }
+      case "curl": {
+        expect(rest, 2, "curl <name> <file.txt>");
+        const { readFileSync } = await import("node:fs");
+        const recipe = await engine.importCurl({ name: rest[0], commands: readFileSync(rest[1], "utf8"), merge: values.merge });
         console.log(describeRecipe(recipe, toolNames(recipe.name)));
         break;
       }

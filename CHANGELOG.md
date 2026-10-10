@@ -12,6 +12,8 @@
 - Protobuf and gRPC-web responses are decoded without schema (fields by number, trailers shown).
 - CSV, XML, RSS and Atom responses are converted to JSON.
 - Idempotent requests are retried on 429 / 502 / 503 / 504 (twice, `Retry-After` honoured up to 10 s).
+- `import_curl` (CLI `curl`): tools from cURL commands, bash or Windows cmd syntax, credentials stored as secrets.
+- JSON-RPC 1.0 / 2.0 (single and batch calls): one tool per method plus `__rpc`; the generic POST endpoint is dropped.
 
 ## 0.1.0 — 2026-10-10
 

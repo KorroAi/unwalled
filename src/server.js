@@ -96,6 +96,22 @@ const MANAGEMENT_TOOLS = [
     annotations: { title: "Watch a tool", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
   },
   {
+    name: "import_curl",
+    description:
+      'Create tools from cURL commands (browser devtools "Copy as cURL", API documentation examples). Nothing is sent while importing; ' +
+      "ids in paths become parameters and credentials (Authorization, cookies, API keys) are stored as local secrets, never in the recipe.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: NAME,
+        commands: { type: "array", items: { type: "string" }, description: "One or more cURL commands (bash or Windows cmd syntax)." },
+        merge: { type: "boolean", description: "Add to an existing recipe created from cURL or HAR." },
+      },
+      required: ["name", "commands"],
+    },
+    annotations: { title: "Import cURL commands", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  },
+  {
     name: "export_recipe",
     description: "Write a recipe to a JSON file to share it or move it to another machine. Recipes contain no secrets; import it with import_file.",
     inputSchema: {
@@ -216,6 +232,11 @@ export async function startServer(config) {
             durationMs: Math.min(Math.max(Number(args.duration_seconds ?? 300), 1), 3600) * 1000,
             until: args.until, onChange: onProgress,
           }).then((result) => text(result.text));
+        }
+        case "import_curl": {
+          const recipe = await engine.importCurl({ name: args.name, commands: args.commands, merge: args.merge });
+          notifyToolsChanged();
+          return text(describeRecipe(recipe, engine.toolsOf(recipe.name).map((t) => t.name)));
         }
         case "export_recipe": {
           const { path, bytes } = engine.exportRecipe({ name: args.name, path: args.path, overwrite: args.overwrite });
