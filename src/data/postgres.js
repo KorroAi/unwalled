@@ -218,6 +218,8 @@ export async function connectPostgres(url, { timeoutMs = 15_000 } = {}) {
      * @returns {Promise<{ columns: string[], rows: Record<string, unknown>[], truncated: boolean }>}
      */
     async query(sql, values = [], { maxRows = 200, statementTimeoutMs = 30_000 } = {}) {
+      const first = sql.replace(/^(\s|--[^\n]*\n|\/\*[\s\S]*?\*\/)*/, "");
+      if (!/^(select|with|show|explain|values|table)\b/i.test(first)) throw new Error("Only read statements are allowed (SELECT, WITH, SHOW, EXPLAIN, VALUES, TABLE).");
       await simple(`BEGIN READ ONLY; SET LOCAL statement_timeout = ${Math.max(1000, Math.floor(statementTimeoutMs))}`);
       try {
         const encoded = values.map((v) => (v === null || v === undefined ? null : Buffer.from(typeof v === "object" ? JSON.stringify(v) : String(v), "utf8")));

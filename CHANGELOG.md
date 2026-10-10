@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- MySQL / MariaDB data source: built-in client (TLS, caching_sha2_password with TLS or RSA, mysql_native_password), read-only session and transaction, statement timeout, `?` parameters escaped client-side.
+- Database clients refuse anything but reading statements before sending them (MySQL DDL would otherwise commit implicitly, outside the read-only transaction).
 - PostgreSQL data source: built-in client (protocol v3, TLS, SCRAM-SHA-256 / MD5 / cleartext), read-only transactions with statement timeout, typed results; `import_file` takes a `postgres://` address, kept with the secrets.
 - JSON served as text/plain or JavaScript, or behind an anti-hijacking prefix (`)]}'`, `while(1);`, `for(;;);`), is recognised in browser captures, HAR files and tool responses.
 - `oauth_login`: first OAuth sign-in (authorization code + PKCE, loopback redirect) for Google, GitHub, Microsoft, Spotify or any provider; the token is stored for the API host and refreshed automatically with the existing refresh support.

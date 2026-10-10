@@ -1,40 +1,47 @@
 // Tools of a local data recipe: "<recipe>__tables" (schema, row counts, samples) and "<recipe>__sql" (read-only SQL).
 import { statSync } from "node:fs";
 import { pick } from "../tools/pick.js";
+import { connectMysql, mysqlTables } from "./mysql.js";
 import { connectPostgres, postgresTables } from "./postgres.js";
+
+/** Database engines: connection, table listing, and how the agent should write queries for them. */
+const ENGINES = {
+  postgres: { connect: connectPostgres, tables: postgresTables, label: "PostgreSQL", placeholders: "$1, $2..." },
+  mysql: { connect: connectMysql, tables: mysqlTables, label: "MySQL / MariaDB", placeholders: "?" },
+};
 import { assertReadOnly, dataFiles, describeTable, openData } from "./source.js";
 
-/** Open PostgreSQL connections by address, closed after a few idle minutes. @type {Map<string, { pg: Promise<Awaited<ReturnType<typeof connectPostgres>>>, timer?: NodeJS.Timeout }>} */
-const postgres = new Map();
+/** Open database connections by address, closed after a few idle minutes. @type {Map<string, { pg: Promise<any>, timer?: NodeJS.Timeout }>} */
+const databases = new Map();
 
-/** @param {string} url */
-async function postgresConnection(url) {
-  let entry = postgres.get(url);
+/** @param {string} url @param {keyof typeof ENGINES} [engine] */
+async function dbConnection(url, engine = "postgres") {
+  let entry = databases.get(url);
   if (!entry) {
-    entry = { pg: connectPostgres(url) };
-    postgres.set(url, entry);
-    entry.pg.catch(() => postgres.delete(url));
+    entry = { pg: ENGINES[engine].connect(url) };
+    databases.set(url, entry);
+    entry.pg.catch(() => databases.delete(url));
   }
   clearTimeout(entry.timer);
   const current = entry;
   current.timer = setTimeout(async () => {
-    if (postgres.get(url) === current) postgres.delete(url);
+    if (databases.get(url) === current) databases.delete(url);
     (await current.pg.catch(() => null))?.close();
   }, IDLE_MS);
   current.timer.unref?.();
   return current.pg;
 }
 
-/** Runs fn on a cached connection, reconnecting once if the connection was lost. @template T @param {string} url @param {(pg: any) => Promise<T>} fn @returns {Promise<T>} */
-async function withPostgres(url, fn) {
+/** Runs fn on a cached connection, reconnecting once if the connection was lost. @template T @param {string} url @param {(pg: any) => Promise<T>} fn @param {keyof typeof ENGINES} [engine] @returns {Promise<T>} */
+async function withDatabase(url, fn, engine = "postgres") {
   try {
-    return await fn(await postgresConnection(url));
+    return await fn(await dbConnection(url, engine));
   } catch (error) {
     if (!/connection closed|ECONNRESET|EPIPE|did not answer/i.test(String(error?.message))) throw error;
-    const stale = postgres.get(url);
-    postgres.delete(url);
+    const stale = databases.get(url);
+    databases.delete(url);
     (await stale?.pg.catch(() => null))?.close();
-    return fn(await postgresConnection(url));
+    return fn(await dbConnection(url, engine));
   }
 }
 
@@ -74,8 +81,8 @@ async function connection(path) {
 
 /** Closes every cached connection (tests, shutdown). */
 export async function closeDataConnections() {
-  for (const [url, entry] of postgres) {
-    postgres.delete(url);
+  for (const [url, entry] of databases) {
+    databases.delete(url);
     clearTimeout(entry.timer);
     (await entry.pg.catch(() => null))?.close();
   }
@@ -96,7 +103,7 @@ const plain = (row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [k
  * @param {(recipe: any) => Promise<string>} [dataPath] where the data is (remote data is downloaded into a cache); for databases, their address
  */
 export function buildDataTools(recipe, name, maxOutputChars, dataPath = async (r) => r.source.path) {
-  if (recipe.source?.db === "postgres") return postgresTools(recipe, name, maxOutputChars, dataPath);
+  if (recipe.source?.db === "postgres" || recipe.source?.db === "mysql") return databaseTools(recipe, name, maxOutputChars, dataPath);
   const path = recipe.source.remote ? `${recipe.source.origin} (remote, refreshed every ${recipe.source.refreshSeconds ?? 300}s)` : recipe.source.path;
   const summary = (recipe.tables ?? []).map((t) => `${t.name}(${t.columns.map((c) => c.name).slice(0, 12).join(", ")}${t.columns.length > 12 ? ", …" : ""}) ${t.rows} rows`).join("; ");
   return [
@@ -165,21 +172,23 @@ export function buildDataTools(recipe, name, maxOutputChars, dataPath = async (r
 }
 
 /**
- * Tools of a PostgreSQL recipe: same names and arguments as file data, queries run in READ ONLY transactions.
+ * Tools of a database recipe (PostgreSQL, MySQL / MariaDB): same names and arguments as file data, queries run in READ ONLY transactions.
  * @param {any} recipe @param {(suffix: string) => string} name @param {number} maxOutputChars @param {(recipe: any) => Promise<string>} address
  */
-function postgresTools(recipe, name, maxOutputChars, address) {
+function databaseTools(recipe, name, maxOutputChars, address) {
   const where = recipe.source.origin;
+  const engine = /** @type {keyof typeof ENGINES} */ (recipe.source.db);
+  const { label, placeholders } = ENGINES[engine];
   const summary = (recipe.tables ?? []).slice(0, 40).map((t) => `${t.name}(${t.columns.map((c) => c.name).slice(0, 10).join(", ")}${t.columns.length > 10 ? ", …" : ""})`).join("; ");
   return [
     {
       name: name("tables"),
-      description: `[${recipe.name}] Tables and views of the PostgreSQL database ${where}: columns, types and estimated row counts. ${summary}`.slice(0, 1200),
+      description: `[${recipe.name}] Tables and views of the ${label} database ${where}: columns, types and estimated row counts. ${summary}`.slice(0, 1200),
       inputSchema: { type: "object", properties: { table: { type: "string", description: "Only this table (schema.table outside public)." } } },
       annotations: { title: `${recipe.name} tables`, readOnlyHint: true, openWorldHint: true },
       /** @param {Record<string, any>} args */
       run: async (args) => {
-        const tables = await withPostgres(await address(recipe), (pg) => postgresTables(pg));
+        const tables = await withDatabase(await address(recipe), (db) => ENGINES[engine].tables(db), engine);
         const wanted = args.table ? tables.filter((t) => t.name === args.table) : tables;
         if (args.table && !wanted.length) return { text: `Unknown table "${args.table}". Tables: ${tables.map((t) => t.name).join(", ")}`, isError: true };
         return { text: JSON.stringify(wanted, null, 1).slice(0, maxOutputChars), isError: false };
@@ -188,14 +197,14 @@ function postgresTools(recipe, name, maxOutputChars, address) {
     {
       name: name("sql"),
       description: (
-        `[${recipe.name}] Read-only SQL (PostgreSQL dialect) on ${where}, inside a READ ONLY transaction with a statement timeout. Parameters: $1, $2... Tables: ${summary}. ` +
+        `[${recipe.name}] Read-only SQL (${label} dialect) on ${where}, inside a READ ONLY transaction with a statement timeout. Parameters: ${placeholders} Tables: ${summary}. ` +
         "Use aggregates and filters instead of reading everything."
       ).slice(0, 1200),
       inputSchema: {
         type: "object",
         properties: {
           sql: { type: "string", description: "One SELECT / WITH / VALUES / EXPLAIN statement." },
-          params: { type: "array", items: {}, description: "Values for $1, $2..." },
+          params: { type: "array", items: {}, description: `Values for ${placeholders}` },
           max_rows: { type: "integer", minimum: 1, maximum: 10_000, description: "Default 200." },
           timeout_seconds: { type: "integer", minimum: 1, maximum: 300, description: "Statement timeout (default 30)." },
           pick: { type: "string", description: 'Optional: keep only part of the result, e.g. "rows[*].name".' },
@@ -215,8 +224,10 @@ function postgresTools(recipe, name, maxOutputChars, address) {
         const maxRows = Math.min(Math.max(Number(args.max_rows ?? 200), 1), 10_000);
         let result;
         try {
-          result = await withPostgres(await address(recipe), (pg) =>
-            pg.query(sql, Array.isArray(args.params) ? args.params : [], { maxRows, statementTimeoutMs: Math.min(Math.max(Number(args.timeout_seconds ?? 30), 1), 300) * 1000 }),
+          result = await withDatabase(
+            await address(recipe),
+            (db) => db.query(sql, Array.isArray(args.params) ? args.params : [], { maxRows, statementTimeoutMs: Math.min(Math.max(Number(args.timeout_seconds ?? 30), 1), 300) * 1000 }),
+            engine,
           );
         } catch (error) {
           return { text: `SQL error: ${error.message}`, isError: true };

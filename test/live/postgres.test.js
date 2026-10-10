@@ -30,7 +30,8 @@ describe("PostgreSQL data source", { skip: !url && "set UNIVERSAL_MCP_PG_URL to 
     try {
       const { rows } = await pg.query("SELECT 1::int AS i, 10::numeric AS n, 2.5::float8 AS f, true AS b, '{\"a\":1}'::jsonb AS j, NULL::text AS z, 9007199254740993::bigint AS big");
       assert.deepEqual(rows, [{ i: 1, n: 10, f: 2.5, b: true, j: { a: 1 }, z: null, big: "9007199254740993" }]);
-      await assert.rejects(pg.query("CREATE TABLE umcp_should_not_exist (a int)"), /read-only transaction/);
+      await assert.rejects(pg.query("CREATE TABLE umcp_should_not_exist (a int)"), /Only read statements/);
+      await assert.rejects(pg.query("WITH x AS (SELECT 1) SELECT * INTO umcp_should_not_exist FROM x"), /read-only transaction/);
       await assert.rejects(pg.query("SELECT pg_sleep(3)", [], { statementTimeoutMs: 1000 }), /statement timeout/);
       const limited = await pg.query("SELECT generate_series(1, 50) AS n", [], { maxRows: 5 });
       assert.equal(limited.rows.length, 5);

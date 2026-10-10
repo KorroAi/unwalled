@@ -15,6 +15,7 @@ import { assertRecipeName, RECIPE_SCHEMA_VERSION } from "./store.js";
 import { dataFiles, DATA_EXTENSIONS, describeTable, openData } from "./data/source.js";
 import { cacheFile, fetchToCache, remoteExtension } from "./data/remote.js";
 import { connectPostgres, isPostgresUrl, postgresTables } from "./data/postgres.js";
+import { connectMysql, isMysqlUrl, mysqlTables } from "./data/mysql.js";
 
 /**
  * Local data: CSV, TSV, JSON Lines and SQLite files, and folders holding data files (Bruno collections excepted).
@@ -98,6 +99,29 @@ async function savePostgresRecipe(engine, name, url) {
 }
 
 /**
+ * MySQL / MariaDB database (mysql://user:password@host:port/db?ssl=prefer|require|disable): queried read-only, like PostgreSQL.
+ * @param {import("./core.js").Engine} engine @param {string} name @param {string} url
+ */
+async function saveMysqlRecipe(engine, name, url) {
+  const db = await connectMysql(url, { timeoutMs: engine.config.requestTimeoutMs });
+  let tables;
+  try {
+    tables = (await mysqlTables(db)).map((t) => ({ name: t.name, columns: t.columns, rows: t.rows }));
+  } finally {
+    db.close();
+  }
+  const target = new URL(url);
+  const origin = `mysql://${target.hostname}:${target.port || 3306}/${decodeURIComponent(target.pathname.replace(/^\//, ""))}`;
+  const now = new Date().toISOString();
+  const recipe = {
+    schemaVersion: RECIPE_SCHEMA_VERSION, name, kind: "data", source: { remote: true, db: "mysql", origin, format: "data" },
+    title: origin, baseUrl: origin, tables, createdAt: engine.recipes.get(name)?.createdAt ?? now, updatedAt: now,
+    warnings: tables.length ? [] : ["No table found (or no access to them)."],
+  };
+  return engine.withLock(name, async () => engine.saveRecipe(recipe, { [REMOTE_DATA_KEY]: { url } }));
+}
+
+/**
  * Recipe for local data queried with read-only SQL. The data stays in the files; the recipe keeps the path and a schema summary.
  * @param {import("./core.js").Engine} engine @param {string} name @param {string} path
  */
@@ -130,7 +154,7 @@ async function saveDataRecipe(engine, name, path) {
  */
 export async function importFile(engine, { name, path, include, baseUrl, variables: given = {}, variablesFile, environment, hosts, maxEndpoints, merge, refreshSeconds }) {
   assertRecipeName(name);
-  if (!isAbsolute(path) && !/^https?:\/\//i.test(path) && !isPostgresUrl(path)) throw new Error("path must be an absolute path, an http(s) address of a data file or a postgres:// address");
+  if (!isAbsolute(path) && !/^https?:\/\//i.test(path) && !isPostgresUrl(path) && !isMysqlUrl(path)) throw new Error("path must be an absolute path, an http(s) address of a data file, or a postgres:// or mysql:// address");
   if (variablesFile && !isAbsolute(variablesFile)) throw new Error("variables_file must be an absolute path");
   // Explicit variables win over the file's.
   const variables = { ...(variablesFile ? readVariablesFile(variablesFile) : {}), ...given };
@@ -138,6 +162,7 @@ export async function importFile(engine, { name, path, include, baseUrl, variabl
   if (baseUrl) assertHttpUrl(baseUrl);
   let described;
   if (isPostgresUrl(path)) return savePostgresRecipe(engine, name, path);
+  if (isMysqlUrl(path)) return saveMysqlRecipe(engine, name, path);
   if (/^https?:\/\//i.test(path)) return saveRemoteDataRecipe(engine, name, path, refreshSeconds);
   if (isDataSource(path)) return saveDataRecipe(engine, name, path);
   if (isBrunoCollection(path)) described = { format: /** @type {const} */ ("bruno"), ...brunoToOpenApi(path, { variables, environment }) };

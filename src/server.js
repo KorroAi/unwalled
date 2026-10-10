@@ -70,7 +70,7 @@ export const MANAGEMENT_TOOLS = [
       type: "object",
       properties: {
         name: NAME,
-        path: { type: "string", description: "Absolute path to the file or folder, the http(s) address of a data file (CSV, JSON, Excel, iCalendar...), or a postgres:// database address (queried read-only)." },
+        path: { type: "string", description: "Absolute path to the file or folder, the http(s) address of a data file (CSV, JSON, Excel, iCalendar...), or a postgres:// or mysql:// database address (queried read-only)." },
         refresh_seconds: { type: "integer", minimum: 10, description: "Remote data: refresh the downloaded copy after this many seconds (default 300)." },
         base_url: { type: "string", description: "Override the API base URL (e.g. when a collection uses an undefined {{baseUrl}})." },
         variables: { type: "object", additionalProperties: { type: "string" }, description: "Values for {{variables}} of Postman / Insomnia / Bruno collections and .http files." },
