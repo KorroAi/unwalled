@@ -22,7 +22,7 @@ import { buildTools, storableArguments, validateMacro } from "./tools/generate.j
 import { act, readText, riskyTargets, snapshot, validateUiSteps } from "./ui.js";
 import { isChallenge, sendInPage, sendRequest } from "./tools/http.js";
 import { isExpired, refreshOAuth } from "./auth.js";
-import { AuditLog, checkPolicy, intentOf, previewRequest, RateLimiter, ResponseCache, retryDelay, shouldRetry } from "./safety.js";
+import { AuditLog, checkPolicy, intentOf, orgHostBlock, previewRequest, RateLimiter, ResponseCache, retryDelay, shouldRetry, stricterConfirm } from "./safety.js";
 
 const IDLE_BROWSER_MS = 5 * 60 * 1000;
 
@@ -74,6 +74,7 @@ export class Engine {
       findTool: (name) => this.tools.get(name),
       secret: (recipe, host, key) => this.store.loadSecrets(recipe.name)[host]?.[key],
       streamAuth: (recipe, url) => this.streamAuth(recipe, url),
+      guard: (recipe, url, intent, confirmed) => this.guardStream(recipe, url, intent, confirmed),
       dataPath: (recipe) => this.dataPath(recipe),
       maxOutputChars: this.config.maxOutputChars,
       schemaBudget: this.config.schemaBudget,
@@ -135,7 +136,7 @@ export class Engine {
     const build = () => this.withCredentials(recipe, request);
     let outgoing = build();
     const secretNames = Object.keys(this.store.loadSecrets(recipe.name)[url.host] ?? {}).map((k) => k.toLowerCase());
-    const decision = checkPolicy(policy, { intent, url, confirmed }, this.config.confirm);
+    const decision = checkPolicy(policy, { intent, url, confirmed }, this.config.confirm, this.config.orgPolicy);
     if (decision?.blocked) {
       this.audit.write({ recipe: recipe.name, tool, method: request.method, url: request.url, outcome: "blocked" });
       return { preview: `Blocked: ${decision.reason}\n${previewRequest(outgoing, secretNames)}`, blocked: true };
@@ -356,6 +357,20 @@ export class Engine {
       log(`${recipe.name}: credentials renewed from a fresh page load`);
       return "browser";
     }));
+  }
+
+  /**
+   * Policy check for stream tools (WebSocket, Server-Sent Events, MQTT) before they connect.
+   * Returns the message to give instead of connecting (refused, or waiting for confirm=true), or null.
+   * @param {any} recipe @param {string} address @param {import("./safety.js").Intent} intent @param {boolean} confirmed
+   */
+  guardStream(recipe, address, intent, confirmed) {
+    const url = new URL(address);
+    const policy = this.store.loadState(recipe.name).policy ?? {};
+    const decision = checkPolicy(policy, { intent, url, confirmed }, this.config.confirm, this.config.orgPolicy);
+    if (!decision) return null;
+    if (decision.blocked) this.audit.write({ recipe: recipe.name, method: "STREAM", url: address, outcome: "blocked" });
+    return decision.blocked ? { text: `Blocked: ${decision.reason}`, isError: true } : { text: decision.reason };
   }
 
   /**
@@ -868,6 +883,9 @@ export class Engine {
     assertRecipeName(name);
     if (!["open", "snapshot", "act", "read", "screenshot", "close"].includes(action)) throw new Error(`Unknown ui action "${action}"`);
     if (url) assertHttpUrl(url);
+    const org = this.config.orgPolicy;
+    const blockedUrl = url ? orgHostBlock(org, new URL(url)) : null;
+    if (blockedUrl) return { text: blockedUrl, isError: true };
     const policy = this.store.loadState(name).policy ?? {};
     const validSteps = action === "act" ? validateUiSteps(steps) : [];
     return this.withLock(name, async () => {
@@ -880,6 +898,9 @@ export class Engine {
       if (url) await this.limiter.wait(new URL(url).host, policy.rateLimit ?? this.config.rateLimit);
       const page = await this.pageFor(name, action === "open" ? url : undefined);
       if (page.url() === "about:blank" && action !== "open") throw new Error(`No page is open for "${name}": call ui with action=open and a url first.`);
+      // A click may have led the page to another site: nothing is read from or done on a host the organization does not allow.
+      const offLimits = page.url() === "about:blank" ? null : orgHostBlock(org, new URL(page.url()));
+      if (offLimits) return { text: offLimits, isError: true };
       this.audit.write({ recipe: name, ui: action, url: page.url() });
       switch (action) {
         case "open":
@@ -897,9 +918,10 @@ export class Engine {
           return { text: `Screenshot of ${page.url()}`, image: png.toString("base64") };
         }
         default: {
+          if (org?.readOnly) return { text: "Blocked by the organization policy: every recipe is read-only; interface actions are refused.", isError: true };
           if (policy.readOnly) return { text: "Blocked: this recipe is read-only (policy readOnly=true); interface actions are refused.", isError: true };
           const risky = await riskyTargets(page, validSteps);
-          if (risky.length && (policy.confirm ?? this.config.confirm) !== "none" && !confirm)
+          if (risky.length && stricterConfirm(policy.confirm ?? this.config.confirm, org?.confirm) !== "none" && !confirm)
             return { text: `These steps click controls that may delete, pay or send something: ${risky.join("; ")}.\nCheck with the user, then call again with confirm=true.` };
           const result = await act(page, validSteps, { timeoutMs: this.config.requestTimeoutMs * 2 });
           await saveCookies(page.context(), this.store.profileDir(name));

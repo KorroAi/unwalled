@@ -1,6 +1,7 @@
 // Runtime configuration, read from environment variables.
 import { join, resolve } from "node:path";
 import { ENV_PREFIX, defaultHome, env } from "./env.js";
+import { loadOrgPolicy } from "./safety.js";
 
 /** @param {string} name @param {number} fallback */
 function intFromEnv(name, fallback) {
@@ -29,6 +30,7 @@ function numberFromEnv(name, fallback) {
 
 export function loadConfig() {
   const home = resolve(env("HOME") || defaultHome());
+  const orgPolicy = loadOrgPolicy(env("ORG_POLICY"));
   return {
     home,
     recipesDir: join(home, "recipes"),
@@ -36,7 +38,9 @@ export function loadConfig() {
     secretsDir: join(home, "secrets"),
     /** Local per-recipe state (policy, discovery inputs, health): never shared. */
     stateDir: join(home, "state"),
-    auditFile: env("AUDIT") === "0" ? null : join(home, "audit.log"),
+    auditFile: env("AUDIT") === "0" && !orgPolicy?.audit ? null : join(home, "audit.log"),
+    /** Administrator rules (UNWALLED_ORG_POLICY file) applied on top of every recipe: see OrgPolicy in safety.js. */
+    orgPolicy,
     /** "chrome" | "msedge" | "chromium" | absolute path to a Chromium-based executable */
     browser: env("BROWSER") || "chrome",
     maxOutputChars: intFromEnv("MAX_OUTPUT", 40_000),

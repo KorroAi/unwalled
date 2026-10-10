@@ -141,6 +141,15 @@ describe("MQTT", () => {
       assert.equal(result.text.split("\n").filter((line) => /^\[\+\d+ms\] \d+$/.test(line)).length, 2, result.text);
       const generic = await /** @type {any} */ (engine.tools.get("home__stream")).run({ url: `mqtt://u:p@127.0.0.1:${port}`, topics: ["home/door"], duration_seconds: 2, max_messages: 1 });
       assert.match(generic.text, /"payload":"closed"/);
+
+      engine.configure("home", { policy: { readOnly: true } });
+      const publish = [{ topic: "home/light", message: "on" }];
+      const refused = await tool.run({ duration_seconds: 1, publish });
+      assert.equal(refused.isError, true);
+      assert.match(refused.text, /^Blocked: This recipe is read-only/);
+      assert.match((await /** @type {any} */ (engine.tools.get("home__stream")).run({ url: `mqtt://u:p@127.0.0.1:${port}`, topics: ["home/#"], publish })).text, /^Blocked/);
+      const listening = await tool.run({ duration_seconds: 2, max_messages: 1 });
+      assert.equal(listening.isError, false, `listening is a read and still works: ${listening.text}`);
     } finally {
       await engine.close();
       rmSync(home, { recursive: true, force: true });

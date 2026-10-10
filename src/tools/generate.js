@@ -46,6 +46,7 @@ const DESCRIPTION_MAX = 1200;
  * @property {number} [schemaBudget] maximum characters of a tool's description + input schema
  * @property {number} [foldThreshold] above this many operations, a recipe switches to compact mode (0 = never)
  * @property {import("../realtime/tools.js").StreamRuntime["streamAuth"]} [streamAuth]
+ * @property {import("../realtime/tools.js").StreamRuntime["guard"]} [guard]
  * @property {(recipe: any) => Promise<string>} [dataPath] local path of a data recipe's data (remote data is cached)
  */
 

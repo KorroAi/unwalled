@@ -317,6 +317,33 @@ describe("unwalled end to end", () => {
     await call("configure_recipe", { name: "pets", policy: null });
   });
 
+  it("enforces an organization policy that the agent cannot loosen", TIMEOUT, async () => {
+    const petsHost = new URL(fixtures.petsUrl).host;
+    assert.notEqual(new URL(fixtures.shopUrl).host, petsHost);
+    const file = join(home, "org-policy.json");
+    writeFileSync(file, JSON.stringify({ readOnly: true, allowedHosts: [petsHost], disabledTools: ["ui", "oauth_login"] }));
+    const governed = await connect({ UNWALLED_ORG_POLICY: file });
+    try {
+      assert.match(governed.getInstructions() ?? "", /organization policy .*read-only.*only these hosts/);
+      const names = await toolNames("", governed);
+      assert.ok(!names.includes("ui") && !names.includes("oauth_login"), names.join(", "));
+      assert.match((await call("ui", { name: "pets", action: "open", url: fixtures.petsUrl }, governed)).text, /"ui" is disabled by the organization policy/);
+      const outside = await call("discover", { name: "elsewhere", url: fixtures.shopUrl }, governed);
+      assert.equal(outside.isError, true);
+      assert.match(outside.text, /is not an allowed host/);
+      assert.match((await call("pets__list_pets", {}, governed)).text, /HTTP 200/, "reads on allowed hosts work");
+      await call("configure_recipe", { name: "pets", policy: { readOnly: false, confirm: "none" } }, governed);
+      const write = await call("pets__create_pet", { body: { name: "Nope" }, confirm: true }, governed);
+      assert.equal(write.isError, true);
+      assert.match(write.text, /organization policy: every recipe is read-only/);
+    } finally {
+      await governed.close();
+      await call("configure_recipe", { name: "pets", policy: null });
+    }
+    writeFileSync(file, JSON.stringify({ disabledTools: ["no_such_tool"] }));
+    await assert.rejects(connect({ UNWALLED_ORG_POLICY: file }), "a broken policy stops the server instead of being ignored");
+  });
+
   it("renews an expired access token with the OAuth refresh token", async () => {
     const host = new URL(fixtures.petsUrl).host;
     await call("set_credentials", { name: "pets", host, headers: { authorization: "Bearer acc-old" } });

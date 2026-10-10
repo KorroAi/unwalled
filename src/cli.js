@@ -2,14 +2,15 @@
 import { parseArgs } from "node:util";
 import { loadConfig } from "./config.js";
 import { describeRecipe, Engine } from "./core.js";
+import { describeOrgPolicy } from "./safety.js";
 import { startServer } from "./server.js";
 import { VERSION } from "./version.js";
 
-const HELP = `unwalled ${VERSION} — turn any website, HAR capture or OpenAPI spec into MCP tools.
+const HELP = `unwalled ${VERSION} — open any website, app, API, file or database to AI agents, as MCP tools.
 
 Usage:
-  unwalled [serve]                         Run the MCP server on stdio (what MCP clients launch)
-  unwalled discover <name> <url> [options] Discover an API from the terminal
+  unwalled [serve]                              Run the MCP server on stdio (what MCP clients launch)
+  unwalled discover <name> <url> [options]      Discover an API from the terminal
       --mode auto|openapi|browser   --interactive   --duration <seconds>
       --actions '<json array>'      --host <host> (repeatable)   --include <regex>   --merge
       --explore <pages>             also follow same-site links (never logout, delete, pay...)
@@ -18,25 +19,28 @@ Usage:
                                                 OpenAPI, Swagger, Google Discovery, Postman, Insomnia, HAR,
                                                 exported recipe, or Bruno collection folder
   unwalled login <name> <url> [--duration <seconds>]
-  unwalled check <name> [--repair]          Call read-only tools and report broken or changed ones
-  unwalled curl <name> <file.txt> [--merge] Create tools from cURL commands saved in a text file
-  unwalled export <name> <file.json>       Write a recipe (no secrets) to share it; import it with "import"
-  unwalled list                            List recipes
-  unwalled inspect <name>                  Show a recipe as JSON
+  unwalled check <name> [--repair]              Call read-only tools and report broken or changed ones
+  unwalled curl <name> <file.txt> [--merge]     Create tools from cURL commands saved in a text file
+  unwalled export <name> <file.json>            Write a recipe (no secrets) to share it; import it with "import"
+  unwalled policy                               Check and show the organization policy (UNWALLED_ORG_POLICY)
+  unwalled list                                 List recipes
+  unwalled inspect <name>                       Show a recipe as JSON
   unwalled forget <name> [--delete-profile]
   unwalled --help | --version
 
 Environment:
-  UNWALLED_HOME        Data directory (default ~/.unwalled)
-  UNWALLED_BROWSER     chrome (default) | msedge | chromium | /path/to/browser
-  UNWALLED_MAX_OUTPUT  Max characters returned per tool call (default 40000)
-  UNWALLED_TIMEOUT_MS  Request timeout (default 30000)
+  UNWALLED_HOME          Data directory (default ~/.unwalled)
+  UNWALLED_BROWSER       chrome (default) | msedge | chromium | /path/to/browser
+  UNWALLED_MAX_OUTPUT    Max characters returned per tool call (default 40000)
+  UNWALLED_TIMEOUT_MS    Request timeout (default 30000)
   UNWALLED_MAX_ENDPOINTS, UNWALLED_MAX_OPENAPI_TOOLS  Tool count limits (default 40 / 60)
-  UNWALLED_CONFIRM     Calls needing confirm=true: destructive (default) | writes | none
-  UNWALLED_RATE_LIMIT  Requests per second per host (default 5, 0 = unlimited)
-  UNWALLED_RETRIES     Automatic retries of temporary failures (default 2)
-  UNWALLED_TOOL_MODE   auto (default: search mode above UNWALLED_TOOL_THRESHOLD=60 tools) | all | search
-  UNWALLED_AUDIT       0 disables the audit log (<home>/audit.log)
+  UNWALLED_CONFIRM       Calls needing confirm=true: destructive (default) | writes | none
+  UNWALLED_RATE_LIMIT    Requests per second per host (default 5, 0 = unlimited)
+  UNWALLED_RETRIES       Automatic retries of temporary failures (default 2)
+  UNWALLED_TOOL_MODE     auto (default: search mode above UNWALLED_TOOL_THRESHOLD=60 tools) | all | search
+  UNWALLED_AUDIT         0 disables the audit log (<home>/audit.log)
+  UNWALLED_ORG_POLICY    Path of an organization policy (JSON) that agents cannot loosen; check it with "unwalled policy"
+  The former UNIVERSAL_MCP_* names are still read.
 `;
 
 const OPTIONS = /** @type {const} */ ({
@@ -137,6 +141,13 @@ export async function main(argv) {
         const result = await engine.checkRecipe(rest[0], { repair: values.repair });
         console.log(result.text);
         if ((result.counts.broken ?? 0) && !values.repair) process.exitCode = 1;
+        break;
+      }
+      case "policy": {
+        const org = config.orgPolicy;
+        console.log(org ? `${describeOrgPolicy(org) || "The organization policy sets no rule."}
+
+${JSON.stringify(org, null, 2)}` : "No organization policy (set UNWALLED_ORG_POLICY to the path of a JSON file).");
         break;
       }
       case "list":

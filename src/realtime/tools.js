@@ -12,6 +12,8 @@ import { listenMqtt } from "./mqtt.js";
 /**
  * @typedef {object} StreamRuntime
  * @property {(recipe: any, url: string) => Promise<StreamAuth>} [streamAuth]
+ * @property {(recipe: any, url: string, intent: "read" | "write", confirmed: boolean) => { text: string, isError?: boolean } | null} [guard]
+ *   safety policy check before connecting (sending frames or publishing counts as a write)
  * @property {number} maxOutputChars
  */
 
@@ -46,6 +48,7 @@ const LISTEN_PROPERTIES = {
   filter: { type: "string", description: 'Keep only messages containing this text, or matching "/regex/flags".' },
   pick: { type: "string", description: 'Keep only part of each JSON message, e.g. "data.price" or "p,s".' },
   max_chars: { type: "integer", minimum: 20, description: "Maximum characters returned." },
+  confirm: { type: "boolean", description: "Set to true after checking with the user, when the safety policy holds a send or publish for confirmation." },
 };
 
 /** @param {any} args */
@@ -130,6 +133,9 @@ export function buildStreamTools(recipe, runtime, name) {
       annotations: { title: `${recipe.name} ${stream.kind} ${stream.id}`, readOnlyHint: !isSocket || !stream.send.length, destructiveHint: false, openWorldHint: true },
       /** @param {Record<string, any>} args */
       run: async (args) => {
+        const writes = isMqtt ? mqttPublish(args).length > 0 : isSocket ? Array.isArray(args.send) && args.send.length > 0 : !!stream.method && stream.method !== "GET";
+        const held = runtime.guard?.(recipe, stream.url, writes ? "write" : "read", !!args.confirm);
+        if (held) return held;
         const auth = await (runtime.streamAuth ?? NO_AUTH)(recipe, stream.url);
         const url = streamUrl(stream.url, auth.query, args.query);
         const { durationMs, maxMessages, filter } = limits(args);
@@ -170,6 +176,9 @@ export function buildStreamTools(recipe, runtime, name) {
       run: async (args) => {
         const url = new URL(String(args.url));
         if (!/^(wss?|https?|mqtts?):$/.test(url.protocol)) return { text: "url must start with ws://, wss://, http://, https://, mqtt:// or mqtts://", isError: true };
+        const writes = mqttPublish(args).length > 0 || (Array.isArray(args.send) && args.send.length > 0);
+        const held = runtime.guard?.(recipe, url.toString(), writes ? "write" : "read", !!args.confirm);
+        if (held) return held;
         const auth = await (runtime.streamAuth ?? NO_AUTH)(recipe, url.toString());
         // MQTT over TCP/TLS, or over WebSocket when topics are given.
         if (/^mqtts?:$/.test(url.protocol) || (/^wss?:$/.test(url.protocol) && Array.isArray(args.topics) && args.topics.length)) {

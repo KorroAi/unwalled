@@ -1,6 +1,6 @@
 // Guard rails around every request a generated tool sends: per-recipe policy, confirmation of risky calls,
 // dry runs, per-host rate limiting and an audit log (method, redacted URL, status; never bodies or credentials).
-import { appendFileSync, existsSync, renameSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, renameSync, statSync } from "node:fs";
 import { redactUrl } from "./discovery/secrets.js";
 
 const AUDIT_MAX_BYTES = 5 * 1024 * 1024;
@@ -15,6 +15,73 @@ const AUDIT_MAX_BYTES = 5 * 1024 * 1024;
  * @property {number} [cacheSeconds] reuse successful read responses for this long
  */
 
+/**
+ * Rules set by an administrator in the file named by UNWALLED_ORG_POLICY. They apply on top of every recipe's own policy
+ * and nothing the agent does (configure_recipe, new recipes, imported recipes) can loosen them.
+ * @typedef {object} OrgPolicy
+ * @property {boolean} [readOnly] refuse every write, in every recipe
+ * @property {string[]} [allowedHosts] the only hosts any tool may reach (subdomains included)
+ * @property {"none" | "destructive" | "writes"} [confirm] minimum confirmation level
+ * @property {string[]} [disabledTools] management tools that are hidden and refused (e.g. "ui", "discover")
+ * @property {boolean} [audit] keep the audit log even when UNWALLED_AUDIT=0
+ */
+
+const CONFIRM_LEVELS = ["none", "destructive", "writes"];
+const ORG_POLICY_KEYS = ["readOnly", "allowedHosts", "confirm", "disabledTools", "audit"];
+
+/**
+ * Reads and validates the organization policy. A policy file that is named but missing or invalid stops the server
+ * instead of silently running without the rules.
+ * @param {string | undefined} path @returns {OrgPolicy | null}
+ */
+export function loadOrgPolicy(path) {
+  if (!path) return null;
+  let policy;
+  try {
+    policy = JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    throw new Error(`Cannot read the organization policy ${path}: ${/** @type {Error} */ (error).message}`);
+  }
+  const fail = (message) => {
+    throw new Error(`Invalid organization policy ${path}: ${message}`);
+  };
+  if (!policy || typeof policy !== "object" || Array.isArray(policy)) fail("expected a JSON object");
+  const unknown = Object.keys(policy).filter((key) => !ORG_POLICY_KEYS.includes(key));
+  if (unknown.length) fail(`unknown setting(s) ${unknown.join(", ")} (allowed: ${ORG_POLICY_KEYS.join(", ")})`);
+  for (const key of ["readOnly", "audit"]) if (policy[key] !== undefined && typeof policy[key] !== "boolean") fail(`${key} must be true or false`);
+  if (policy.confirm !== undefined && !CONFIRM_LEVELS.includes(policy.confirm)) fail(`confirm must be one of ${CONFIRM_LEVELS.join(", ")}`);
+  for (const key of ["allowedHosts", "disabledTools"])
+    if (policy[key] !== undefined && (!Array.isArray(policy[key]) || policy[key].some((v) => typeof v !== "string" || !v || /[/\s]/.test(v)))) fail(`${key} must be a list of names`);
+  if (policy.allowedHosts) policy.allowedHosts = policy.allowedHosts.map((h) => h.toLowerCase());
+  return policy;
+}
+
+/** @param {string[]} hosts @param {URL} url */
+const hostAllowed = (hosts, url) => hosts.some((host) => url.host === host || url.hostname === host || url.hostname.endsWith(`.${host}`));
+
+/** @param {"none" | "destructive" | "writes"} a @param {"none" | "destructive" | "writes" | undefined} b */
+export const stricterConfirm = (a, b) => (b && CONFIRM_LEVELS.indexOf(b) > CONFIRM_LEVELS.indexOf(a) ? b : a);
+
+/**
+ * Whether the organization policy lets a tool reach this address. Returns the reason when it does not.
+ * @param {OrgPolicy | null | undefined} org @param {URL} url
+ */
+export function orgHostBlock(org, url) {
+  if (!org?.allowedHosts?.length || hostAllowed(org.allowedHosts, url)) return null;
+  return `Blocked by the organization policy: ${url.host || url.protocol} is not an allowed host (${org.allowedHosts.join(", ")}).`;
+}
+
+/** One line for the agent: what the organization policy enforces. @param {OrgPolicy | null | undefined} org */
+export function describeOrgPolicy(org) {
+  if (!org) return "";
+  const rules = [];
+  if (org.readOnly) rules.push("read-only (writes are refused)");
+  if (org.allowedHosts?.length) rules.push(`only these hosts: ${org.allowedHosts.join(", ")}`);
+  if (org.confirm && org.confirm !== "none") rules.push(`confirmation required for ${org.confirm === "writes" ? "every write" : "destructive calls"}`);
+  if (org.disabledTools?.length) rules.push(`disabled tools: ${org.disabledTools.join(", ")}`);
+  return rules.length ? `An organization policy applies to every recipe and cannot be changed from here: ${rules.join("; ")}.` : "";
+}
+
 /** @typedef {"read" | "write" | "delete"} Intent */
 
 /** @param {string} method @returns {Intent} */
@@ -28,13 +95,17 @@ export function intentOf(method) {
 /**
  * Decides whether a call may go out. Returns null when allowed, or the reason it is blocked.
  * @param {Policy} policy @param {{ intent: Intent, url: URL, confirmed: boolean }} call @param {"none" | "destructive" | "writes"} defaultConfirm
+ * @param {OrgPolicy | null} [org] organization policy, applied first and never loosened by the recipe
  * @returns {{ blocked: boolean, reason: string } | null}
  */
-export function checkPolicy(policy, { intent, url, confirmed }, defaultConfirm) {
-  if (policy.allowedHosts?.length && !policy.allowedHosts.some((host) => url.host === host || url.hostname === host || url.hostname.endsWith(`.${host}`)))
+export function checkPolicy(policy, { intent, url, confirmed }, defaultConfirm, org = null) {
+  const orgBlock = orgHostBlock(org, url);
+  if (orgBlock) return { blocked: true, reason: orgBlock };
+  if (org?.readOnly && intent !== "read") return { blocked: true, reason: "Blocked by the organization policy: every recipe is read-only, writes are refused." };
+  if (policy.allowedHosts?.length && !hostAllowed(policy.allowedHosts, url))
     return { blocked: true, reason: `Host ${url.host} is not in this recipe's allowed hosts (${policy.allowedHosts.join(", ")}).` };
   if (policy.readOnly && intent !== "read") return { blocked: true, reason: "This recipe is read-only (policy readOnly=true): writes are refused." };
-  const confirm = policy.confirm ?? defaultConfirm;
+  const confirm = stricterConfirm(policy.confirm ?? defaultConfirm, org?.confirm);
   const needsConfirmation = (confirm === "writes" && intent !== "read") || (confirm === "destructive" && intent === "delete");
   if (needsConfirmation && !confirmed)
     return { blocked: false, reason: `This ${intent === "delete" ? "destructive" : "write"} call needs confirmation: check the request below with the user, then call again with confirm=true.` };
