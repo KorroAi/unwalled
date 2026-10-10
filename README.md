@@ -4,7 +4,7 @@
 
 Most websites and apps have no public API and no MCP server, yet they all talk to an internal API.
 `universal-mcp` finds that API and gives it to your agent as typed, documented tools, and keeps them working:
-it stays logged in, gets through bot checks, retries temporary failures, notices when the site changes and repairs itself.
+it stays logged in, retries temporary failures, notices when the site changes and repairs itself.
 When a site has no usable API at all, the agent can still use it through its interface.
 
 ```text
@@ -48,7 +48,7 @@ agent:  crates__get_api_v1_crates_crate(path={"crate": "tokio"}, pick="crate.max
    recipe saved (shareable) ──► tools generated ──► tools/list_changed (no restart)
                                  │
    tool call ──► policy · confirmation · rate limit · cache ──► request with host-scoped credentials
-                 (browser profile, in-page fetch on bot checks, re-authentication on 401, retries)
+                 (browser profile, opt-in in-page fetch, re-authentication on 401, retries)
                                  │
                  response ──► pick / readable HTML / truncation ──► agent
 ```
@@ -74,7 +74,7 @@ The result is saved as a **recipe**. Discovery runs once (seconds); after that t
 **Calls that keep working**
 - Persistent browser profile per recipe (session cookies included) and a `login` tool that opens a visible window.
 - Re-authentication: on a 401 or an expired JWT, browser recipes reload the site to pick up fresh tokens; OAuth refresh tokens renew access tokens.
-- Bot protections: requests run inside a real page of the site (real browser network stack) when a challenge answers; stale CSRF tokens are refreshed from cookies or meta tags.
+- Stale CSRF tokens are refreshed from cookies or meta tags. In-page requests (from a real page of the site) are available as an opt-in per recipe, for sites you are allowed to automate.
 - Retries of temporary failures (429, 502, 503, 504, network errors) with `Retry-After` or exponential backoff; writes are retried only when the server did not process them.
 - Read cache (`cache_seconds`, or per recipe), per-call timeouts (`timeout_ms`), non-secret recipe headers (language, API version).
 - `check_recipe` probes every read-only tool and flags broken or changed endpoints; `repair=true` rediscovers the recipe and keeps annotations and macros.
@@ -294,7 +294,8 @@ Cookies and credentials found in the file are stored as local secrets and replay
 
 - **Browser recipes**: on a 401, or before sending a bearer JWT that has expired, the site is reloaded headlessly in the recipe's profile and the auth headers the app sends are kept. A failed attempt is not repeated for 30 seconds. If the session itself has ended, call `login`.
 - **OAuth**: `configure_recipe {"name": "x", "oauth": {"host": "api.example.com", "token_url": "https://auth.example.com/oauth/token", "refresh_token": "...", "client_id": "..."}}`. Access tokens are refreshed on 401 and before expiry; rotated refresh tokens are kept.
-- **Bot challenges**: browser recipes retry the request from inside a real page and keep doing so for that recipe (`policy.transport` forces `page` or `node`). If a CAPTCHA still blocks, `login` lets you solve it.
+- **Bot challenges**: requests leave from Node by default and a challenge is reported with a hint. If you are allowed to automate the site, `configure_recipe {"policy": {"transport": "auto"}}`
+  retries from inside a real page after a challenge (`"page"` always uses the page). If a CAPTCHA still blocks, `login` lets you solve it.
 
 ### When the site changes
 
@@ -411,7 +412,7 @@ Treat `secrets/`, `profiles/` and `state/` like a password store: do not commit,
 - **Streams are bounded**: MCP is request/response, so stream tools and `watch` listen for a limited time and return what they saw; long calls may hit the MCP client's tool timeout.
   Stream replays come from Node, not from the page: servers that require a browser-only handshake may refuse them. Event streams read with `fetch()` are recorded without sample messages.
 - **Approximate protocol coverage**: SOAP without WS-Security or external XSD imports, OData without `$batch`, MQTT 3.1.1 with QoS 0/1. Google APIs need an API key or an OAuth token that you provide.
-- **CAPTCHAs** are not solved automatically: in-page requests get through many bot checks, and `login` lets a person solve the rest.
+- **Bot protections and CAPTCHAs** are not bypassed by default: a challenge is reported, `login` lets a person solve it, and in-page requests are an opt-in per recipe for sites you are allowed to automate.
 - **Secret detection is heuristic**: credentials with an obvious name, a known format or a long random value are caught, but a short, ordinary-looking token in a URL path (e.g. `/hooks/abc123`) looks like any other path segment. Review recipes before sharing them.
 - **Path inference is heuristic**: if a parameter was not detected, call the endpoint through `<recipe>__request` or capture more pages with `merge: true` or `explore_pages`.
 - **Health checks** only call read-only tools that have a recorded example; writes are never probed.

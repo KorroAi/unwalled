@@ -225,7 +225,9 @@ export class Engine {
     return this.withLock(recipe.name, async () => {
       const context = await this.browserFor(recipe.name);
       await refreshCsrfFromCookies(context, outgoing);
-      const mode = policy.transport ?? "auto";
+      // Requests leave from Node unless the user opted this recipe into in-page requests ("auto" or "page"):
+      // getting past a site's bot protection is the user's decision, for sites they are allowed to automate.
+      const mode = policy.transport ?? "node";
       let result;
       if (mode === "page" || (mode === "auto" && this.pageMode.has(recipe.name))) result = await this.sendFromPage(recipe, outgoing);
       else {

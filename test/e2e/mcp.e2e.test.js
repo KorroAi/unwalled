@@ -149,7 +149,12 @@ describe("universal-mcp end to end", () => {
     assert.match(orders.text, /"o1"/);
   });
 
-  it("passes bot protection by retrying inside a real page", TIMEOUT, async () => {
+  it("uses in-page requests against bot protection only when the recipe opts in", TIMEOUT, async () => {
+    const refused = await call("shop__get_api_protected");
+    assert.equal(refused.isError, true, "no in-page retry by default");
+    assert.match(refused.text, /"transport": "auto"/, "the hint explains how to opt in");
+    const optIn = await call("configure_recipe", { name: "shop", policy: { transport: "auto" } });
+    assert.equal(optIn.isError, false, optIn.text);
     const refusedBefore = (await stats()).protectedRefused;
     const result = await call("shop__get_api_protected");
     assert.equal(result.isError, false, result.text);

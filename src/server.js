@@ -153,7 +153,7 @@ export const MANAGEMENT_TOOLS = [
     name: "configure_recipe",
     description:
       "Local settings of a recipe. policy: readOnly (refuse writes), confirm ('none' | 'destructive' | 'writes': calls that need confirm=true), allowedHosts, rateLimit (requests/second/host), " +
-      "transport ('auto' | 'node' | 'page': browser recipes send requests from inside a real page with 'page'). oauth: refresh settings so expired access tokens renew themselves " +
+      "transport ('node' default | 'auto' | 'page': opt-in, browser recipes send requests from inside a real page with 'page', or after a bot challenge with 'auto'; only for sites the user may automate). oauth: refresh settings so expired access tokens renew themselves " +
       "({host, token_url, refresh_token, client_id?, client_secret?, scope?, encoding?: 'form'|'json'}; stored with the secrets). headers: non-secret headers added to every call. policy=null resets the policy.",
     inputSchema: {
       type: "object",

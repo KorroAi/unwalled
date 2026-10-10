@@ -121,7 +121,7 @@ const FORBIDDEN_IN_PAGE = /^(cookie|cookie2|host|origin|referer|user-agent|conne
 
 /**
  * Runs the request with fetch() inside a page of the site: the browser's own network stack, cookies,
- * service workers and TLS fingerprint are used, which passes most bot protections and SameSite rules.
+ * service workers and TLS fingerprint are used. Only used when the user opted the recipe in (policy.transport "auto" or "page").
  * @param {import("playwright-core").Page} page @param {OutgoingRequest} request @param {{ timeoutMs: number }} options
  * @returns {Promise<HttpResult>}
  */
@@ -235,7 +235,9 @@ export function formatResponse(result, { pick: pickExpression, maxChars, saveTo,
   if (bodyText.length > maxChars) bodyText = `${bodyText.slice(0, maxChars)}\n… [truncated: ${bodyText.length} characters in total; use "pick" or raise "max_chars"]`;
   let hint = "";
   if (isChallenge(result))
-    hint = "\nHint: a bot-protection challenge answered. Browser recipes retry inside a real page automatically; if it persists, call login so the user can solve it in a visible window.";
+    hint =
+      "\nHint: a bot-protection challenge answered. If the user is allowed to automate this site, they can opt this recipe into in-page requests " +
+      '(configure_recipe {"policy": {"transport": "auto"}}), or call login to solve the challenge in a visible window.';
   else if (result.status === 401 || result.status === 403)
     hint = "\nHint: the session or credentials may have expired. Use the login tool (browser recipes) or set_credentials, then retry.";
   else if (result.status === 404 || result.status === 410) hint = "\nHint: if this endpoint used to work, the site may have changed: run check_recipe (with repair=true) to rediscover it.";
