@@ -111,8 +111,12 @@ describe("live websites", { skip: !enabled && "set UNWALLED_LIVE=1 to run" }, ()
     assert.match(repo.text, /HTTP 200[\s\S]*"nodejs\/node"/);
   });
 
-  it("a YouTube channel feed as SQL data (no key)", TIMEOUT, async () => {
-    const imported = await call("import_file", { name: "ytfeed", path: "https://www.youtube.com/feeds/videos.xml?channel_id=UC_x5XG1OV2P6uZZ5FSM9Ttw" });
+  it("a YouTube channel feed as SQL data (no key)", TIMEOUT, async (t) => {
+    const feed = "https://www.youtube.com/feeds/videos.xml?channel_id=UC_x5XG1OV2P6uZZ5FSM9Ttw";
+    // YouTube's feeds are sometimes down for everyone (HTTP 404 or 5xx): that is reported as a skip, not as a failure of unwalled.
+    const upstream = await fetch(feed, { method: "HEAD" }).then((r) => r.status, () => 0);
+    if (upstream !== 200) return t.skip(`YouTube feed unavailable upstream (HTTP ${upstream || "network error"})`);
+    const imported = await call("import_file", { name: "ytfeed", path: feed });
     assert.equal(imported.isError, false, imported.text);
     const top = await call("ytfeed__sql", { sql: "SELECT title, views FROM ytfeed ORDER BY views DESC LIMIT 1" });
     assert.match(top.text, /"views":\d+/);
