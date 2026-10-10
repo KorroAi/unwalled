@@ -545,7 +545,10 @@ export async function startServer(config) {
     if (closing) return;
     closing = true;
     await engine.close();
-    process.exit(0);
+    await server.close().catch(() => {});
+    // Let the event loop end by itself: calling process.exit() right after network calls makes Node abort on Windows
+    // ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)"). Force the exit only if something still holds the loop.
+    setTimeout(() => process.exit(0), 3000).unref();
   };
   process.stdin.on("close", shutdown);
   process.on("SIGINT", shutdown);

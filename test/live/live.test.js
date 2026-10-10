@@ -117,4 +117,22 @@ describe("live websites", { skip: !enabled && "set UNWALLED_LIVE=1 to run" }, ()
     const top = await call("ytfeed__sql", { sql: "SELECT title, views FROM ytfeed ORDER BY views DESC LIMIT 1" });
     assert.match(top.text, /"views":\d+/);
   });
+
+  it("stops cleanly when the client closes after HTTPS calls", TIMEOUT, async () => {
+    // Forcing process.exit() right after these requests made Node abort on Windows
+    // ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)"). Local test servers (HTTP, gzip) do not reproduce it; this does.
+    for (let round = 0; round < 2; round++) {
+      const transport = new StdioClientTransport({ command: process.execPath, args: [BIN], env: { ...process.env, UNWALLED_HOME: home }, stderr: "pipe" });
+      let stderr = "";
+      transport.stderr?.on("data", (chunk) => (stderr += chunk));
+      const own = new Client({ name: "shutdown", version: "0.0.0" });
+      await own.connect(transport);
+      await own.callTool({ name: "discover", arguments: { name: "cg", url: "preset:coingecko" } }, undefined, { timeout: 230_000 });
+      const result = await own.callTool({ name: "cg__simple_price", arguments: { query: { ids: "bitcoin", vs_currencies: "usd" } } }, undefined, { timeout: 230_000 });
+      assert.equal(result.isError, false);
+      await own.close();
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      assert.doesNotMatch(stderr, /Assertion failed|FATAL ERROR/, stderr);
+    }
+  });
 });
