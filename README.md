@@ -406,6 +406,27 @@ Before a recipe is written, credentials are detected by name and by value and mo
 A leak test covers 28 placements (headers, query, path, fragments, `user:password@`, JSON and form bodies, arrays, GraphQL documents and variables, free text).
 Treat `secrets/`, `profiles/` and `state/` like a password store: do not commit, sync or share them. See [SECURITY.md](SECURITY.md).
 
+## Compatibility
+
+What is covered, and how it was checked. "Live" means a real public service in `test/live/` (run with `UNIVERSAL_MCP_LIVE=1`);
+"local" means a local test server or file in the offline suite. Anything not listed here is not claimed.
+
+| Source | Checked against | Known limits |
+| --- | --- | --- |
+| Browser capture (REST, GraphQL) | live: crates.io, Hacker News search (Algolia); local: login, CSRF, token rotation | Server-rendered pages have no API to capture; bot protections are not bypassed by default |
+| OpenAPI 3 / Swagger 2 | live: Petstore, GitHub (about 1,200 operations), presets | |
+| Google Discovery (YouTube, Gmail, Drive...) | live: YouTube Data API description and call (API key needed for answers) | User data needs an OAuth client of your own |
+| OData v2 / v4 | live: Northwind demo service | No `$batch` |
+| SOAP 1.1 / 1.2 (WSDL) | live: public calculator service | No WS-Security, no external XSD imports |
+| WebSocket / Server-Sent Events | live: Binance trade stream; local: auth frames, cookies, heartbeats | Replayed from Node; event streams read with `fetch()` have no samples |
+| AsyncAPI 2 / 3 | live: Binance streams preset; local: WebSocket and MQTT channels | |
+| MQTT 3.1.1 | local broker: wildcards, publishing, credentials, QoS 0 / 1 | No MQTT 5 |
+| JSON-RPC 1.0 / 2.0 | local server (single and batch calls) | |
+| Postman, Insomnia, Bruno, `.http`, cURL, HAR | local servers and files | Postman scripts and Bruno scripts are not run |
+| Local / remote data (CSV, TSV, Excel, iCalendar, RSS / Atom, JSON, SQLite) | live: GitHub-hosted CSV, YouTube channel feed, Hacker News RSS; local files | Read-only SQL; Excel dates stay serial numbers |
+| OAuth sign-in (`oauth_login`) | local provider through a real browser (PKCE, refresh) | Needs an OAuth client created by the user |
+| Responses: protobuf, gRPC-web, CSV, XML, images | local | Protobuf decoded without schema |
+
 ## When to use it, and when not
 
 - **Prefer an official option when there is one.** If a service publishes an API, an OpenAPI description or an MCP server, use it
