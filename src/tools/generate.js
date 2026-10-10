@@ -1,6 +1,7 @@
 // Builds MCP tool definitions from a recipe.
 import { createHash } from "node:crypto";
 import { buildRpcTools } from "../discovery/jsonrpc.js";
+import { buildSoapTools } from "../discovery/soap.js";
 import { buildStreamTools } from "../realtime/tools.js";
 import { formatResponse } from "./http.js";
 import { withCache } from "./cache.js";
@@ -291,8 +292,12 @@ function openApiTools(recipe, runtime, name) {
  */
 export function buildTools(recipe, runtime) {
   const name = toolNamer(recipe.name);
-  const tools = recipe.kind === "openapi" ? openApiTools(recipe, runtime, name) : [...graphqlTools(recipe, runtime, name), ...restTools(recipe, runtime, name)];
-  tools.push(...buildRpcTools(recipe, runtime, name, (result, args) => formatResponse(result, { pick: args.pick, maxChars: args.max_chars ?? runtime.maxOutputChars })));
+  const format = (result, args) => formatResponse(result, { pick: args.pick, maxChars: args.max_chars ?? runtime.maxOutputChars });
+  const tools =
+    recipe.kind === "openapi" ? openApiTools(recipe, runtime, name)
+    : recipe.kind === "soap" ? buildSoapTools(recipe, runtime, name, format)
+    : [...graphqlTools(recipe, runtime, name), ...restTools(recipe, runtime, name)];
+  tools.push(...buildRpcTools(recipe, runtime, name, format));
   tools.push(...buildStreamTools(recipe, runtime, name));
   tools.push({
     name: name("request"),

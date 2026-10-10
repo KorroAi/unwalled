@@ -4,7 +4,7 @@ import { isAbsolute } from "node:path";
 import { closeProfile, launchProfile, saveCookies } from "./browser.js";
 import { captureTraffic, validateActions } from "./discovery/capture.js";
 import { observationsFromHar } from "./discovery/har.js";
-import { inferEndpoints, navigationVariables } from "./discovery/infer.js";
+import { inferEndpoints, navigationVariables, redactUrl } from "./discovery/infer.js";
 import { brunoToOpenApi, isBrunoCollection } from "./discovery/bruno.js";
 import { parseCurl, splitCurlCommands } from "./discovery/curl.js";
 import { parseHttpFile } from "./discovery/httpfile.js";
@@ -204,6 +204,7 @@ export class Engine {
     if (mode !== "browser") {
       onProgress("Looking for a published OpenAPI / Swagger description");
       const found = await findOpenApi(url, { timeoutMs: Math.min(this.config.requestTimeoutMs, 10_000) });
+      if (found?.soap) return this.saveSoapRecipe(name, found.soap, { url: redactUrl(url), specUrl: redactUrl(found.specUrl) }, include);
       if (found) {
         const normalized = normalizeOpenApi(found.spec, found.specUrl, { include, maxTools: this.config.maxOpenApiTools });
         const now = new Date().toISOString();
@@ -302,6 +303,7 @@ export class Engine {
       described = describeFile(readFileSync(path, "utf8"), { variables, serviceRoot: baseUrl });
     }
     if (described.format === "har") return this.discoverHar({ name, harPath: path, hosts, maxEndpoints, merge });
+    if (described.format === "soap") return this.saveSoapRecipe(name, described.soap, { file: path, format: "soap" }, include);
     if (described.format === "recipe") {
       const shared = described.recipe;
       if (shared.schemaVersion !== RECIPE_SCHEMA_VERSION) throw new Error(`This recipe uses schema version ${shared.schemaVersion}; this universal-mcp reads version ${RECIPE_SCHEMA_VERSION}.`);
@@ -369,6 +371,24 @@ export class Engine {
       stats: inferred.stats,
     };
     return this.withLock(name, async () => this.saveRecipe(recipe, inferred.secrets));
+  }
+
+  /**
+   * @param {string} name @param {ReturnType<typeof import("./discovery/soap.js").parseWsdl>} soap @param {Record<string, unknown>} source @param {string} [include]
+   */
+  async saveSoapRecipe(name, soap, source, include) {
+    const filter = include ? new RegExp(include, "i") : null;
+    const operations = soap.operations.filter((op) => !filter || filter.test(op.name)).slice(0, this.config.maxOpenApiTools);
+    const now = new Date().toISOString();
+    const recipe = {
+      schemaVersion: RECIPE_SCHEMA_VERSION, name, kind: "soap", source, title: soap.title, baseUrl: new URL(soap.endpoint).origin,
+      endpoint: soap.endpoint, version: soap.version, operations, createdAt: this.recipes.get(name)?.createdAt ?? now, updatedAt: now,
+      warnings: soap.operations.length > operations.length ? [`${soap.operations.length} operations, ${operations.length} became tools.`] : [],
+    };
+    return this.withLock(name, async () => {
+      await this.closeBrowser(name);
+      return this.saveRecipe(recipe);
+    });
   }
 
   /**
@@ -451,7 +471,8 @@ export class Engine {
 /** One-paragraph summary of a recipe, for tool results and the CLI. @param {any} recipe @param {string[]} toolNames */
 export function describeRecipe(recipe, toolNames) {
   const lines = [`Recipe "${recipe.name}" (${recipe.kind}) — base ${recipe.baseUrl} — updated ${recipe.updatedAt}`];
-  if (recipe.kind === "openapi") lines.push(`${recipe.source.format ? `${recipe.source.format} file` : "OpenAPI"}: ${recipe.source.specUrl ?? recipe.source.file} — ${recipe.title ?? "untitled"} — ${recipe.routes.length} routes, ${recipe.operations.length} with dedicated tools.`);
+  if (recipe.kind === "soap") lines.push(`SOAP ${recipe.version}: ${recipe.endpoint} — ${recipe.title} — ${recipe.operations.length} operation(s): ${recipe.operations.map((o) => o.name).join(", ")}`);
+  else if (recipe.kind === "openapi") lines.push(`${recipe.source.format ? `${recipe.source.format} file` : "OpenAPI"}: ${recipe.source.specUrl ?? recipe.source.file} — ${recipe.title ?? "untitled"} — ${recipe.routes.length} routes, ${recipe.operations.length} with dedicated tools.`);
   else {
     if (recipe.stats) lines.push(`Captured ${recipe.stats.observed} requests, ${recipe.stats.usable} usable.`);
     for (const op of recipe.graphql) lines.push(`  GraphQL ${op.operationType} ${op.operationName ?? "(anonymous)"} @ ${op.url} (${op.observed}×)`);

@@ -24,7 +24,7 @@ agent:  crates__get_api_v1_crates_crate(path={"crate": "tokio"}, pick="crate.max
 ## Features
 
 - **Many sources**: live browser capture, HAR files (devtools, mitmproxy, Charles, Proxyman: mobile and desktop apps too), OpenAPI 3 / Swagger 2 (JSON or YAML, found automatically, including behind a Swagger UI page),
-  Google Discovery documents (YouTube Data and Analytics, Drive, Gmail, Sheets, Calendar and every other Google API), OData services (`$metadata`: SAP, Dynamics, SharePoint...),
+  Google Discovery documents (YouTube Data and Analytics, Drive, Gmail, Sheets, Calendar and every other Google API), OData services (`$metadata`: SAP, Dynamics, SharePoint...), SOAP web services (WSDL),
   and local files: Postman collections, Insomnia exports, Bruno collection folders, `.http` / `.rest` files (VS Code REST Client, JetBrains), shared recipes.
 - **cURL and JSON-RPC**: paste "Copy as cURL" commands to get tools without a browser (`import_curl`); JSON-RPC calls (Ethereum and Bitcoin nodes, Kodi, Transmission, Odoo...) become one tool per method.
 - **Realtime streams**: WebSocket and Server-Sent Events connections opened by the page are captured with their protocol (subscribe and auth frames, in order) and become tools that connect, replay the handshake and return the messages received for a chosen duration.
@@ -90,7 +90,7 @@ The agent calls the management tools below, then the generated ones.
 | --- | --- |
 | `discover` | Creates a recipe from a URL. Options: `mode` (`auto`, `openapi`, `browser`), `actions`, `interactive`, `duration_seconds`, `hosts` (extra API hosts), `include` (OpenAPI operation filter), `max_endpoints`, `merge`. |
 | `discover_har` | Creates a recipe from a `.har` file (absolute path). |
-| `import_file` | Creates a recipe from a local file or folder: OpenAPI / Swagger, Google Discovery document, OData `$metadata` (with `base_url`), Postman collection, Insomnia export, Bruno collection, `.http` / `.rest` file, HAR, or a recipe shared with `export_recipe`. Options: `base_url`, `variables`, `environment` (Bruno), `include`. |
+| `import_file` | Creates a recipe from a local file or folder: OpenAPI / Swagger, Google Discovery document, OData `$metadata` or WSDL (with `base_url`), Postman collection, Insomnia export, Bruno collection, `.http` / `.rest` file, HAR, or a recipe shared with `export_recipe`. Options: `base_url`, `variables`, `environment` (Bruno), `include`. |
 | `import_curl` | Creates tools from cURL commands (devtools "Copy as cURL", bash or Windows cmd). Nothing is sent while importing; credentials go to local secrets. |
 | `export_recipe` | Writes a recipe (never its secrets) to a JSON file. |
 | `watch` | Calls a read-only generated tool every `interval_seconds` for up to `duration_seconds`, and returns the changes (field by field for JSON); `until` stops early. |
@@ -125,6 +125,7 @@ For flows that are hard to script, use `interactive: true`: a window opens, you 
 | --- | --- |
 | Browser / HAR | one tool per REST endpoint (`<recipe>__get_api_items_item`), one per GraphQL operation (`<recipe>__gql_GetCart`), `<recipe>__graphql` when GraphQL is used, and `<recipe>__request` |
 | OpenAPI / imported files | one tool per operation (up to 60 by default), `<recipe>__routes` to list every route, and `<recipe>__request` |
+| SOAP (WSDL) | one tool per operation (`<recipe>__GetQuote`) taking `params` as JSON, sent as XML; the SOAP Body comes back as JSON and a Fault is an error |
 | Recipes with JSON-RPC | one tool per method (`<recipe>__rpc_eth_getBalance`) taking `params`, and `<recipe>__rpc` for any method |
 | Recipes with streams | one tool per WebSocket / event stream (`<recipe>__stream_ws_prices`) and `<recipe>__stream` for any `ws(s)://` or event-stream URL |
 
@@ -176,6 +177,7 @@ import_file(name="team-api", path="/abs/path/Team.postman_collection.json", vari
 import_file(name="shop", path="/abs/path/bruno/shop", environment="prod")
 import_file(name="api", path="/abs/path/requests.http", variables={"host": "https://api.example.com"})
 discover(name="erp", url="https://erp.example.com/odata/v4/sales/")      # OData: finds $metadata
+discover(name="calc", url="http://www.dneonline.com/calculator.asmx")    # SOAP: finds ?wsdl
 export_recipe(name="shop", path="/abs/path/shop-recipe.json")   # share it; the receiver runs import_file
 ```
 

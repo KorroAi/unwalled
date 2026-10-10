@@ -2,6 +2,7 @@
 import YAML from "yaml";
 import { discoveryToOpenApi, isGoogleDiscovery } from "./google.js";
 import { isODataMetadata, odataToOpenApi } from "./odata.js";
+import { isWsdl, parseWsdl } from "./soap.js";
 
 const DOC_PATHS = [
   "/openapi.json", "/openapi.yaml", "/openapi.yml", "/swagger.json", "/swagger.yaml",
@@ -39,7 +40,7 @@ async function fetchText(url, timeoutMs) {
 /**
  * Tries the URL itself, links found in a Swagger UI page, then well-known locations.
  * @param {string} url @param {{ timeoutMs?: number }} [options]
- * @returns {Promise<{ specUrl: string, spec: any } | null>}
+ * @returns {Promise<{ specUrl: string, spec: any, soap?: ReturnType<typeof parseWsdl> } | null>}
  */
 export async function findOpenApi(url, { timeoutMs = 8000 } = {}) {
   const tried = new Set();
@@ -49,6 +50,13 @@ export async function findOpenApi(url, { timeoutMs = 8000 } = {}) {
     tried.add(candidate);
     const result = await fetchText(candidate, timeoutMs);
     if (!result) return null;
+    if (isWsdl(result.text)) {
+      try {
+        return { specUrl: result.url, spec: null, soap: parseWsdl(result.text, result.url) };
+      } catch {
+        return null;
+      }
+    }
     if (isODataMetadata(result.text)) {
       try {
         return { specUrl: result.url, spec: odataToOpenApi(result.text, result.url.replace(/\/?\$metadata.*$/, "")) };
@@ -79,6 +87,9 @@ export async function findOpenApi(url, { timeoutMs = 8000 } = {}) {
   // OData services describe themselves at "<service root>/$metadata".
   const odata = /odata|\.svc(\/|$)/i.test(start.href) ? await attempt(`${start.origin}${start.pathname.replace(/\/$/, "")}/$metadata`) : null;
   if (odata) return odata;
+  // SOAP services publish their WSDL at "<endpoint>?wsdl".
+  const wsdl = /\.(asmx|svc|php)$|service|soap|ws$/i.test(start.pathname) && !start.search ? await attempt(`${start.origin}${start.pathname}?wsdl`) : null;
+  if (wsdl) return wsdl;
   const prefixes = new Set([""]);
   const firstSegment = start.pathname.split("/").filter(Boolean)[0];
   if (firstSegment) prefixes.add(`/${firstSegment}`);

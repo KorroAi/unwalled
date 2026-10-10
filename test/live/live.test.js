@@ -72,4 +72,11 @@ describe("live websites", { skip: !enabled && "set UNIVERSAL_MCP_LIVE=1 to run" 
     const list = await call("northwind__list_customers", { query: { $filter: "Country eq 'France'", $top: 3, $select: "CompanyName" }, pick: "value[*].CompanyName" });
     assert.match(list.text, /HTTP 200/);
   });
+
+  it("SOAP demo service (calculator, WSDL)", TIMEOUT, async () => {
+    const discovered = await call("discover", { name: "calc", url: "http://www.dneonline.com/calculator.asmx" });
+    assert.equal(discovered.isError, false, discovered.text);
+    const sum = await call("calc__Add", { params: { intA: 2, intB: 40 }, pick: "AddResponse.AddResult" });
+    assert.match(sum.text, /HTTP 200[^\n]*\n"42"/);
+  });
 });
