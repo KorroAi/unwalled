@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `oauth_login`: first OAuth sign-in (authorization code + PKCE, loopback redirect) for Google, GitHub, Microsoft, Spotify or any provider; the token is stored for the API host and refreshed automatically with the existing refresh support.
 - Preset catalogue: `discover(name, "preset:<id>")` (GitHub, Stripe, Vercel, ElevenLabs, Discord, Binance REST and streams, CoinGecko, Open-Meteo, Google APIs); addresses checked, small public APIs described from tested endpoints.
 - In compact mode, OpenAPI recipes keep every operation (they are reached through `__operation` / `__call`) instead of the first 60.
 - Local data sources: CSV, TSV, JSON records, JSON Lines, SQLite databases and folders of such files, queried with read-only SQL through `__tables` and `__sql` (node:sqlite, no extra dependency); data is reloaded when files change.

@@ -159,6 +159,7 @@ After a few calls, ask it to `annotate_recipe` the tools it used and to `define_
 | `discover_har` | Creates a recipe from a `.har` file (absolute path). |
 | `import_file` | Creates a recipe from a local file or folder: OpenAPI / Swagger, Google Discovery document, OData `$metadata` or WSDL (with `base_url`), Postman collection, Insomnia export, Bruno collection, `.http` / `.rest` file, HAR, or a recipe shared with `export_recipe`. Options: `base_url`, `variables`, `variables_file` (Postman environment, Insomnia export, `.env`, JSON), `environment` (Bruno), `include`. |
 | `import_curl` | Creates tools from cURL commands (devtools "Copy as cURL", bash or Windows cmd). Nothing is sent while importing; credentials go to local secrets. |
+| `oauth_login` | First OAuth sign-in (authorization code + PKCE): the consent page opens in a visible window, then the token is stored for the API host and refreshed automatically. `provider`: google, github, microsoft, spotify, or `authorize_url` + `token_url`. |
 | `export_recipe` | Writes a recipe (never its secrets) to a JSON file. |
 | `watch` | Calls a read-only generated tool every `interval_seconds` for up to `duration_seconds`, and returns the changes (field by field for JSON); `until` stops early. |
 | `login` | Opens a visible browser on the recipe's profile so you can sign in (or solve a challenge); cookies are kept. |

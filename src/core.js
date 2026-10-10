@@ -10,6 +10,7 @@ import { findOpenApi, normalizeOpenApi } from "./discovery/openapi.js";
 import { exportRecipe, importCurl, importFile, saveSoapRecipe } from "./imports.js";
 import { closeDataConnections } from "./data/tools.js";
 import { resolvePreset } from "./presets.js";
+import { authorizationCodeLogin, OAUTH_PROVIDERS } from "./oauth-login.js";
 import { cacheFile, fetchToCache } from "./data/remote.js";
 import { REMOTE_DATA_KEY } from "./imports.js";
 import { assertHttpUrl, graphqlKey, MAX_FILE_BYTES, mergeByKey, mergeSecrets, restKey, rpcKey, streamKey, withJsonRpc } from "./recipe-merge.js";
@@ -574,6 +575,49 @@ export class Engine {
   }
 
   /** @param {string} name @param {{ deleteProfile?: boolean }} [options] */
+  /**
+   * First OAuth sign-in for an API host: the provider's consent page opens in a visible window (the recipe's browser profile),
+   * the access token is stored as the host's Authorization header and the refresh token as its "@oauth" settings.
+   * @param {{ name: string, host: string, provider?: string, authorizeUrl?: string, tokenUrl?: string, clientId: string, clientSecret?: string,
+   *   scopes?: string[], extra?: Record<string, string>, redirectPort?: number, durationSeconds?: number, visible?: boolean }} options
+   */
+  async oauthLogin({ name, host, provider, authorizeUrl, tokenUrl, clientId, clientSecret, scopes = [], extra = {}, redirectPort, durationSeconds = 300, visible = true }) {
+    assertRecipeName(name);
+    if (!host || /[/\s]/.test(host)) throw new Error('host must be the bare API host the token is sent to, e.g. "youtubeanalytics.googleapis.com"');
+    if (!clientId) throw new Error("client_id is required (create an OAuth client in the provider's developer console; use a desktop / native app type)");
+    const known = provider ? OAUTH_PROVIDERS[/** @type {keyof typeof OAUTH_PROVIDERS} */ (provider)] : undefined;
+    if (provider && !known) throw new Error(`Unknown provider "${provider}". Known: ${Object.keys(OAUTH_PROVIDERS).join(", ")}; or pass authorize_url and token_url.`);
+    const authorize = authorizeUrl ?? known?.authorize_url;
+    const token = tokenUrl ?? known?.token_url;
+    if (!authorize || !token) throw new Error("authorize_url and token_url are required when no provider is given.");
+    return this.withLock(name, async () => {
+      await this.closeBrowser(name);
+      const profileDir = this.store.profileDir(name);
+      const context = await launchProfile(this.config, profileDir, { headless: !visible });
+      try {
+        const result = await authorizationCodeLogin({
+          authorizeUrl: authorize, tokenUrl: token, clientId, clientSecret, scopes, extra: { ...(known?.extra ?? {}), ...extra }, redirectPort,
+          timeoutMs: Math.min(Math.max(durationSeconds, 10), 1800) * 1000,
+          openUrl: async (url) => {
+            const page = context.pages()[0] ?? (await context.newPage());
+            await page.goto(url, { waitUntil: "domcontentloaded", timeout: this.config.requestTimeoutMs * 2 });
+          },
+        });
+        const secrets = this.store.loadSecrets(name);
+        const scheme = /^bearer$/i.test(result.tokenType) ? "Bearer" : result.tokenType;
+        secrets[host] = {
+          ...(secrets[host] ?? {}),
+          authorization: `${scheme} ${result.accessToken}`,
+          ...(result.refreshToken ? { "@oauth": /** @type {any} */ ({ token_url: token, refresh_token: result.refreshToken, client_id: clientId, ...(clientSecret ? { client_secret: clientSecret } : {}) }) } : {}),
+        };
+        this.store.saveSecrets(name, secrets);
+        return { host, refreshable: !!result.refreshToken, scope: result.scope, expiresIn: result.expiresIn };
+      } finally {
+        await closeProfile(context, profileDir);
+      }
+    });
+  }
+
   /**
    * Operations kept per OpenAPI recipe: all of them in compact mode (they are reached through __operation / __call),
    * otherwise UNIVERSAL_MCP_MAX_OPENAPI_TOOLS.

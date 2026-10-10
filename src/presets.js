@@ -64,7 +64,7 @@ const BINANCE_STREAMS = {
 
 /** @type {Record<string, Preset>} */
 export const PRESETS = {
-  github: { title: "GitHub REST API", auth: 'set_credentials(host="api.github.com", headers={"authorization": "Bearer <token>"}) — a token from "gh auth token" or GitHub settings', source: { url: "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json" } },
+  github: { title: "GitHub REST API", auth: 'set_credentials(host="api.github.com", headers={"authorization": "Bearer <token>"}) with a token from "gh auth token" or GitHub settings, or oauth_login(provider="github")', source: { url: "https://raw.githubusercontent.com/github/rest-api-description/main/descriptions/api.github.com/api.github.com.json" } },
   stripe: { title: "Stripe API", auth: 'set_credentials(host="api.stripe.com", headers={"authorization": "Bearer sk_..."})', source: { url: "https://raw.githubusercontent.com/stripe/openapi/master/openapi/spec3.json" } },
   vercel: { title: "Vercel REST API", auth: 'set_credentials(host="api.vercel.com", headers={"authorization": "Bearer <token>"})', source: { url: "https://openapi.vercel.sh/" } },
   elevenlabs: { title: "ElevenLabs API", auth: 'set_credentials(host="api.elevenlabs.io", headers={"xi-api-key": "<key>"})', source: { url: "https://api.elevenlabs.io/openapi.json" } },
@@ -91,7 +91,7 @@ function google(api, version) {
 /** @param {string} host @param {boolean} [userData] */
 function GOOGLE_AUTH(host, userData = false) {
   return userData
-    ? `your own data needs an OAuth access token: set_credentials(host="${host}", headers={"authorization": "Bearer <token>"})`
+    ? `your own data needs OAuth: oauth_login(name, host="${host}", provider="google", client_id="<your OAuth client>", scopes=[...]), or set_credentials with a Bearer token`
     : `public data needs an API key: set_credentials(host="${host}", headers={"x-goog-api-key": "<key>"})`;
 }
 

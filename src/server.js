@@ -119,6 +119,30 @@ export const MANAGEMENT_TOOLS = [
     annotations: { title: "Import cURL commands", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   },
   {
+    name: "oauth_login",
+    description:
+      "Sign in to an OAuth API (Google / YouTube Analytics / Gmail / Drive, GitHub, Microsoft, Spotify, or any provider): the consent page opens in a visible window, " +
+      "the user approves, and the access token (refreshed automatically when a refresh token is given) is stored for the API host. Needs the client_id of an OAuth app " +
+      "the user created (desktop / native type); the redirect URI is http://127.0.0.1:<port>/callback.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: NAME,
+        host: { type: "string", description: 'API host the token is sent to, e.g. "youtubeanalytics.googleapis.com" or "api.github.com".' },
+        provider: { type: "string", enum: ["google", "github", "microsoft", "spotify"], description: "Fills authorize_url and token_url." },
+        authorize_url: { type: "string" },
+        token_url: { type: "string" },
+        client_id: { type: "string" },
+        client_secret: { type: "string", description: "Only when the provider issued one." },
+        scopes: { type: "array", items: { type: "string" }, description: 'e.g. ["https://www.googleapis.com/auth/yt-analytics.readonly"] or ["repo"].' },
+        redirect_port: { type: "integer", minimum: 1024, maximum: 65535, description: "Fixed loopback port when the provider requires a registered redirect URI." },
+        duration_seconds: { type: "integer", minimum: 10, maximum: 1800, description: "Time left to the user to consent (default 300)." },
+      },
+      required: ["name", "host", "client_id"],
+    },
+    annotations: { title: "OAuth sign-in", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  },
+  {
     name: "export_recipe",
     description: "Write a recipe to a JSON file to share it or move it to another machine. Recipes contain no secrets; import it with import_file.",
     inputSchema: {
@@ -373,6 +397,16 @@ export async function startServer(config) {
           const recipe = await engine.importCurl({ name: args.name, commands: args.commands, merge: args.merge });
           notifyToolsChanged();
           return text(describeRecipe(recipe, engine.toolsOf(recipe.name).map((t) => t.name)));
+        }
+        case "oauth_login": {
+          const result = await engine.oauthLogin({
+            name: args.name, host: args.host, provider: args.provider, authorizeUrl: args.authorize_url, tokenUrl: args.token_url, clientId: args.client_id,
+            clientSecret: args.client_secret, scopes: args.scopes, redirectPort: args.redirect_port, durationSeconds: args.duration_seconds,
+          });
+          return text(
+            `Signed in: a token is stored for ${result.host}${result.scope ? ` (scope: ${result.scope})` : ""}. ` +
+              (result.refreshable ? "It is refreshed automatically when it expires." : "No refresh token was given: sign in again when it expires."),
+          );
         }
         case "export_recipe": {
           const { path, bytes } = engine.exportRecipe({ name: args.name, path: args.path, overwrite: args.overwrite });
