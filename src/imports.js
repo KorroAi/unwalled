@@ -152,7 +152,7 @@ export async function importFile(engine, { name, path, include, baseUrl, variabl
   const spec = baseUrl ? { ...described.spec, servers: [{ url: baseUrl }], host: undefined, basePath: undefined } : described.spec;
   if (baseUrl && spec.swagger) Object.assign(spec, { host: new URL(baseUrl).host, basePath: new URL(baseUrl).pathname, schemes: [new URL(baseUrl).protocol.slice(0, -1)] });
   const specUrl = baseUrl ?? spec.servers?.[0]?.url ?? "https://example.invalid/";
-  const normalized = normalizeOpenApi(spec, /^https?:/.test(specUrl) ? specUrl : "https://example.invalid/", { include, maxTools: engine.config.maxOpenApiTools });
+  const normalized = normalizeOpenApi(spec, /^https?:/.test(specUrl) ? specUrl : "https://example.invalid/", { include, maxTools: engine.operationLimit() });
   if (/\{\{|example\.invalid/.test(`${specUrl} ${normalized.baseUrl}`)) normalized.warnings.unshift(`Base URL "${normalized.baseUrl}" is incomplete: import again with base_url (or variables).`);
   const now = new Date().toISOString();
   const recipe = {

@@ -5,6 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { describeRecipe, Engine } from "./core.js";
 import { log } from "./log.js";
+import { listPresets } from "./presets.js";
 import { watch } from "./watch.js";
 import { VERSION } from "./version.js";
 
@@ -21,7 +22,7 @@ export const MANAGEMENT_TOOLS = [
       type: "object",
       properties: {
         name: NAME,
-        url: { type: "string", description: "Page to load (or the URL of an OpenAPI description)." },
+        url: { type: "string", description: `Page to load, the URL of an API description, or a ready-made source "preset:<id>": ${listPresets()}.` },
         mode: { type: "string", enum: ["auto", "openapi", "browser"], description: "auto (default): OpenAPI first, then browser capture." },
         actions: {
           type: "array",

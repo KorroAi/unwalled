@@ -88,6 +88,9 @@ The result is saved as a **recipe**. Discovery runs once (seconds); after that t
 - Shared recipes cannot act on your behalf: stored defaults and macro steps cannot confirm calls, write or upload local files.
 
 **More sources and protocols**
+- Ready-made sources: `discover(name, "preset:<id>")` for GitHub, Stripe, Vercel, ElevenLabs, Discord, Binance (REST and live streams), CoinGecko, Open-Meteo,
+  YouTube, Gmail, Drive, Sheets, Calendar and any Google API (`preset:google:<api>/<version>`); the recipe says how to give credentials when the API needs them.
+  In compact mode every operation of a large API is reachable (GitHub: about 1,200 operations through `__operation` / `__call`).
 - Local and remote data: CSV, TSV, Excel (`.xlsx`, one table per sheet), iCalendar (`.ics`: events, to-dos), JSON records, JSON Lines, SQLite databases or a folder of such files
   become tables queried with read-only SQL (`<recipe>__tables`, `<recipe>__sql`), joins across files included. An http(s) address works too (published spreadsheet, private
   calendar feed, open data): it is cached and refreshed (`refresh_seconds`), and the address itself is stored with the secrets, not in the recipe.

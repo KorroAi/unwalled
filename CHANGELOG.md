@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preset catalogue: `discover(name, "preset:<id>")` (GitHub, Stripe, Vercel, ElevenLabs, Discord, Binance REST and streams, CoinGecko, Open-Meteo, Google APIs); addresses checked, small public APIs described from tested endpoints.
+- In compact mode, OpenAPI recipes keep every operation (they are reached through `__operation` / `__call`) instead of the first 60.
 - Local data sources: CSV, TSV, JSON records, JSON Lines, SQLite databases and folders of such files, queried with read-only SQL through `__tables` and `__sql` (node:sqlite, no extra dependency); data is reloaded when files change.
 - Excel workbooks (`.xlsx`) and iCalendar files (`.ics`) as data; remote data addresses (CSV, JSON, Excel, iCalendar, SQLite) cached and refreshed, with the address kept as a secret.
 - Repair re-imports recipes that came from a file or folder; exported SOAP and data recipes can be imported again.

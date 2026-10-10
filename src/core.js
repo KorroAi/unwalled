@@ -1,6 +1,6 @@
 // Engine shared by the MCP server and the CLI: discovery, recipe management, request execution.
-import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { basename, isAbsolute } from "node:path";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { closeProfile, launchProfile, saveCookies } from "./browser.js";
 import { captureTraffic, validateActions } from "./discovery/capture.js";
 import { observationsFromHar } from "./discovery/har.js";
@@ -9,6 +9,7 @@ import { redactUrl, scrubRecipe, secretValues } from "./discovery/secrets.js";
 import { findOpenApi, normalizeOpenApi } from "./discovery/openapi.js";
 import { exportRecipe, importCurl, importFile, saveSoapRecipe } from "./imports.js";
 import { closeDataConnections } from "./data/tools.js";
+import { resolvePreset } from "./presets.js";
 import { cacheFile, fetchToCache } from "./data/remote.js";
 import { REMOTE_DATA_KEY } from "./imports.js";
 import { assertHttpUrl, graphqlKey, MAX_FILE_BYTES, mergeByKey, mergeSecrets, restKey, rpcKey, streamKey, withJsonRpc } from "./recipe-merge.js";
@@ -402,6 +403,7 @@ export class Engine {
    * @param {(message: string) => void} [onProgress]
    */
   async discover(options, onProgress = () => {}) {
+    if (/^preset:/i.test(String(options.url ?? ""))) return this.discoverPreset(options, onProgress);
     const { name, url, mode = "auto", interactive = false, durationSeconds, hosts = [], include, merge = false, explorePages = 0 } = options;
     if (!Number.isInteger(explorePages) || explorePages < 0 || explorePages > 100) throw new Error("explore_pages must be an integer between 0 and 100");
     assertRecipeName(name);
@@ -416,7 +418,7 @@ export class Engine {
       const found = await findOpenApi(url, { timeoutMs: Math.min(this.config.requestTimeoutMs, 10_000) });
       if (found?.soap) return this.saveSoapRecipe(name, found.soap, { url: redactUrl(url), specUrl: redactUrl(found.specUrl) }, include);
       if (found) {
-        const normalized = normalizeOpenApi(found.spec, found.specUrl, { include, maxTools: this.config.maxOpenApiTools });
+        const normalized = normalizeOpenApi(found.spec, found.specUrl, { include, maxTools: this.operationLimit() });
         const now = new Date().toISOString();
         const recipe = {
           schemaVersion: RECIPE_SCHEMA_VERSION, name, kind: "openapi", source: { url: redactUrl(url), specUrl: redactUrl(found.specUrl) },
@@ -572,6 +574,37 @@ export class Engine {
   }
 
   /** @param {string} name @param {{ deleteProfile?: boolean }} [options] */
+  /**
+   * Operations kept per OpenAPI recipe: all of them in compact mode (they are reached through __operation / __call),
+   * otherwise UNIVERSAL_MCP_MAX_OPENAPI_TOOLS.
+   */
+  operationLimit() {
+    return this.config.foldThreshold > 0 ? Math.max(this.config.maxOpenApiTools, 5000) : this.config.maxOpenApiTools;
+  }
+
+  /**
+   * discover(name, "preset:<id>"): a ready-made source from the catalogue (presets.js).
+   * @param {Parameters<Engine["discover"]>[0]} options @param {(message: string) => void} onProgress
+   */
+  async discoverPreset(options, onProgress) {
+    const preset = resolvePreset(options.url);
+    onProgress(`Preset ${preset.id}: ${preset.title}`);
+    let recipe;
+    if ("url" in preset.source) recipe = await this.discover({ ...options, url: preset.source.url, mode: "openapi" }, onProgress);
+    else {
+      // Built-in descriptions are written to the cache and imported like a file.
+      const file = join(this.config.home, "cache", `preset-${preset.id.replace(/[^a-z0-9-]+/g, "_")}.json`);
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, JSON.stringify("spec" in preset.source ? preset.source.spec : preset.source.asyncapi));
+      recipe = await this.importFile({ name: options.name, path: file, include: options.include });
+    }
+    if (preset.auth) {
+      recipe.warnings = [`Credentials: ${preset.auth}`, ...(recipe.warnings ?? []).filter((w) => !w.startsWith("Credentials: "))];
+      this.store.saveRecipe(recipe);
+    }
+    return recipe;
+  }
+
   /**
    * Local file or folder holding a data recipe's data: the source path, or (remote data) a cache refreshed after source.refreshSeconds.
    * @param {any} recipe @returns {Promise<string>}

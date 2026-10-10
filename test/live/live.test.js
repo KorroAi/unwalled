@@ -99,4 +99,15 @@ describe("live websites", { skip: !enabled && "set UNIVERSAL_MCP_LIVE=1 to run" 
     assert.equal(prices.isError, false, prices.text);
     assert.equal(prices.text.split("\n").filter((line) => /^\[\+\d+ms\] "\d+\.\d+"$/.test(line)).length, 3, prices.text);
   });
+
+  it("presets: CoinGecko, Open-Meteo and the GitHub API in compact mode", TIMEOUT, async () => {
+    assert.equal((await call("discover", { name: "cg", url: "preset:coingecko" })).isError, false);
+    assert.match((await call("cg__simple_price", { query: { ids: "bitcoin", vs_currencies: "usd" }, pick: "bitcoin.usd" })).text, /HTTP 200[^\n]*\n\d+/);
+    assert.equal((await call("discover", { name: "meteo", url: "preset:open-meteo" })).isError, false);
+    assert.match((await call("meteo__forecast", { query: { latitude: 48.85, longitude: 2.35, current: "temperature_2m" }, pick: "current.temperature_2m" })).text, /HTTP 200/);
+    const github = await call("discover", { name: "gh", url: "preset:github" });
+    assert.match(github.text, /Credentials: set_credentials/);
+    const repo = await call("gh__call", { operation: "repos_get", arguments: { path: { owner: "nodejs", repo: "node" }, pick: "full_name" } });
+    assert.match(repo.text, /HTTP 200[\s\S]*"nodejs\/node"/);
+  });
 });
