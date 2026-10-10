@@ -17,6 +17,8 @@
 - `.http` / `.rest` request files (VS Code REST Client, JetBrains HTTP Client) imported with `import_file`.
 - OData v2 / v4 services: `$metadata` found from the service root (or imported with `base_url`) and turned into list / get / create / update / delete tools per entity set, with `$filter`, `$select`, `$expand`...
 - SOAP 1.1 / 1.2 web services: the WSDL (found at `?wsdl` or imported) becomes one tool per operation; JSON parameters are sent as XML and the response Body is returned as JSON, faults as errors.
+- AsyncAPI 2.x / 3.x: WebSocket channels become stream tools (send examples as default frames, receive payloads as message shape).
+- `import_file` `variables_file`: Postman environments, Insomnia exports, `.env` files or JSON objects.
 
 ## 0.1.0 — 2026-10-10
 

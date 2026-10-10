@@ -60,7 +60,7 @@ const MANAGEMENT_TOOLS = [
     name: "import_file",
     description:
       "Create tools from a local API description file (absolute path): OpenAPI 3 / Swagger 2 (JSON or YAML), Google Discovery document, " +
-      "Postman collection (v2.x), Insomnia export (v4), Bruno collection folder, .http / .rest file (VS Code REST Client, JetBrains), HAR capture, or a recipe exported with export_recipe. The format is detected automatically.",
+      "Postman collection (v2.x), Insomnia export (v4), Bruno collection folder, AsyncAPI (WebSocket channels), .http / .rest file (VS Code REST Client, JetBrains), HAR capture, or a recipe exported with export_recipe. The format is detected automatically.",
     inputSchema: {
       type: "object",
       properties: {
@@ -68,6 +68,7 @@ const MANAGEMENT_TOOLS = [
         path: { type: "string", description: "Absolute path to the file." },
         base_url: { type: "string", description: "Override the API base URL (e.g. when a collection uses an undefined {{baseUrl}})." },
         variables: { type: "object", additionalProperties: { type: "string" }, description: "Values for {{variables}} of Postman / Insomnia / Bruno collections and .http files." },
+        variables_file: { type: "string", description: "Absolute path to a variables file: Postman environment, Insomnia export, .env or a JSON object." },
         environment: { type: "string", description: "Bruno only: environment to use (default: the first one)." },
         include: { type: "string", description: "Regular expression selecting which operations become tools." },
         hosts: { type: "array", items: { type: "string" }, description: "HAR only: keep these hosts." },
@@ -219,7 +220,7 @@ export async function startServer(config) {
           return text(describeRecipe(recipe, engine.toolsOf(recipe.name).map((t) => t.name)));
         }
         case "import_file": {
-          const recipe = await engine.importFile({ name: args.name, path: args.path, baseUrl: args.base_url, variables: args.variables, environment: args.environment, include: args.include, hosts: args.hosts, merge: args.merge });
+          const recipe = await engine.importFile({ name: args.name, path: args.path, baseUrl: args.base_url, variables: args.variables, variablesFile: args.variables_file, environment: args.environment, include: args.include, hosts: args.hosts, merge: args.merge });
           notifyToolsChanged();
           return text(describeRecipe(recipe, engine.toolsOf(recipe.name).map((t) => t.name)));
         }

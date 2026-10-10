@@ -8,6 +8,7 @@ import { inferEndpoints, navigationVariables, redactUrl } from "./discovery/infe
 import { brunoToOpenApi, isBrunoCollection } from "./discovery/bruno.js";
 import { parseCurl, splitCurlCommands } from "./discovery/curl.js";
 import { parseHttpFile } from "./discovery/httpfile.js";
+import { readVariablesFile } from "./discovery/variables.js";
 import { describeFile } from "./discovery/files.js";
 import { inferJsonRpc } from "./discovery/jsonrpc.js";
 import { findOpenApi, normalizeOpenApi } from "./discovery/openapi.js";
@@ -284,12 +285,15 @@ export class Engine {
   /**
    * Creates a recipe from a local file: OpenAPI 3 / Swagger 2 (JSON or YAML), Google Discovery document,
    * Postman collection, Insomnia export, HAR capture, exported recipe, or a Bruno collection folder.
-   * @param {{ name: string, path: string, include?: string, baseUrl?: string, variables?: Record<string, string>, environment?: string,
+   * @param {{ name: string, path: string, include?: string, baseUrl?: string, variables?: Record<string, string>, variablesFile?: string, environment?: string,
    *   hosts?: string[], maxEndpoints?: number, merge?: boolean }} options
    */
-  async importFile({ name, path, include, baseUrl, variables = {}, environment, hosts, maxEndpoints, merge }) {
+  async importFile({ name, path, include, baseUrl, variables: given = {}, variablesFile, environment, hosts, maxEndpoints, merge }) {
     assertRecipeName(name);
     if (!isAbsolute(path)) throw new Error("path must be an absolute path");
+    if (variablesFile && !isAbsolute(variablesFile)) throw new Error("variables_file must be an absolute path");
+    // Explicit variables win over the file's.
+    const variables = { ...(variablesFile ? readVariablesFile(variablesFile) : {}), ...given };
     if (include) new RegExp(include); // validate early
     if (baseUrl) assertHttpUrl(baseUrl);
     let described;
@@ -303,6 +307,15 @@ export class Engine {
       described = describeFile(readFileSync(path, "utf8"), { variables, serviceRoot: baseUrl });
     }
     if (described.format === "har") return this.discoverHar({ name, harPath: path, hosts, maxEndpoints, merge });
+    if (described.format === "asyncapi") {
+      const now = new Date().toISOString();
+      const { title, baseUrl: streamsBase, streams, warnings } = described.asyncapi;
+      const recipe = {
+        schemaVersion: RECIPE_SCHEMA_VERSION, name, kind: "har", source: { file: path, format: "asyncapi" }, title, baseUrl: baseUrl ?? streamsBase,
+        createdAt: this.recipes.get(name)?.createdAt ?? now, updatedAt: now, endpoints: [], graphql: [], streams, warnings,
+      };
+      return this.withLock(name, async () => this.saveRecipe(recipe));
+    }
     if (described.format === "soap") return this.saveSoapRecipe(name, described.soap, { file: path, format: "soap" }, include);
     if (described.format === "recipe") {
       const shared = described.recipe;

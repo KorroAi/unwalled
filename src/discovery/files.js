@@ -3,6 +3,7 @@
 // HAR files are recognised too (they are imported as captured traffic, not as a description).
 import YAML from "yaml";
 import { insomniaToOpenApi, isInsomniaExport, isPostmanCollection, postmanToOpenApi } from "./collections.js";
+import { asyncApiToStreams, isAsyncApi } from "./asyncapi.js";
 import { discoveryToOpenApi, isGoogleDiscovery } from "./google.js";
 import { isODataMetadata, odataToOpenApi } from "./odata.js";
 import { isWsdl, parseWsdl } from "./soap.js";
@@ -10,7 +11,7 @@ import { isWsdl, parseWsdl } from "./soap.js";
 /**
  * @param {string} text file content
  * @param {{ variables?: Record<string, string>, serviceRoot?: string }} [options] values for {{variables}} of collections; service root of an OData $metadata file
- * @returns {{ format: "har" } | { format: "recipe", recipe: any } | { format: "soap", soap: ReturnType<typeof parseWsdl> } | { format: "openapi" | "swagger" | "google" | "postman" | "insomnia" | "odata", spec: any, warnings: string[] }}
+ * @returns {{ format: "har" } | { format: "asyncapi", asyncapi: ReturnType<typeof asyncApiToStreams> } | { format: "recipe", recipe: any } | { format: "soap", soap: ReturnType<typeof parseWsdl> } | { format: "openapi" | "swagger" | "google" | "postman" | "insomnia" | "odata", spec: any, warnings: string[] }}
  */
 export function describeFile(text, { variables = {}, serviceRoot } = {}) {
   if (isWsdl(text)) return { format: "soap", soap: parseWsdl(text, serviceRoot ?? "http://localhost/") };
@@ -28,6 +29,7 @@ export function describeFile(text, { variables = {}, serviceRoot } = {}) {
   if (Array.isArray(doc?.log?.entries)) return { format: "har" };
   if (typeof doc.schemaVersion === "number" && ["browser", "har", "openapi"].includes(doc.kind) && (Array.isArray(doc.endpoints) || Array.isArray(doc.operations)))
     return { format: "recipe", recipe: doc };
+  if (isAsyncApi(doc)) return { format: "asyncapi", asyncapi: asyncApiToStreams(doc) };
   if (isGoogleDiscovery(doc)) return { format: "google", spec: discoveryToOpenApi(doc), warnings: [] };
   if (isPostmanCollection(doc)) return { format: "postman", ...postmanToOpenApi(doc, variables) };
   if (isInsomniaExport(doc)) return { format: "insomnia", ...insomniaToOpenApi(doc, variables) };
