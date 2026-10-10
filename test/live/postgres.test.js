@@ -1,6 +1,6 @@
-// Real PostgreSQL server. Skipped unless UNIVERSAL_MCP_PG_URL is set, e.g. a throwaway container:
+// Real PostgreSQL server. Skipped unless UNWALLED_PG_URL is set, e.g. a throwaway container:
 //   docker run -d --name umcp-pg -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=shop -p 127.0.0.1::5432 postgres:17
-//   UNIVERSAL_MCP_PG_URL="postgres://postgres:secret@127.0.0.1:<port>/shop" node --test test/live/postgres.test.js
+//   UNWALLED_PG_URL="postgres://postgres:secret@127.0.0.1:<port>/shop" node --test test/live/postgres.test.js
 // It only reads (system catalogs), so any database works.
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -9,13 +9,13 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { connectPostgres } from "../../src/data/postgres.js";
 
-const url = process.env.UNIVERSAL_MCP_PG_URL;
+const url = process.env.UNWALLED_PG_URL;
 
-describe("PostgreSQL data source", { skip: !url && "set UNIVERSAL_MCP_PG_URL to run" }, () => {
+describe("PostgreSQL data source", { skip: !url && "set UNWALLED_PG_URL to run" }, () => {
   let home, engine;
   before(async () => {
     home = mkdtempSync(join(tmpdir(), "umcp-pg-"));
-    process.env.UNIVERSAL_MCP_HOME = home;
+    process.env.UNWALLED_HOME = home;
     const { loadConfig } = await import("../../src/config.js");
     const { Engine } = await import("../../src/core.js");
     engine = new Engine(loadConfig());

@@ -1,6 +1,6 @@
-// Real MySQL or MariaDB server. Skipped unless UNIVERSAL_MCP_MYSQL_URL is set, e.g. a throwaway container:
+// Real MySQL or MariaDB server. Skipped unless UNWALLED_MYSQL_URL is set, e.g. a throwaway container:
 //   docker run -d --name umcp-mysql -e MYSQL_ROOT_PASSWORD=secret -e MYSQL_DATABASE=shop -p 127.0.0.1::3306 mysql:8.4
-//   UNIVERSAL_MCP_MYSQL_URL="mysql://root:secret@127.0.0.1:<port>/shop" node --test test/live/mysql.test.js
+//   UNWALLED_MYSQL_URL="mysql://root:secret@127.0.0.1:<port>/shop" node --test test/live/mysql.test.js
 // It only reads (no table needed).
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
@@ -9,13 +9,13 @@ import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { connectMysql } from "../../src/data/mysql.js";
 
-const url = process.env.UNIVERSAL_MCP_MYSQL_URL;
+const url = process.env.UNWALLED_MYSQL_URL;
 
-describe("MySQL / MariaDB data source", { skip: !url && "set UNIVERSAL_MCP_MYSQL_URL to run" }, () => {
+describe("MySQL / MariaDB data source", { skip: !url && "set UNWALLED_MYSQL_URL to run" }, () => {
   let home, engine;
   before(async () => {
     home = mkdtempSync(join(tmpdir(), "umcp-mysql-"));
-    process.env.UNIVERSAL_MCP_HOME = home;
+    process.env.UNWALLED_HOME = home;
     const { loadConfig } = await import("../../src/config.js");
     const { Engine } = await import("../../src/core.js");
     engine = new Engine(loadConfig());

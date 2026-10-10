@@ -431,7 +431,7 @@ export function inferEndpoints(observations, { variables = navigationVariables([
   }));
 
   const all = [...graphql, ...endpoints].sort((a, b) => b.observed - a.observed);
-  if (all.length > maxEndpoints) warnings.push(`Kept the ${maxEndpoints} most frequent of ${all.length} endpoints (UNIVERSAL_MCP_MAX_ENDPOINTS).`);
+  if (all.length > maxEndpoints) warnings.push(`Kept the ${maxEndpoints} most frequent of ${all.length} endpoints (UNWALLED_MAX_ENDPOINTS).`);
   const kept = all.slice(0, maxEndpoints);
   if (!kept.length) {
     warnings.push(

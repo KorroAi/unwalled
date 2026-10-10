@@ -71,7 +71,7 @@ describe("SOAP tools", () => {
     await new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve(undefined)));
     base = `http://127.0.0.1:${/** @type {import("node:net").AddressInfo} */ (server.address()).port}`;
     home = mkdtempSync(join(tmpdir(), "umcp-soap-"));
-    process.env.UNIVERSAL_MCP_HOME = home;
+    process.env.UNWALLED_HOME = home;
     const { loadConfig } = await import("../../src/config.js");
     const { Engine } = await import("../../src/core.js");
     engine = new Engine(loadConfig());

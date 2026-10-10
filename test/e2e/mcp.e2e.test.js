@@ -1,5 +1,5 @@
 // End-to-end: a real MCP client drives the server (spawned like an MCP host would) against local fixture servers.
-// Requires a Chromium-based browser (Chrome by default; set UNIVERSAL_MCP_BROWSER=chromium on CI).
+// Requires a Chromium-based browser (Chrome by default; set UNWALLED_BROWSER=chromium on CI).
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -15,7 +15,7 @@ import { MANAGEMENT_TOOLS } from "../../src/server.js";
 import { Store } from "../../src/store.js";
 import { startFixtureServers } from "./fixture-servers.js";
 
-const BIN = fileURLToPath(new URL("../../bin/universal-mcp.js", import.meta.url));
+const BIN = fileURLToPath(new URL("../../bin/unwalled.js", import.meta.url));
 const TIMEOUT = { timeout: 180_000 };
 const MANAGEMENT = MANAGEMENT_TOOLS.map((t) => t.name).sort();
 
@@ -30,7 +30,7 @@ async function connect(env = {}) {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [BIN],
-    env: { ...process.env, UNIVERSAL_MCP_HOME: home, ...env },
+    env: { ...process.env, UNWALLED_HOME: home, ...env },
     stderr: "pipe",
   });
   transport.stderr?.on("data", (chunk) => {
@@ -59,7 +59,7 @@ async function toolNames(prefix = "", on = client) {
 const stats = async () => (await fetch(`${fixtures.shopUrl}/__stats`)).json();
 
 before(async () => {
-  home = mkdtempSync(join(tmpdir(), "universal-mcp-e2e-"));
+  home = mkdtempSync(join(tmpdir(), "unwalled-e2e-"));
   fixtures = await startFixtureServers();
   client = await connect();
 });
@@ -78,7 +78,7 @@ after(async () => {
   }
 });
 
-describe("universal-mcp end to end", () => {
+describe("unwalled end to end", () => {
   it("starts with only the management tools", async () => {
     assert.deepEqual(await toolNames(), MANAGEMENT);
     assert.match((await call("list_recipes")).text, /No recipe yet/);
@@ -265,7 +265,7 @@ describe("universal-mcp end to end", () => {
   it("lists only search tools in search mode, and finds and runs any tool", TIMEOUT, async () => {
     // One server at a time: a browser profile can only be opened by one process.
     await client.close();
-    const other = await connect({ UNIVERSAL_MCP_TOOL_MODE: "search" });
+    const other = await connect({ UNWALLED_TOOL_MODE: "search" });
     try {
       assert.deepEqual(await toolNames("", other), MANAGEMENT);
       const found = await call("search_tools", { query: "product reviews" }, other);
@@ -410,7 +410,7 @@ describe("universal-mcp end to end", () => {
 
   it("works from the command line", TIMEOUT, async () => {
     const run = promisify(execFile);
-    const env = { ...process.env, UNIVERSAL_MCP_HOME: home };
+    const env = { ...process.env, UNWALLED_HOME: home };
     assert.match((await run(process.execPath, [BIN, "--version"], { env })).stdout, /^\d+\.\d+\.\d+/);
     const list = await run(process.execPath, [BIN, "list"], { env });
     assert.match(list.stdout, /Recipe "pets" \(openapi\)/);

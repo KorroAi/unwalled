@@ -1,4 +1,4 @@
-// Tests against real public websites. Skipped unless UNIVERSAL_MCP_LIVE=1 (they need network access
+// Tests against real public websites. Skipped unless UNWALLED_LIVE=1 (they need network access
 // and depend on third-party sites that can change at any time).
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -9,8 +9,8 @@ import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
-const enabled = process.env.UNIVERSAL_MCP_LIVE === "1";
-const BIN = fileURLToPath(new URL("../../bin/universal-mcp.js", import.meta.url));
+const enabled = process.env.UNWALLED_LIVE === "1";
+const BIN = fileURLToPath(new URL("../../bin/unwalled.js", import.meta.url));
 const TIMEOUT = { timeout: 240_000 };
 
 let home;
@@ -21,11 +21,11 @@ async function call(name, args = {}) {
   return { text: /** @type {any} */ (result.content)[0].text, isError: !!result.isError };
 }
 
-describe("live websites", { skip: !enabled && "set UNIVERSAL_MCP_LIVE=1 to run" }, () => {
+describe("live websites", { skip: !enabled && "set UNWALLED_LIVE=1 to run" }, () => {
   before(async () => {
-    home = mkdtempSync(join(tmpdir(), "universal-mcp-live-"));
+    home = mkdtempSync(join(tmpdir(), "unwalled-live-"));
     client = new Client({ name: "live", version: "0.0.0" });
-    await client.connect(new StdioClientTransport({ command: process.execPath, args: [BIN], env: { ...process.env, UNIVERSAL_MCP_HOME: home } }));
+    await client.connect(new StdioClientTransport({ command: process.execPath, args: [BIN], env: { ...process.env, UNWALLED_HOME: home } }));
   });
 
   after(async () => {

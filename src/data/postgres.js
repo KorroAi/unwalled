@@ -155,7 +155,7 @@ export async function connectPostgres(url, { timeoutMs = 15_000 } = {}) {
   const send = (/** @type {Buffer} */ data) => socket.write(data);
 
   // ---------------------------------------------------------------- startup and authentication
-  const params = Buffer.concat([cstring("user"), cstring(user), cstring("database"), cstring(database), cstring("application_name"), cstring("universal-mcp"), cstring("client_encoding"), cstring("UTF8"), Buffer.from([0])]);
+  const params = Buffer.concat([cstring("user"), cstring(user), cstring("database"), cstring(database), cstring("application_name"), cstring("unwalled"), cstring("client_encoding"), cstring("UTF8"), Buffer.from([0])]);
   send(Buffer.concat([int32(params.length + 8), int32(196608), params]));
   /** @type {{ nonce: string, clientFirstBare: string, saltedPassword?: Buffer, authMessage?: string }} */ let scram = { nonce: "", clientFirstBare: "" };
   for (;;) {

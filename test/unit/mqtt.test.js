@@ -118,7 +118,7 @@ describe("MQTT", () => {
 
   it("turns AsyncAPI MQTT channels into stream tools that use stored credentials", async () => {
     const home = mkdtempSync(join(tmpdir(), "umcp-mqtt-"));
-    process.env.UNIVERSAL_MCP_HOME = home;
+    process.env.UNWALLED_HOME = home;
     const { loadConfig } = await import("../../src/config.js");
     const { Engine } = await import("../../src/core.js");
     const engine = new Engine(loadConfig());

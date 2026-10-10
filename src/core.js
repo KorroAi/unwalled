@@ -620,7 +620,7 @@ export class Engine {
 
   /**
    * Operations kept per OpenAPI recipe: all of them in compact mode (they are reached through __operation / __call),
-   * otherwise UNIVERSAL_MCP_MAX_OPENAPI_TOOLS.
+   * otherwise UNWALLED_MAX_OPENAPI_TOOLS.
    */
   operationLimit() {
     return this.config.foldThreshold > 0 ? Math.max(this.config.maxOpenApiTools, 5000) : this.config.maxOpenApiTools;

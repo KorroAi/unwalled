@@ -86,7 +86,7 @@ export class Store {
       try {
         return decryptJson(stored, secretKey(this.config.home).key);
       } catch (error) {
-        log(`Cannot decrypt the secrets of "${name}" (${error.message}): wrong UNIVERSAL_MCP_SECRET_KEY or another user? Sign in again or set credentials.`);
+        log(`Cannot decrypt the secrets of "${name}" (${error.message}): wrong UNWALLED_SECRET_KEY or another user? Sign in again or set credentials.`);
         return {};
       }
     }

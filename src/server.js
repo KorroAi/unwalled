@@ -325,11 +325,11 @@ export async function startServer(config) {
   /** Tools listed even in search mode (pinned with search_tools). @type {Set<string>} */
   const pinned = new Set();
   const server = new Server(
-    { name: "universal-mcp", version: VERSION },
+    { name: "unwalled", version: VERSION },
     {
       capabilities: { tools: { listChanged: true } },
       instructions:
-        "universal-mcp turns websites, HAR captures and OpenAPI descriptions into tools. Call list_recipes to see what is already available. " +
+        "unwalled turns websites, HAR captures and OpenAPI descriptions into tools. Call list_recipes to see what is already available. " +
         "To use a new site, call discover with a name and URL (add actions to reach the data, explore_pages to cover more of the site, or interactive=true to let the user browse), then call the generated <name>__* tools. " +
         "For sites behind a login, call login first. If a site has no usable API, use the ui tool. When not every generated tool is listed, find them with search_tools and run them with call_tool. " +
         "Generated tools accept pick (to trim JSON), max_chars, save_to (downloads), dry_run (preview) and confirm (for calls held by the safety policy). " +

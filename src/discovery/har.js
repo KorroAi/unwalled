@@ -24,7 +24,7 @@ function postBody(postData) {
   const params = Array.isArray(postData.params) ? postData.params.filter((p) => p && typeof p.name === "string") : [];
   if (!params.length) return { text: typeof postData.text === "string" ? postData.text : null, contentType: mime };
   if (/multipart\/form-data/i.test(mime ?? "")) {
-    const boundary = "universal-mcp-har";
+    const boundary = "unwalled-har";
     const parts = params.map((p) =>
       `--${boundary}\r\nContent-Disposition: form-data; name="${p.name}"${p.fileName ? `; filename="${p.fileName}"` : ""}\r\n\r\n${p.fileName ? "" : (p.value ?? "")}\r\n`,
     );

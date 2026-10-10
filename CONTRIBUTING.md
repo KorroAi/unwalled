@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in improving universal-mcp.
+Thanks for your interest in improving unwalled.
 
 ## Setup
 
@@ -11,9 +11,9 @@ npm run check
 
 `npm run check` runs the type checker, the unit tests and the end-to-end tests. The end-to-end tests start local
 fixture websites and drive the server through a real MCP client; they need Chrome or Edge, or Playwright's Chromium
-(`npx playwright-core install chromium` and `UNIVERSAL_MCP_BROWSER=chromium`).
+(`npx playwright-core install chromium` and `UNWALLED_BROWSER=chromium`).
 
-Tests against real websites are optional: `UNIVERSAL_MCP_LIVE=1 npm run test:live` (crates.io and Swagger Petstore).
+Tests against real websites are optional: `UNWALLED_LIVE=1 npm run test:live` (crates.io and Swagger Petstore).
 
 ## Guidelines
 

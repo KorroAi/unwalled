@@ -5,38 +5,38 @@ import { describeRecipe, Engine } from "./core.js";
 import { startServer } from "./server.js";
 import { VERSION } from "./version.js";
 
-const HELP = `universal-mcp ${VERSION} — turn any website, HAR capture or OpenAPI spec into MCP tools.
+const HELP = `unwalled ${VERSION} — turn any website, HAR capture or OpenAPI spec into MCP tools.
 
 Usage:
-  universal-mcp [serve]                         Run the MCP server on stdio (what MCP clients launch)
-  universal-mcp discover <name> <url> [options] Discover an API from the terminal
+  unwalled [serve]                         Run the MCP server on stdio (what MCP clients launch)
+  unwalled discover <name> <url> [options] Discover an API from the terminal
       --mode auto|openapi|browser   --interactive   --duration <seconds>
       --actions '<json array>'      --host <host> (repeatable)   --include <regex>   --merge
       --explore <pages>             also follow same-site links (never logout, delete, pay...)
-  universal-mcp har <name> <file.har> [--host <host>] [--merge]
-  universal-mcp import <name> <file> [--base-url <url>] [--include <regex>]
+  unwalled har <name> <file.har> [--host <host>] [--merge]
+  unwalled import <name> <file> [--base-url <url>] [--include <regex>]
                                                 OpenAPI, Swagger, Google Discovery, Postman, Insomnia, HAR,
                                                 exported recipe, or Bruno collection folder
-  universal-mcp login <name> <url> [--duration <seconds>]
-  universal-mcp check <name> [--repair]          Call read-only tools and report broken or changed ones
-  universal-mcp curl <name> <file.txt> [--merge] Create tools from cURL commands saved in a text file
-  universal-mcp export <name> <file.json>       Write a recipe (no secrets) to share it; import it with "import"
-  universal-mcp list                            List recipes
-  universal-mcp inspect <name>                  Show a recipe as JSON
-  universal-mcp forget <name> [--delete-profile]
-  universal-mcp --help | --version
+  unwalled login <name> <url> [--duration <seconds>]
+  unwalled check <name> [--repair]          Call read-only tools and report broken or changed ones
+  unwalled curl <name> <file.txt> [--merge] Create tools from cURL commands saved in a text file
+  unwalled export <name> <file.json>       Write a recipe (no secrets) to share it; import it with "import"
+  unwalled list                            List recipes
+  unwalled inspect <name>                  Show a recipe as JSON
+  unwalled forget <name> [--delete-profile]
+  unwalled --help | --version
 
 Environment:
-  UNIVERSAL_MCP_HOME        Data directory (default ~/.universal-mcp)
-  UNIVERSAL_MCP_BROWSER     chrome (default) | msedge | chromium | /path/to/browser
-  UNIVERSAL_MCP_MAX_OUTPUT  Max characters returned per tool call (default 40000)
-  UNIVERSAL_MCP_TIMEOUT_MS  Request timeout (default 30000)
-  UNIVERSAL_MCP_MAX_ENDPOINTS, UNIVERSAL_MCP_MAX_OPENAPI_TOOLS  Tool count limits (default 40 / 60)
-  UNIVERSAL_MCP_CONFIRM     Calls needing confirm=true: destructive (default) | writes | none
-  UNIVERSAL_MCP_RATE_LIMIT  Requests per second per host (default 5, 0 = unlimited)
-  UNIVERSAL_MCP_RETRIES     Automatic retries of temporary failures (default 2)
-  UNIVERSAL_MCP_TOOL_MODE   auto (default: search mode above UNIVERSAL_MCP_TOOL_THRESHOLD=60 tools) | all | search
-  UNIVERSAL_MCP_AUDIT       0 disables the audit log (<home>/audit.log)
+  UNWALLED_HOME        Data directory (default ~/.unwalled)
+  UNWALLED_BROWSER     chrome (default) | msedge | chromium | /path/to/browser
+  UNWALLED_MAX_OUTPUT  Max characters returned per tool call (default 40000)
+  UNWALLED_TIMEOUT_MS  Request timeout (default 30000)
+  UNWALLED_MAX_ENDPOINTS, UNWALLED_MAX_OPENAPI_TOOLS  Tool count limits (default 40 / 60)
+  UNWALLED_CONFIRM     Calls needing confirm=true: destructive (default) | writes | none
+  UNWALLED_RATE_LIMIT  Requests per second per host (default 5, 0 = unlimited)
+  UNWALLED_RETRIES     Automatic retries of temporary failures (default 2)
+  UNWALLED_TOOL_MODE   auto (default: search mode above UNWALLED_TOOL_THRESHOLD=60 tools) | all | search
+  UNWALLED_AUDIT       0 disables the audit log (<home>/audit.log)
 `;
 
 const OPTIONS = /** @type {const} */ ({
@@ -57,7 +57,7 @@ const OPTIONS = /** @type {const} */ ({
 
 /** @param {string[]} positionals @param {number} count @param {string} usage */
 function expect(positionals, count, usage) {
-  if (positionals.length !== count) throw new Error(`Usage: universal-mcp ${usage}`);
+  if (positionals.length !== count) throw new Error(`Usage: unwalled ${usage}`);
 }
 
 /** @param {string[]} argv */
@@ -154,7 +154,7 @@ export async function main(argv) {
         console.log(`Recipe "${rest[0]}" deleted.`);
         break;
       default:
-        throw new Error(`Unknown command "${command}". Run universal-mcp --help.`);
+        throw new Error(`Unknown command "${command}". Run unwalled --help.`);
     }
   } finally {
     await engine.close();

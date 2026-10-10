@@ -17,7 +17,7 @@ const makeConfig = (overrides = {}) => {
 
 describe("secrets encryption", () => {
   after(() => {
-    delete process.env.UNIVERSAL_MCP_SECRET_KEY;
+    delete process.env.UNWALLED_SECRET_KEY;
     for (const home of homes) rmSync(home, { recursive: true, force: true });
   });
 
@@ -33,7 +33,7 @@ describe("secrets encryption", () => {
   });
 
   it("stores secrets encrypted with a passphrase, and migrates plaintext files", () => {
-    process.env.UNIVERSAL_MCP_SECRET_KEY = "correct horse battery staple";
+    process.env.UNWALLED_SECRET_KEY = "correct horse battery staple";
     const config = makeConfig();
     const store = new Store(/** @type {any} */ (config));
     store.saveSecrets("shop", { "shop.io": { cookie: "sid=s3cr3t" } });
@@ -48,7 +48,7 @@ describe("secrets encryption", () => {
   });
 
   it("returns no secrets (instead of crashing) when the key is wrong", async () => {
-    process.env.UNIVERSAL_MCP_SECRET_KEY = "one";
+    process.env.UNWALLED_SECRET_KEY = "one";
     const config = makeConfig();
     new Store(/** @type {any} */ (config)).saveSecrets("x", { "x.io": { cookie: "c" } });
     // A fresh process with another passphrase: emulate by encrypting with a different key.
@@ -64,7 +64,7 @@ describe("secrets encryption", () => {
   });
 
   it("uses DPAPI on Windows when no passphrase is set", { skip: process.platform !== "win32" && "Windows only" }, () => {
-    delete process.env.UNIVERSAL_MCP_SECRET_KEY;
+    delete process.env.UNWALLED_SECRET_KEY;
     const config = makeConfig();
     const first = secretKey(config.home);
     assert.match(first.source, /DPAPI/);

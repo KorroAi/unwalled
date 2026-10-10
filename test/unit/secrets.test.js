@@ -63,7 +63,7 @@ after(() => homes.forEach((home) => rmSync(home, { recursive: true, force: true 
 
 /** @param {object[]} entries */
 async function importHar(entries) {
-  const home = mkdtempSync(join(tmpdir(), "universal-mcp-leak-"));
+  const home = mkdtempSync(join(tmpdir(), "unwalled-leak-"));
   homes.push(home);
   const config = /** @type {any} */ ({
     home, recipesDir: join(home, "recipes"), profilesDir: join(home, "profiles"), secretsDir: join(home, "secrets"), stateDir: join(home, "state"), auditFile: null, confirm: "destructive", rateLimit: 0, toolMode: "all", toolThreshold: 60,

@@ -156,7 +156,7 @@ export function listenMqtt(url, { topics, qos = 0, publish = [], username, passw
         }
       }
     };
-    const connectFrame = connectPacket({ clientId: `universal-mcp-${Math.random().toString(16).slice(2, 10)}`, username, password });
+    const connectFrame = connectPacket({ clientId: `unwalled-${Math.random().toString(16).slice(2, 10)}`, username, password });
 
     if (/^wss?:$/.test(target.protocol)) {
       const socket = new WebSocket(url, ["mqtt"]);

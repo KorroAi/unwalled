@@ -118,7 +118,7 @@ describe("audit regressions", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const { Engine } = await import("../../src/core.js");
-    const home = mkdtempSync(join(tmpdir(), "universal-mcp-audit-"));
+    const home = mkdtempSync(join(tmpdir(), "unwalled-audit-"));
     const config = /** @type {any} */ ({
       home, recipesDir: join(home, "recipes"), profilesDir: join(home, "profiles"), secretsDir: join(home, "secrets"), stateDir: join(home, "state"), auditFile: null,
       browser: "chrome", maxOutputChars: 40_000, requestTimeoutMs: 5000, maxEndpoints: 40, maxOpenApiTools: 60, confirm: "destructive", rateLimit: 0, toolMode: "all", toolThreshold: 60,
@@ -150,7 +150,7 @@ describe("audit regressions", () => {
     writeFileSync(harPath, JSON.stringify({ log: { entries: [entry] } }));
     const recipe = await engine.discoverHar({ name: "h", harPath });
     assert.equal(recipe.source.harFile, "private-folder-name.har");
-    assert.ok(!readFileSync(join(home, "recipes", "h.json"), "utf8").includes("universal-mcp-audit-"), "no local path in the recipe");
+    assert.ok(!readFileSync(join(home, "recipes", "h.json"), "utf8").includes("unwalled-audit-"), "no local path in the recipe");
     assert.equal(recipe.endpoints[0].bodyKind, "multipart");
     assert.deepEqual(recipe.endpoints[0].fileFields, ["doc"]);
     const tool = engine.toolsOf("h").find((t) => t.name === "h__post_upload");
@@ -218,7 +218,7 @@ describe("robustness", () => {
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
     const { Engine } = await import("../../src/core.js");
-    const home = mkdtempSync(join(tmpdir(), "universal-mcp-bad-"));
+    const home = mkdtempSync(join(tmpdir(), "unwalled-bad-"));
     mkdirSync(join(home, "recipes"), { recursive: true });
     writeFileSync(join(home, "recipes", "bad.json"), JSON.stringify({ schemaVersion: 1, name: "bad", kind: "browser", baseUrl: "https://x.test" }));
     const config = /** @type {any} */ ({ home, recipesDir: join(home, "recipes"), profilesDir: join(home, "profiles"), secretsDir: join(home, "secrets"), stateDir: join(home, "state"), auditFile: null, maxOutputChars: 1000, requestTimeoutMs: 1000, maxEndpoints: 40, maxOpenApiTools: 60, confirm: "destructive", rateLimit: 0 });

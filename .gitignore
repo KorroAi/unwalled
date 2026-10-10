@@ -2,8 +2,8 @@ node_modules/
 *.log
 *.tmp
 .DS_Store
-# Local data, if UNIVERSAL_MCP_HOME points inside the repository
-.universal-mcp/
+# Local data, if UNWALLED_HOME points inside the repository
+.unwalled/
 recipes/
 secrets/
 profiles/

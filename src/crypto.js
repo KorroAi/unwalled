@@ -1,6 +1,6 @@
 // Encryption at rest for stored secrets (AES-256-GCM).
 // Key, in order of preference:
-//   1. UNIVERSAL_MCP_SECRET_KEY (a passphrase, stretched with scrypt and a per-installation salt);
+//   1. UNWALLED_SECRET_KEY (a passphrase, stretched with scrypt and a per-installation salt);
 //   2. on Windows, a random key protected with DPAPI (only the same Windows user can unprotect it);
 //   3. elsewhere, a random key in <home>/secret.key (mode 600): it keeps secrets out of backups and
 //      shared recipe folders, but anyone who can read the home directory can read the key too.
@@ -8,6 +8,7 @@ import { execFileSync } from "node:child_process";
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { env } from "./env.js";
 
 /** @type {Map<string, { key: Buffer, source: string }>} */
 const keys = new Map();
@@ -36,11 +37,11 @@ export function secretKey(home) {
   const cached = keys.get(home);
   if (cached) return cached;
   let result;
-  const passphrase = process.env.UNIVERSAL_MCP_SECRET_KEY;
+  const passphrase = env("SECRET_KEY");
   if (passphrase) {
     const saltFile = join(home, "secret.salt");
     if (!existsSync(saltFile)) writePrivate(saltFile, randomBytes(16).toString("base64"));
-    result = { key: scryptSync(passphrase, Buffer.from(readFileSync(saltFile, "utf8"), "base64"), 32), source: "passphrase (UNIVERSAL_MCP_SECRET_KEY)" };
+    result = { key: scryptSync(passphrase, Buffer.from(readFileSync(saltFile, "utf8"), "base64"), 32), source: "passphrase (UNWALLED_SECRET_KEY)" };
   } else if (process.platform === "win32") {
     const file = join(home, "secret.key.dpapi");
     if (!existsSync(file)) writePrivate(file, powershell(DPAPI("Protect"), randomBytes(32).toString("base64")));

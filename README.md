@@ -1,9 +1,9 @@
-# universal-mcp
+# unwalled
 
 **Turn any website, HAR capture or OpenAPI spec into MCP tools. Discover once, call forever.**
 
 Most websites and apps have no public API and no MCP server, yet they all talk to an internal API.
-`universal-mcp` finds that API and gives it to your agent as typed, documented tools, and keeps them working:
+`unwalled` finds that API and gives it to your agent as typed, documented tools, and keeps them working:
 it stays logged in, retries temporary failures, notices when the site changes and repairs itself.
 When a site has no usable API at all, the agent can still use it through its interface.
 
@@ -102,20 +102,20 @@ The result is saved as a **recipe**. Discovery runs once (seconds); after that t
 - Local files with `import_file`: OpenAPI / Swagger, Postman collections (and environments), Insomnia exports, Bruno collection folders, AsyncAPI 2/3, `.http` / `.rest` files, `.env` variables, shared recipes; `import_curl` for "Copy as cURL" commands; `export_recipe` to share a recipe without its secrets.
 - Realtime: WebSocket and Server-Sent Events captured with their protocol (subscribe and auth frames, in order) become tools that connect, replay the handshake and return the messages received for a chosen duration; MQTT brokers (TCP, TLS, WebSocket; wildcards, publishing).
 - Responses: images (PNG, JPEG, GIF, WebP up to 2 MB, checked by signature) reach the agent as images; CSV, XML, RSS and Atom come back as JSON; protobuf and gRPC-web are decoded without schema; `pick` also takes slices (`items[0:5]`), filters (`items[?price>10]`), counts (`items.#`) and JSONPath (`$..price`); `paginate` merges pages; `watch` reports what changed.
-- Encrypted secrets (AES-256-GCM, key protected by Windows DPAPI or derived from `UNIVERSAL_MCP_SECRET_KEY`), and compact tool lists: schemas fit a per-tool budget and recipes with more than 20 operations expose `<recipe>__operation` + `<recipe>__call` (a 62-operation Google API costs about 2 KB of tool definitions instead of 165 KB).
+- Encrypted secrets (AES-256-GCM, key protected by Windows DPAPI or derived from `UNWALLED_SECRET_KEY`), and compact tool lists: schemas fit a per-tool budget and recipes with more than 20 operations expose `<recipe>__operation` + `<recipe>__call` (a 62-operation Google API costs about 2 KB of tool definitions instead of 165 KB).
 
 ## Requirements
 
 - Node.js 22 or newer.
 - For browser capture, browser recipes and the `ui` tool: Google Chrome or Microsoft Edge (used automatically), or Playwright's Chromium
-  (`npx playwright-core install chromium`, then `UNIVERSAL_MCP_BROWSER=chromium`). OpenAPI and HAR recipes do not need a browser.
+  (`npx playwright-core install chromium`, then `UNWALLED_BROWSER=chromium`). OpenAPI and HAR recipes do not need a browser.
 
 ## Installation
 
 ### Claude Code
 
 ```bash
-claude mcp add universal -- npx -y github:KorroAi/universal-mcp
+claude mcp add unwalled -- npx -y github:KorroAi/unwalled
 ```
 
 ### Claude Desktop, Cursor, Windsurf and other MCP clients
@@ -123,30 +123,30 @@ claude mcp add universal -- npx -y github:KorroAi/universal-mcp
 ```json
 {
   "mcpServers": {
-    "universal": {
+    "unwalled": {
       "command": "npx",
-      "args": ["-y", "github:KorroAi/universal-mcp"]
+      "args": ["-y", "github:KorroAi/unwalled"]
     }
   }
 }
 ```
 
-On Windows, some clients cannot start `npx` directly: use `"command": "cmd"` with `"args": ["/c", "npx", "-y", "github:KorroAi/universal-mcp"]`.
+On Windows, some clients cannot start `npx` directly: use `"command": "cmd"` with `"args": ["/c", "npx", "-y", "github:KorroAi/unwalled"]`.
 
 ### From source
 
 ```bash
-git clone https://github.com/KorroAi/universal-mcp.git
-cd universal-mcp
+git clone https://github.com/KorroAi/unwalled.git
+cd unwalled
 npm install
-claude mcp add universal -- node /absolute/path/to/universal-mcp/bin/universal-mcp.js
+claude mcp add unwalled -- node /absolute/path/to/unwalled/bin/unwalled.js
 ```
 
 ## Quick start
 
 Ask your agent in plain language:
 
-> Use universal to discover https://example.com, search for "lamp" and open the first product, then tell me its price.
+> Use unwalled to discover https://example.com, search for "lamp" and open the first product, then tell me its price.
 
 The agent calls `discover` (with actions such as filling the search box), then the generated `<recipe>__*` tools.
 For a site behind a login, ask it to call `login` first: a window opens, you sign in, and the cookies are kept.
@@ -294,12 +294,12 @@ Cookies and credentials found in the file are stored as local secrets and replay
 
 ### Safety
 
-- **Confirmation**: DELETE calls (and the interface's risky clicks) return a preview and wait for `confirm=true`. `UNIVERSAL_MCP_CONFIRM=writes` extends this to every write; `none` disables it. Per recipe: `configure_recipe {"name": "x", "policy": {"confirm": "writes"}}`.
+- **Confirmation**: DELETE calls (and the interface's risky clicks) return a preview and wait for `confirm=true`. `UNWALLED_CONFIRM=writes` extends this to every write; `none` disables it. Per recipe: `configure_recipe {"name": "x", "policy": {"confirm": "writes"}}`.
 - **Read-only recipes**: `{"policy": {"readOnly": true}}` refuses every write and interface action.
 - **Allowed hosts**: `{"policy": {"allowedHosts": ["api.example.com"]}}`.
-- **Rate limit**: 5 requests per second per host by default (`UNIVERSAL_MCP_RATE_LIMIT`, or `policy.rateLimit`); retries, macros and exploration go through it.
+- **Rate limit**: 5 requests per second per host by default (`UNWALLED_RATE_LIMIT`, or `policy.rateLimit`); retries, macros and exploration go through it.
 - **Dry runs**: any generated tool with `dry_run: true` shows the exact request, credentials replaced by `<stored secret>`.
-- **Audit log**: `<home>/audit.log` (JSON Lines, rotated at 5 MB) records time, recipe, tool, method, redacted URL, status, transport, retries, cache hits and re-authentication. `UNIVERSAL_MCP_AUDIT=0` disables it.
+- **Audit log**: `<home>/audit.log` (JSON Lines, rotated at 5 MB) records time, recipe, tool, method, redacted URL, status, transport, retries, cache hits and re-authentication. `UNWALLED_AUDIT=0` disables it.
 
 ### Staying logged in
 
@@ -312,11 +312,11 @@ Cookies and credentials found in the file are stored as local secrets and replay
 
 `check_recipe {"name": "shop"}` calls each read-only tool with the example recorded at discovery and reports `ok`, `changed` (fields missing), `broken` (errors, GraphQL errors) or `auth`.
 `check_recipe {"name": "shop", "repair": true}` rediscovers from the original inputs (kept locally, actions and merged captures included) and lists added and removed tools; annotations and macros are kept.
-`universal-mcp check shop` does the same from the terminal and exits with code 1 when something is broken, which suits a scheduled job.
+`unwalled check shop` does the same from the terminal and exits with code 1 when something is broken, which suits a scheduled job.
 
 ### Many tools
 
-With `UNIVERSAL_MCP_TOOL_MODE=auto` (default), when recipes generate more than 60 tools (`UNIVERSAL_MCP_TOOL_THRESHOLD`) only the management tools are listed.
+With `UNWALLED_TOOL_MODE=auto` (default), when recipes generate more than 60 tools (`UNWALLED_TOOL_THRESHOLD`) only the management tools are listed.
 The agent finds tools with `search_tools` (`pin: true` lists them from then on) and runs them with `call_tool`. `all` always lists everything; `search` never lists generated tools.
 
 ### Google APIs (YouTube, Drive, Gmail...)
@@ -350,53 +350,53 @@ export_recipe(name="shop", path="/abs/path/shop-recipe.json")   # share it; the 
 
 ### Compact mode and search mode
 
-Recipes with more than 20 operations (`UNIVERSAL_MCP_FOLD_THRESHOLD`) expose `<recipe>__operation` (list operations, or read one's parameters) and `<recipe>__call`
-instead of one tool per operation; tool schemas are also compacted to `UNIVERSAL_MCP_SCHEMA_CHARS`. Search mode (above) still applies to the remaining tools.
+Recipes with more than 20 operations (`UNWALLED_FOLD_THRESHOLD`) expose `<recipe>__operation` (list operations, or read one's parameters) and `<recipe>__call`
+instead of one tool per operation; tool schemas are also compacted to `UNWALLED_SCHEMA_CHARS`. Search mode (above) still applies to the remaining tools.
 
 ## Command line
 
 ```bash
-npx -y github:KorroAi/universal-mcp --help
-universal-mcp discover crates "https://crates.io/search?q=serde" --actions '[{"goto":"/crates/serde"}]'
-universal-mcp discover shop https://shop.example --explore 10
-universal-mcp har myapp ./capture.har --host api.myapp.com
-universal-mcp import team-api ./Team.postman_collection.json --base-url https://api.example.com
-universal-mcp export crates ./crates-recipe.json
-universal-mcp curl myapi ./commands.txt
-universal-mcp login github https://github.com/login
-universal-mcp check crates --repair
-universal-mcp list
-universal-mcp inspect crates
-universal-mcp forget crates --delete-profile
+npx -y github:KorroAi/unwalled --help
+unwalled discover crates "https://crates.io/search?q=serde" --actions '[{"goto":"/crates/serde"}]'
+unwalled discover shop https://shop.example --explore 10
+unwalled har myapp ./capture.har --host api.myapp.com
+unwalled import team-api ./Team.postman_collection.json --base-url https://api.example.com
+unwalled export crates ./crates-recipe.json
+unwalled curl myapi ./commands.txt
+unwalled login github https://github.com/login
+unwalled check crates --repair
+unwalled list
+unwalled inspect crates
+unwalled forget crates --delete-profile
 ```
 
-Without a command, `universal-mcp` runs the MCP server on stdio (what MCP clients launch).
+Without a command, `unwalled` runs the MCP server on stdio (what MCP clients launch).
 
 ## Configuration
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `UNIVERSAL_MCP_HOME` | `~/.universal-mcp` | Data directory |
-| `UNIVERSAL_MCP_BROWSER` | `chrome` | `chrome`, `msedge`, `chromium` (Playwright) or an absolute path to a Chromium-based browser. `chrome` falls back to Edge, then Playwright's Chromium. |
-| `UNIVERSAL_MCP_MAX_OUTPUT` | `40000` | Default maximum characters per tool result |
-| `UNIVERSAL_MCP_TIMEOUT_MS` | `30000` | Request timeout |
-| `UNIVERSAL_MCP_MAX_ENDPOINTS` | `40` | Endpoints kept per browser/HAR recipe (most frequent first) |
-| `UNIVERSAL_MCP_MAX_OPENAPI_TOOLS` | `60` | Operations turned into tools per OpenAPI recipe |
-| `UNIVERSAL_MCP_CONFIRM` | `destructive` | Calls that need `confirm=true`: `destructive` (DELETE), `writes` (anything but reads) or `none` |
-| `UNIVERSAL_MCP_RETRIES` | `2` | Automatic retries of temporary failures |
-| `UNIVERSAL_MCP_RATE_LIMIT` | `5` | Requests per second per host (`0` = unlimited) |
-| `UNIVERSAL_MCP_TOOL_MODE` | `auto` | `auto` (search mode above the threshold), `all` or `search` |
-| `UNIVERSAL_MCP_TOOL_THRESHOLD` | `60` | Generated tools listed before `auto` switches to search mode |
-| `UNIVERSAL_MCP_AUDIT` | on | `0` disables the audit log |
-| `UNIVERSAL_MCP_SECRET_KEY` | (unset) | Passphrase for the secrets encryption key. Unset: Windows DPAPI, or a key file next to the data elsewhere |
-| `UNIVERSAL_MCP_PLAINTEXT_SECRETS` | (unset) | `1` stores secrets unencrypted (not recommended) |
-| `UNIVERSAL_MCP_SCHEMA_CHARS` | `3000` | Budget of one tool's description + input schema |
-| `UNIVERSAL_MCP_FOLD_THRESHOLD` | `20` | Above this many operations a recipe uses compact mode (`0` = never) |
+| `UNWALLED_HOME` | `~/.unwalled` | Data directory |
+| `UNWALLED_BROWSER` | `chrome` | `chrome`, `msedge`, `chromium` (Playwright) or an absolute path to a Chromium-based browser. `chrome` falls back to Edge, then Playwright's Chromium. |
+| `UNWALLED_MAX_OUTPUT` | `40000` | Default maximum characters per tool result |
+| `UNWALLED_TIMEOUT_MS` | `30000` | Request timeout |
+| `UNWALLED_MAX_ENDPOINTS` | `40` | Endpoints kept per browser/HAR recipe (most frequent first) |
+| `UNWALLED_MAX_OPENAPI_TOOLS` | `60` | Operations turned into tools per OpenAPI recipe |
+| `UNWALLED_CONFIRM` | `destructive` | Calls that need `confirm=true`: `destructive` (DELETE), `writes` (anything but reads) or `none` |
+| `UNWALLED_RETRIES` | `2` | Automatic retries of temporary failures |
+| `UNWALLED_RATE_LIMIT` | `5` | Requests per second per host (`0` = unlimited) |
+| `UNWALLED_TOOL_MODE` | `auto` | `auto` (search mode above the threshold), `all` or `search` |
+| `UNWALLED_TOOL_THRESHOLD` | `60` | Generated tools listed before `auto` switches to search mode |
+| `UNWALLED_AUDIT` | on | `0` disables the audit log |
+| `UNWALLED_SECRET_KEY` | (unset) | Passphrase for the secrets encryption key. Unset: Windows DPAPI, or a key file next to the data elsewhere |
+| `UNWALLED_PLAINTEXT_SECRETS` | (unset) | `1` stores secrets unencrypted (not recommended) |
+| `UNWALLED_SCHEMA_CHARS` | `3000` | Budget of one tool's description + input schema |
+| `UNWALLED_FOLD_THRESHOLD` | `20` | Above this many operations a recipe uses compact mode (`0` = never) |
 
 ## Data and secrets
 
 ```text
-~/.universal-mcp/
+~/.unwalled/
   recipes/<name>.json    shareable: endpoints, schemas, redacted examples, annotations, macros
   secrets/<name>.json    local only, encrypted: auth headers, API keys, cookies from HAR, secret query and path values, OAuth refresh settings
   secret.key.dpapi       Windows: the encryption key, protected for the current user (secret.key elsewhere)
@@ -411,7 +411,7 @@ Treat `secrets/`, `profiles/` and `state/` like a password store: do not commit,
 
 ## Compatibility
 
-What is covered, and how it was checked. "Live" means a real public service in `test/live/` (run with `UNIVERSAL_MCP_LIVE=1`);
+What is covered, and how it was checked. "Live" means a real public service in `test/live/` (run with `UNWALLED_LIVE=1`);
 "local" means a local test server or file in the offline suite. Anything not listed here is not claimed.
 
 | Source | Checked against | Known limits |
@@ -435,14 +435,14 @@ What is covered, and how it was checked. "Live" means a real public service in `
 ## When to use it, and when not
 
 - **Prefer an official option when there is one.** If a service publishes an API, an OpenAPI description or an MCP server, use it
-  (universal-mcp can import the description): it is documented, stable and allowed. Captured internal APIs change without notice.
+  (unwalled can import the description): it is documented, stable and allowed. Captured internal APIs change without notice.
 - **Good fits**: your own tools and dashboards, internal company apps, APIs documented only as Postman/Insomnia/Bruno/.http/cURL
   collections, OData and SOAP services, devices on your network (MQTT, local web interfaces), public data APIs.
 - **Poor fits**: sites that forbid automated access in their terms, and anything where an account ban would hurt.
 
 ## Limitations
 
-- **Desktop and native apps** are reached through their network traffic only (HAR capture through a proxy). universal-mcp does not drive native windows or programs.
+- **Desktop and native apps** are reached through their network traffic only (HAR capture through a proxy). unwalled does not drive native windows or programs.
 - **Requests signed by the page's own code** (an HMAC computed in JavaScript for each call) cannot be replayed from captured examples; use `ui` for those flows.
 - **Binary protocols**: protobuf and gRPC-web responses are decoded without their .proto schema, so fields appear by number and types are guessed; binary bodies can be sent (`body_kind: "base64"`) and saved (`save_to`).
 - **Streams are bounded**: MCP is request/response, so stream tools and `watch` listen for a limited time and return what they saw; long calls may hit the MCP client's tool timeout.
@@ -456,7 +456,7 @@ What is covered, and how it was checked. "Live" means a real public service in `
 
 ## Responsible use
 
-Only use universal-mcp with services and accounts you are allowed to access, and respect their terms of service, rate limits and robots policies.
+Only use unwalled with services and accounts you are allowed to access, and respect their terms of service, rate limits and robots policies.
 Do not use it for mass data collection; keep the default rate limit unless you have a reason and the right to raise it.
 Using a service's internal API may break its terms even with your own account. Tool results are third-party data: the agent is told
 never to follow instructions found in them, and tools that may change or delete data are marked so that MCP clients can ask before calling them.

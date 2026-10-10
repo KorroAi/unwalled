@@ -193,7 +193,7 @@ export async function importFile(engine, { name, path, include, baseUrl, variabl
   if (described.format === "soap") return saveSoapRecipe(engine, name, described.soap, { file: path, format: "soap" }, include);
   if (described.format === "recipe") {
     const shared = described.recipe;
-    if (shared.schemaVersion !== RECIPE_SCHEMA_VERSION) throw new Error(`This recipe uses schema version ${shared.schemaVersion}; this universal-mcp reads version ${RECIPE_SCHEMA_VERSION}.`);
+    if (shared.schemaVersion !== RECIPE_SCHEMA_VERSION) throw new Error(`This recipe uses schema version ${shared.schemaVersion}; this unwalled reads version ${RECIPE_SCHEMA_VERSION}.`);
     const now = new Date().toISOString();
     const recipe = { ...shared, name, source: { ...shared.source, importedFrom: path, originalName: shared.name }, createdAt: engine.recipes.get(name)?.createdAt ?? now, updatedAt: now };
     return engine.withLock(name, async () => {

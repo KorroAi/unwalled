@@ -30,4 +30,4 @@ jobs:
       - name: End-to-end tests
         run: npm run test:e2e
         env:
-          UNIVERSAL_MCP_BROWSER: chromium
+          UNWALLED_BROWSER: chromium

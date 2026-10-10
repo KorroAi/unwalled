@@ -3,7 +3,9 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSy
 import { isAbsolute, join } from "node:path";
 import { chromium } from "playwright-core";
 
-const COOKIE_FILE = "universal-mcp-cookies.json";
+const COOKIE_FILE = "unwalled-cookies.json";
+/** Name used before the rename to unwalled: still read when the new file does not exist yet. */
+const LEGACY_COOKIE_FILE = "universal-mcp-cookies.json";
 
 /**
  * Chrome drops session cookies (no expiry) when it closes, which would log the user out
@@ -26,7 +28,8 @@ export async function saveCookies(context, profileDir) {
 
 /** @param {import("playwright-core").BrowserContext} context @param {string} profileDir */
 async function restoreCookies(context, profileDir) {
-  const file = join(profileDir, COOKIE_FILE);
+  let file = join(profileDir, COOKIE_FILE);
+  if (!existsSync(file)) file = join(profileDir, LEGACY_COOKIE_FILE);
   if (!existsSync(file)) return;
   try {
     const now = Date.now() / 1000;
@@ -82,6 +85,6 @@ export async function launchProfile(config, profileDir, { headless = true } = {}
     }
   }
   throw new Error(
-    `No usable browser found. Install Google Chrome or Microsoft Edge, or run "npx playwright-core install chromium" and set UNIVERSAL_MCP_BROWSER=chromium.\n${errors.join("\n")}`,
+    `No usable browser found. Install Google Chrome or Microsoft Edge, or run "npx playwright-core install chromium" and set UNWALLED_BROWSER=chromium.\n${errors.join("\n")}`,
   );
 }

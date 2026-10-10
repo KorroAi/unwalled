@@ -34,7 +34,7 @@ describe("import_curl through the engine", () => {
   let home, fixtures, engine;
   before(async () => {
     home = mkdtempSync(join(tmpdir(), "umcp-curl-"));
-    process.env.UNIVERSAL_MCP_HOME = home;
+    process.env.UNWALLED_HOME = home;
     fixtures = await startFixtureServers();
     const { loadConfig } = await import("../../src/config.js");
     const { Engine } = await import("../../src/core.js");

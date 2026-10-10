@@ -36,7 +36,7 @@ describe("local data recipes", () => {
     home = mkdtempSync(join(tmpdir(), "umcp-datahome-"));
     dir = join(home, "files");
     mkdirSync(dir);
-    process.env.UNIVERSAL_MCP_HOME = home;
+    process.env.UNWALLED_HOME = home;
     const { loadConfig } = await import("../../src/config.js");
     const { Engine } = await import("../../src/core.js");
     engine = new Engine(loadConfig());

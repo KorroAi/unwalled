@@ -12,7 +12,7 @@ labels: bug
 The tool call or CLI command, and the kind of site (single-page app, GraphQL, OpenAPI, HAR).
 
 **Environment**
-- universal-mcp version (`universal-mcp --version`):
+- unwalled version (`unwalled --version`):
 - Node.js version:
 - OS:
 - Browser (Chrome, Edge, Playwright Chromium):

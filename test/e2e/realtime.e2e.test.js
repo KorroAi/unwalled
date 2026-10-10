@@ -1,5 +1,5 @@
 // End-to-end: a real browser captures a page's WebSocket and EventSource, then the generated tools replay them.
-// Requires a Chromium-based browser (Chrome by default; set UNIVERSAL_MCP_BROWSER=chromium on CI).
+// Requires a Chromium-based browser (Chrome by default; set UNWALLED_BROWSER=chromium on CI).
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,7 +18,7 @@ describe("realtime streams (browser capture)", TIMEOUT, () => {
 
   before(async () => {
     home = mkdtempSync(join(tmpdir(), "umcp-rt-"));
-    process.env.UNIVERSAL_MCP_HOME = home;
+    process.env.UNWALLED_HOME = home;
     fixture = await startRealtimeFixture();
     engine = new Engine(loadConfig());
   });

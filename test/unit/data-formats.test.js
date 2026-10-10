@@ -71,7 +71,7 @@ describe("Excel and iCalendar as SQL tables", () => {
   let home, engine;
   before(async () => {
     home = mkdtempSync(join(tmpdir(), "umcp-xlsx-"));
-    process.env.UNIVERSAL_MCP_HOME = home;
+    process.env.UNWALLED_HOME = home;
     const { loadConfig } = await import("../../src/config.js");
     const { Engine } = await import("../../src/core.js");
     engine = new Engine(loadConfig());
