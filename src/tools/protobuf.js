@@ -3,6 +3,7 @@
 // when they parse as one, otherwise as text (when printable) or base64.
 
 const MAX_DEPTH = 12;
+const SCHEMALESS = "decoded without the .proto schema: keys are field numbers and types are guessed (varint shown as unsigned, bytes as text when printable)";
 const MAX_FIELDS = 5000;
 
 /** @param {Buffer} buf @param {number} offset @returns {[bigint, number] | null} value and new offset */
@@ -113,11 +114,11 @@ export function decodeGrpcWeb(body, contentType) {
 export function describeProtobuf(body, contentType) {
   if (/grpc-web/i.test(contentType) || /application\/grpc/i.test(contentType)) {
     const { messages, trailers } = decodeGrpcWeb(body, contentType);
-    return JSON.stringify({ grpc: { messages, ...(Object.keys(trailers).length ? { trailers } : {}) } });
+    return JSON.stringify({ grpc: { messages, ...(Object.keys(trailers).length ? { trailers } : {}) }, note: SCHEMALESS });
   }
   if (/protobuf|x-protobuf|vnd\.google\.protobuf/i.test(contentType)) {
     const message = decodeMessage(body);
-    return message ? JSON.stringify({ protobuf: message }) : undefined;
+    return message ? JSON.stringify({ protobuf: message, note: SCHEMALESS }) : undefined;
   }
   return undefined;
 }

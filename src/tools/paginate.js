@@ -96,7 +96,17 @@ export function nextPage(json, query, count) {
   return { stop: "no next-page token in the response and no page/offset parameter in query" };
 }
 
-/** @param {string} text tool output "HTTP <status> — <url>\n<body>" */
+/**
+ * Status and JSON of a tool result: taken from the structured fields formatResponse adds, or (for tools that
+ * only return text) parsed from the "HTTP <status> — <url>\n<body>" output.
+ * @param {{ text: string, status?: number, json?: unknown }} result
+ */
+function pageOf(result) {
+  if (typeof result.status === "number") return { status: result.status, json: result.json };
+  return parseToolOutput(result.text);
+}
+
+/** @param {string} text */
 function parseToolOutput(text) {
   const newline = text.indexOf("\n");
   const header = newline === -1 ? text : text.slice(0, newline);
@@ -130,7 +140,7 @@ export function withPagination(tool, fetchUrl) {
       let pages = 0;
       let itemsPath = paginate.items_path;
       const seen = new Set();
-      /** @type {{ status: number, json: unknown }} */ let page = parseToolOutput((await run({ ...base, query, max_chars: PAGE_CHARS })).text);
+      /** @type {{ status: number, json: unknown }} */ let page = pageOf(await run({ ...base, query, max_chars: PAGE_CHARS }));
       for (;;) {
         pages++;
         if (page.status >= 400 || page.json === undefined) {
@@ -165,7 +175,7 @@ export function withPagination(tool, fetchUrl) {
         if ("url" in next) page = await fetchUrl(next.url);
         else {
           query = next.query;
-          page = parseToolOutput((await run({ ...base, query, max_chars: PAGE_CHARS })).text);
+          page = pageOf(await run({ ...base, query, max_chars: PAGE_CHARS }));
         }
       }
       const kept = items.slice(0, maxItems);

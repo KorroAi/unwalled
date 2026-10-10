@@ -89,7 +89,7 @@ const MANAGEMENT_TOOLS = [
         tool: { type: "string", description: "Name of a generated tool, e.g. shop__get_api_products_product." },
         arguments: { type: "object", additionalProperties: true, description: "Arguments for that tool (pick is recommended to watch only the relevant fields)." },
         interval_seconds: { type: "number", minimum: 1, maximum: 3600, description: "Default 30." },
-        duration_seconds: { type: "number", minimum: 1, maximum: 3600, description: "Default 300." },
+        duration_seconds: { type: "number", minimum: 1, maximum: 3600, description: "Default 120. MCP clients often time out long calls: keep it short, or raise the client's tool timeout." },
         until: { type: "string", description: 'Stop when the output contains this text or matches "/regex/flags".' },
       },
       required: ["tool"],
@@ -231,7 +231,7 @@ export async function startServer(config) {
           if (!tool.annotations.readOnlyHint) return text(`"${args.tool}" is not read-only: watch only repeats read-only tools.`, true);
           return await watch(tool.run, args.arguments ?? {}, {
             intervalMs: Math.min(Math.max(Number(args.interval_seconds ?? 30), 1), 3600) * 1000,
-            durationMs: Math.min(Math.max(Number(args.duration_seconds ?? 300), 1), 3600) * 1000,
+            durationMs: Math.min(Math.max(Number(args.duration_seconds ?? 120), 1), 3600) * 1000,
             until: args.until, onChange: onProgress,
           }).then((result) => text(result.text));
         }

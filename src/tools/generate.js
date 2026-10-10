@@ -19,7 +19,7 @@ const DESCRIPTION_MAX = 1200;
  * @property {Record<string, any>} inputSchema
  * @property {Record<string, any>} annotations
  * @property {boolean} [lazy] one tool per operation: folded into __operation / __call in compact mode
- * @property {(args: Record<string, any>) => Promise<{ text: string, isError: boolean }>} run
+ * @property {(args: Record<string, any>) => Promise<{ text: string, isError: boolean, status?: number, json?: unknown }>} run
  */
 
 /**

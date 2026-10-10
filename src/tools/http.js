@@ -89,7 +89,7 @@ export function retryDelayMs(retryAfter, attempt, now = Date.now()) {
 /**
  * @param {HttpResult} result
  * @param {{ pick?: string, maxChars: number }} options
- * @returns {{ text: string, isError: boolean }}
+ * @returns {{ text: string, isError: boolean, status: number, json?: unknown }} status and the full parsed JSON (before pick) for callers such as pagination
  */
 export function formatResponse(result, { pick: pickExpression, maxChars }) {
   const isError = result.status >= 400;
@@ -98,6 +98,7 @@ export function formatResponse(result, { pick: pickExpression, maxChars }) {
   // Protobuf and gRPC-web bodies are decoded without schema into JSON keyed by field number.
   const decoded = !isText && result.body.length ? describeProtobuf(result.body, result.contentType) : undefined;
   let bodyText;
+  /** @type {unknown} */ let parsed;
   if (!result.body.length) bodyText = "(empty body)";
   else if (!isText && decoded === undefined) bodyText = `(binary body: ${result.body.length} bytes, ${result.contentType})`;
   else {
@@ -109,6 +110,7 @@ export function formatResponse(result, { pick: pickExpression, maxChars }) {
       json = JSON.parse(bodyText);
     } catch {}
     if (json !== undefined) {
+      parsed = json;
       if (pickExpression && !isError) {
         const selected = pick(json, pickExpression);
         bodyText = selected === undefined ? `(pick "${pickExpression}" matched nothing; full body follows)\n${JSON.stringify(json)}` : JSON.stringify(selected, null, 1);
@@ -119,5 +121,5 @@ export function formatResponse(result, { pick: pickExpression, maxChars }) {
   let hint = "";
   if (result.status === 401 || result.status === 403)
     hint = "\nHint: the session or credentials may have expired. Use the login tool (browser recipes) or set_credentials, then retry.";
-  return { text: `${header}\n${bodyText}${hint}`, isError };
+  return { text: `${header}\n${bodyText}${hint}`, isError, status: result.status, ...(parsed !== undefined ? { json: parsed } : {}) };
 }

@@ -248,19 +248,35 @@ Data layout:
    tool call ──► request (browser profile or fetch) + host-scoped secrets ──► pick / truncate ──► agent
 ```
 
+## When to use it, and when not
+
+- **Prefer an official option when there is one.** If a service publishes an API, an OpenAPI description or an MCP server, use it
+  (universal-mcp can import the description): it is documented, stable and allowed. Captured internal APIs change without notice.
+- **Good fits**: your own tools and dashboards, internal company apps, APIs documented only as Postman/Insomnia/Bruno/.http/cURL
+  collections, OData and SOAP services, devices on your network (MQTT, local web interfaces), public data APIs.
+- **Poor fits**: sites that forbid automated access in their terms, sites protected against bots, and anything where an account ban
+  would hurt. universal-mcp does not try to get around such protections.
+
 ## Limitations
 
 - **Server-rendered pages** (HTML built on the server, no JSON calls) expose no API to capture. Use the agent's browser tools for those.
 - **Tokens computed in the page** (request signing, short-lived tokens refreshed by JavaScript) may expire; rerun `discover` or `login`. Bearer tokens are replayed as captured.
 - **Binary protocols**: protobuf and gRPC-web responses are decoded without their .proto schema, so fields appear by number (`{"1": "name", "2": 150}`) and types are guessed; binary request bodies are not rebuilt. Event streams read with `fetch()` (rather than `EventSource`) are recorded without sample messages.
 - **Stream replays** come from Node, not from the page: servers that require a browser-only handshake may refuse them.
-- **Anti-bot protections** (CAPTCHAs, bot scoring) can block headless capture; `interactive: true` or `login` usually helps.
+- **Anti-bot protections** (CAPTCHAs, bot scoring) can block headless capture, and calls are sent from Node, not from the page,
+  so services that check browser fingerprints may refuse them. universal-mcp does not try to get around such protections.
+- **Approximate protocol coverage**: SOAP without WS-Security or external XSD imports, OData without `$batch`, MQTT 3.1.1 with QoS 0/1,
+  protobuf decoded without schema. Google APIs need an API key or an OAuth token that you provide.
+- **Streams are bounded**: MCP is request/response, so stream tools and `watch` listen for a limited time and return what they saw;
+  long calls may hit the MCP client's tool timeout.
 - **Path inference is heuristic**: if a parameter was not detected, call the endpoint through `<recipe>__request` or capture more pages with `merge: true`.
 - Recipes can break when a site changes its API: rediscover.
 
 ## Responsible use
 
 Only use universal-mcp with services you are allowed to access, and respect their terms of service, rate limits and robots policies.
+Using a service's internal API may break its terms even with your own account. Tool results are third-party data: the agent is told
+never to follow instructions found in them, and tools that may change or delete data are marked so that MCP clients can ask before calling them.
 Recordings and recipes may contain personal data from your account: review them before sharing.
 You are responsible for how you use this tool.
 

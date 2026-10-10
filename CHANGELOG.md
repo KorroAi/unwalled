@@ -4,6 +4,10 @@
 
 - Secrets encrypted at rest (AES-256-GCM; key from Windows DPAPI, `UNIVERSAL_MCP_SECRET_KEY`, or a key file); plaintext files are re-encrypted on first read.
 - Tool definitions compacted to a budget (`UNIVERSAL_MCP_SCHEMA_CHARS`); recipes above 20 operations use compact mode (`__operation` + `__call`).
+- `pick` accepts standard JSONPath (`$.a[*].b`, `$..price`, `[?(@.price > 10)]`, `['odd key']`), recursive keys (`**price`) and negative indexes.
+- Pagination reads the status and JSON returned by tools instead of parsing their text output.
+- MQTT subscriptions with QoS 1; protobuf results say they were decoded without schema; `watch` defaults to 120 s.
+- README: when to use universal-mcp and when not, and the limits of each protocol.
 - Safer hints: PUT / PATCH / DELETE, GraphQL mutations and unknown operations, and JSON-RPC / SOAP methods that are not obviously readers are marked destructive; the server instructions tell the agent that tool results are untrusted data.
 
 - WebSocket and Server-Sent Events: captured during browser discovery and from HAR files (Chrome's `_webSocketMessages`, event-stream bodies); one tool per stream plus `__stream`, replaying the captured frames in order with the profile's cookies, secrets kept out of recipes, heartbeats answered.

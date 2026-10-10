@@ -40,11 +40,11 @@ export function connectPacket({ clientId, username, password, keepAlive = 60 }) 
   return packet(0x10, [encodeString("MQTT"), Buffer.from([4, flags]), keep, encodeString(clientId), ...(username !== undefined ? [encodeString(username)] : []), ...(password !== undefined ? [encodeString(password)] : [])]);
 }
 
-/** @param {number} id @param {string[]} topics */
-export function subscribePacket(id, topics) {
+/** @param {number} id @param {string[]} topics @param {0 | 1} [qos] */
+export function subscribePacket(id, topics, qos = 0) {
   const packetId = Buffer.alloc(2);
   packetId.writeUInt16BE(id);
-  return packet(0x82, [packetId, ...topics.flatMap((t) => [encodeString(t), Buffer.from([0])])]);
+  return packet(0x82, [packetId, ...topics.flatMap((t) => [encodeString(t), Buffer.from([qos])])]);
 }
 
 /** @param {string} topic @param {string} message @param {boolean} [retain] */
@@ -97,11 +97,11 @@ export function parsePublish(p) {
 
 /**
  * @param {string} url mqtt://, mqtts://, ws:// or wss://
- * @param {{ topics: string[], publish?: { topic: string, message: string, retain?: boolean }[], username?: string, password?: string,
+ * @param {{ topics: string[], qos?: 0 | 1, publish?: { topic: string, message: string, retain?: boolean }[], username?: string, password?: string,
  *   durationMs: number, maxMessages: number, filter?: string, connectTimeoutMs?: number }} options
  * @returns {Promise<import("./client.js").StreamResult>}
  */
-export function listenMqtt(url, { topics, publish = [], username, password, durationMs, maxMessages, filter, connectTimeoutMs = 15_000 }) {
+export function listenMqtt(url, { topics, qos = 0, publish = [], username, password, durationMs, maxMessages, filter, connectTimeoutMs = 15_000 }) {
   const keep = messageFilter(filter);
   const target = new URL(url);
   /** @type {import("./client.js").StreamResult} */ const result = { opened: false, messages: [], received: 0, sent: 0, durationMs: 0 };
@@ -137,7 +137,7 @@ export function listenMqtt(url, { topics, publish = [], username, password, dura
           clearTimeout(timer);
           timer = setTimeout(() => finish(undefined), durationMs);
           pinger = setInterval(() => write(Buffer.from([0xc0, 0])), 30_000);
-          if (topics.length) write(subscribePacket(1, topics));
+          if (topics.length) write(subscribePacket(1, topics, qos));
           for (const message of publish) {
             write(publishPacket(message.topic, message.message, message.retain));
             result.sent++;

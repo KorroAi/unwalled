@@ -54,6 +54,20 @@ describe("pick", () => {
     assert.deepEqual(pick(shop, "items[?price>10].id, items.#"), { "items[?price>10].id": [1, 2], "items.#": 3 });
   });
 
+  it("accepts JSONPath, recursive keys and negative indexes", () => {
+    const shop = { store: { items: [{ name: "lamp", price: 12, tags: { price: 1 } }, { name: "chair", price: 40 }], "odd key": 3 } };
+    assert.deepEqual(pick(shop, "$.store.items[*].name"), ["lamp", "chair"]);
+    assert.deepEqual(pick(shop, "$..price"), [12, 1, 40]);
+    assert.deepEqual(pick(shop, "**price"), [12, 1, 40]);
+    assert.deepEqual(pick(shop, "$.store.items[?(@.price > 10)].name"), ["lamp", "chair"]);
+    assert.deepEqual(pick(shop, "$.store.items[?(@.name == 'chair')].price"), [40]);
+    assert.deepEqual(pick(shop, "$.store.items[?(@.tags)].name"), ["lamp"]);
+    assert.equal(pick(shop, "$['store']['odd key']"), 3);
+    assert.equal(pick(shop, "store.items[-1].name"), "chair");
+    assert.equal(pick(shop, "$"), shop);
+    assert.throws(() => pick(shop, "$.store.items[?(@.price > 1 && @.price < 50)]"), /Unsupported JSONPath/);
+  });
+
   it("returns undefined when nothing matches and rejects bad paths", () => {
     assert.equal(pick(data, "nope.x"), undefined);
     assert.throws(() => pick(data, "a..b"), /Invalid pick path/);

@@ -2,7 +2,10 @@
 // Syntax: "data.items[0].name", "items[*].id", "items.*.id", "meta" ; several paths separated by commas.
 // Arrays also accept slices "items[0:5]", "items[-3:]" and filters "items[?price>10]", "items[?status=open]",
 // "items[?name~lamp]" (contains, case-insensitive), "items[?tags]" (field present and truthy), "items[?a.b!=1]".
-// "items.#" returns the length of a list (or the number of keys of an object).
+// "items.#" returns the length of a list (or the number of keys of an object); "items[-1]" is the last item;
+// "**price" finds every "price" key at any depth.
+// Standard JSONPath is accepted too when the expression starts with "$": "$.items[*].name", "$..price",
+// "$.items[?(@.price > 10)].name", "$['odd key']".
 
 /**
  * @typedef {{ slice: [number | undefined, number | undefined] }} SliceToken
@@ -10,7 +13,24 @@
  * @typedef {string | number | SliceToken | FilterToken} Token
  */
 
-const BRACKET = /\[(\d+|\*|-?\d*:-?\d*|\?[^\]]+)\]/g;
+const BRACKET = /\[(-?\d+|\*|-?\d*:-?\d*|\?[^\]]+)\]/g;
+
+/**
+ * Translates a JSONPath expression into this module's syntax.
+ * @param {string} expression starts with "$"
+ */
+export function fromJsonPath(expression) {
+  let path = expression.trim().slice(1);
+  if (/&&|\|\||\bin\b|=~|\(\s*@\s*\)/.test(path)) throw new Error(`Unsupported JSONPath expression "${expression}": use a single comparison per filter.`);
+  path = path
+    .replace(/\[\s*'([^']*)'\s*\]|\[\s*"([^"]*)"\s*\]/g, (_, single, double) => `.${single ?? double}`)
+    .replace(/\[\?\(\s*@\.?([^)]*?)\s*(===|==|!==|!=|>=|<=|>|<)\s*([^)]*?)\s*\)\]/g, (_, field, op, value) => `[?${field}${op.startsWith("!") ? "!=" : op.startsWith("=") ? "=" : op}${value}]`)
+    .replace(/\[\?\(\s*@\.?([^)]*?)\s*\)\]/g, (_, field) => `[?${field}]`)
+    .replace(/\.\.([^.[]+)/g, ".**$1")
+    .replace(/\.\.\[/g, ".**[")
+    .replace(/^\./, "");
+  return path;
+}
 
 /** @param {string} body text inside "[?...]" */
 function parseFilter(body) {
@@ -41,7 +61,7 @@ export function parsePath(path) {
   /** @type {Token[]} */ const tokens = [];
   for (const part of splitSegments(path)) {
     if (part === "") throw new Error(`Invalid pick path "${path}"`);
-    const match = /^([^[\]]*)((?:\[(?:\d+|\*|-?\d*:-?\d*|\?[^\]]+)\])*)$/.exec(part);
+    const match = /^([^[\]]*)((?:\[(?:-?\d+|\*|-?\d*:-?\d*|\?[^\]]+)\])*)$/.exec(part);
     if (!match) throw new Error(`Invalid pick path segment "${part}"`);
     if (match[1]) tokens.push(match[1]);
     for (const [, index] of match[2].matchAll(BRACKET)) {
@@ -91,6 +111,19 @@ function select(value, tokens) {
   const [token, ...rest] = tokens;
   if (value === null || typeof value !== "object") return undefined;
   if (token === "#") return Array.isArray(value) ? value.length : Object.keys(value).length;
+  if (typeof token === "string" && token.startsWith("**")) {
+    // Every value of this key at any depth, each followed by the rest of the path.
+    const key = token.slice(2);
+    const found = [];
+    const visit = (/** @type {unknown} */ node, depth = 0) => {
+      if (!node || typeof node !== "object" || depth > 50 || found.length > 10_000) return;
+      if (!Array.isArray(node) && key in node) found.push(node[key]);
+      for (const child of Array.isArray(node) ? node : Object.values(node)) visit(child, depth + 1);
+    };
+    visit(value);
+    return found.map((item) => select(item, rest)).filter((v) => v !== undefined);
+  }
+  if (typeof token === "number" && token < 0) return Array.isArray(value) ? select(value.at(token), rest) : undefined;
   if (token === "*") {
     const items = Array.isArray(value) ? value : Object.values(value);
     return items.map((item) => select(item, rest)).filter((v) => v !== undefined);
@@ -117,8 +150,12 @@ function select(value, tokens) {
  */
 export function pick(data, expression) {
   const paths = splitSegmentsOnCommas(expression).map((p) => p.trim()).filter(Boolean);
-  if (paths.length === 1) return select(data, parsePath(paths[0]));
-  return Object.fromEntries(paths.map((p) => [p, select(data, parsePath(p))]));
+  const run = (/** @type {string} */ path) => {
+    const native = path.startsWith("$") ? fromJsonPath(path) : path;
+    return native === "" ? data : select(data, parsePath(native));
+  };
+  if (paths.length === 1) return run(paths[0]);
+  return Object.fromEntries(paths.map((p) => [p, run(p)]));
 }
 
 /** Commas inside filters ("[?a=1,2]") do not separate paths. @param {string} expression */

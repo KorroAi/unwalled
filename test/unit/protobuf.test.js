@@ -77,6 +77,7 @@ describe("protobuf decoding", () => {
     assert.equal(formatResponse(result, { pick: "grpc.messages[0].3.2", maxChars: 10_000 }).text.split("\n")[1], '"inner text"');
     const raw = formatResponse({ ...result, contentType: "application/x-protobuf", body: MESSAGE }, { maxChars: 10_000 }).text;
     assert.match(raw, /"protobuf":\{"1":"hello world","2":150/);
+    assert.match(raw, /"note":"decoded without the .proto schema/);
     const binary = formatResponse({ ...result, contentType: "image/png", body: Buffer.from([1, 2, 3]) }, { maxChars: 10_000 }).text;
     assert.match(binary, /binary body: 3 bytes/);
   });

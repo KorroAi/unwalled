@@ -20,6 +20,7 @@ const NO_AUTH = async () => ({ headers: {}, query: {}, frames: {} });
 
 const MQTT_PROPERTIES = {
   topics: { type: "array", items: { type: "string" }, description: 'Topic filters to subscribe to, wildcards allowed ("home/+/temperature", "zigbee2mqtt/#").' },
+  qos: { type: "integer", enum: [0, 1], description: "Subscription QoS: 0 (default, at most once) or 1 (at least once, acknowledged)." },
   publish: {
     type: "array",
     items: { type: "object", properties: { topic: { type: "string" }, message: {}, retain: { type: "boolean" } }, required: ["topic", "message"] },
@@ -133,7 +134,7 @@ export function buildStreamTools(recipe, runtime, name) {
         const url = streamUrl(stream.url, auth.query, args.query);
         const { durationMs, maxMessages, filter } = limits(args);
         const result = isMqtt
-          ? await listenMqtt(url, { topics: Array.isArray(args.topics) && args.topics.length ? args.topics : (stream.topics ?? ["#"]), publish: mqttPublish(args), ...mqttCredentials(auth, new URL(url)), durationMs, maxMessages, filter })
+          ? await listenMqtt(url, { topics: Array.isArray(args.topics) && args.topics.length ? args.topics : (stream.topics ?? ["#"]), qos: args.qos === 1 ? 1 : 0, publish: mqttPublish(args), ...mqttCredentials(auth, new URL(url)), durationMs, maxMessages, filter })
           : isSocket
           ? await listenWebSocket(url, { headers: auth.headers, send: framesToSend(stream, auth, args), durationMs, maxMessages, filter })
           : await listenSse(url, {
@@ -173,7 +174,7 @@ export function buildStreamTools(recipe, runtime, name) {
         // MQTT over TCP/TLS, or over WebSocket when topics are given.
         if (/^mqtts?:$/.test(url.protocol) || (/^wss?:$/.test(url.protocol) && Array.isArray(args.topics) && args.topics.length)) {
           const { durationMs, maxMessages, filter } = limits(args);
-          const result = await listenMqtt(url.toString(), { topics: Array.isArray(args.topics) && args.topics.length ? args.topics : ["#"], publish: mqttPublish(args), ...mqttCredentials(auth, url), durationMs, maxMessages, filter });
+          const result = await listenMqtt(url.toString(), { topics: Array.isArray(args.topics) && args.topics.length ? args.topics : ["#"], qos: args.qos === 1 ? 1 : 0, publish: mqttPublish(args), ...mqttCredentials(auth, url), durationMs, maxMessages, filter });
           return formatStreamResult(`mqtt ${url.host}`, result, { pick: args.pick, maxChars: args.max_chars ?? runtime.maxOutputChars });
         }
         const headers = { ...auth.headers, ...Object.fromEntries(Object.entries(args.headers ?? {}).map(([k, v]) => [k.toLowerCase(), String(v)])) };

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
 import { asyncApiToStreams } from "../../src/discovery/asyncapi.js";
-import { listenMqtt, packetReader, parsePublish, publishPacket } from "../../src/realtime/mqtt.js";
+import { listenMqtt, packetReader, parsePublish, publishPacket, subscribePacket } from "../../src/realtime/mqtt.js";
 
 /** MQTT topic filter matching with + and # wildcards. */
 function matches(filter, topic) {
@@ -103,6 +103,11 @@ describe("MQTT", () => {
     assert.deepEqual([...topics].sort(), ["home/kitchen/temperature", "home/livingroom/temperature"]);
     assert.ok(result.messages.every((m) => typeof JSON.parse(m.data).payload.celsius === "number"));
     assert.deepEqual(broker.published, [{ topic: "home/livingroom/temperature", payload: '{"celsius":99}' }]);
+  });
+
+  it("encodes the requested subscription QoS", () => {
+    assert.deepEqual([...subscribePacket(7, ["a/b"], 1)], [0x82, 8, 0, 7, 0, 3, 0x61, 0x2f, 0x62, 1]);
+    assert.equal(subscribePacket(7, ["a/b"]).at(-1), 0);
   });
 
   it("reports refused credentials", async () => {
