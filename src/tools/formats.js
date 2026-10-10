@@ -105,6 +105,23 @@ function close(parent, { name, node, text }) {
   } else parent[name] = value;
 }
 
+/** Anti-hijacking prefixes some APIs put before JSON (Google, Angular, Facebook...). */
+const JSON_PREFIX = /^\s*(\)\]\}'\s*,?\s*\n?|while\s*\(1\);|for\s*\(;;\);|&&&START&&&)/;
+
+/**
+ * Parses a JSON body even when it is served with a non-JSON content type or behind an anti-hijacking prefix.
+ * @param {string} text @returns {unknown} undefined when the text is not JSON
+ */
+export function parseJsonLoose(text) {
+  const body = text.replace(/^﻿/, "").replace(JSON_PREFIX, "");
+  if (!/^\s*[[{"]/.test(body)) return undefined;
+  try {
+    return JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * JSON text for a CSV or XML body, or undefined for other content types (or when the body does not parse).
  * @param {string} body @param {string} contentType

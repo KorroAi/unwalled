@@ -18,6 +18,8 @@ const out = (value) => (document.getElementById("out").textContent += JSON.strin
 const get = (url, options) => fetch(url, options).then((r) => r.json()).then(out);
 get("${v2 ? "/api/v2/products" : "/api/products"}?page=1&limit=5");
 get("/api/protected");
+fetch("/api/plain").then((r) => r.text()).then(out);
+fetch("/api/prefixed").then((r) => r.text()).then(out);
 const match = location.pathname.match(/^\\/product\\/([^/]+)/);
 if (match) { get("/api/products/" + match[1]); get("/api/products/" + match[1] + "/reviews"); }
 get("/graphql", { method: "POST", headers: { "content-type": "application/json" },
@@ -145,6 +147,14 @@ function makeShop() {
     if (product) {
       const id = decodeURIComponent(product[1]);
       return product[2] ? json(res, 200, [{ product: id, stars: 5 }]) : json(res, 200, { id, name: `Product ${id}`, price: 42 });
+    }
+    if (path === "/api/plain") {
+      res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
+      return res.end(JSON.stringify({ kind: "plain", items: [1, 2] }));
+    }
+    if (path === "/api/prefixed") {
+      res.writeHead(200, { "content-type": "application/javascript" });
+      return res.end(")]}'\n" + JSON.stringify({ kind: "prefixed", ok: true }));
     }
     if (path === "/assets/logo.png") {
       res.writeHead(200, { "content-type": "image/png" });

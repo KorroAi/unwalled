@@ -113,6 +113,11 @@ describe("universal-mcp end to end", () => {
     assert.ok(toolListChanges > before, "tools/list_changed notification received");
   });
 
+  it("captures JSON served as text or behind an anti-hijacking prefix", async () => {
+    assert.match((await call("shop__get_api_plain", { pick: "items" })).text, /HTTP 200[\s\S]*1,[\s\S]*2/);
+    assert.match((await call("shop__get_api_prefixed", { pick: "kind" })).text, /"prefixed"/);
+  });
+
   it("describes tools in plain language", async () => {
     const { tools } = await client.listTools();
     const describe = (name) => tools.find((t) => t.name === name)?.description ?? "";

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseCsv, xmlToJson } from "../../src/tools/formats.js";
+import { parseCsv, parseJsonLoose, xmlToJson } from "../../src/tools/formats.js";
 import { formatResponse } from "../../src/tools/http.js";
 
 describe("CSV", () => {
@@ -53,5 +53,15 @@ describe("XML", () => {
     assert.match(result.text, /image: image\/png, \d+ bytes/);
     const svg = formatResponse({ status: 200, statusText: "OK", contentType: "image/svg+xml", body: Buffer.from("<svg/>"), finalUrl: "https://x.io/a.svg" }, { maxChars: 1000 });
     assert.equal(svg.image, undefined, "SVG stays text");
+  });
+
+  it("reads JSON behind anti-hijacking prefixes or served as text", () => {
+    assert.deepEqual(parseJsonLoose(")]}'\n{\"a\":1}"), { a: 1 });
+    assert.deepEqual(parseJsonLoose("while(1);[1,2]"), [1, 2]);
+    assert.deepEqual(parseJsonLoose("for(;;);{\"b\":true}"), { b: true });
+    assert.equal(parseJsonLoose("<html></html>"), undefined);
+    assert.equal(parseJsonLoose("console.log(1)"), undefined);
+    const prefixed = formatResponse({ status: 200, statusText: "OK", contentType: "text/plain", body: Buffer.from(")]}'\n{\"items\":[{\"id\":7}]}"), finalUrl: "https://x.io/api" }, { pick: "items[0].id", maxChars: 1000 });
+    assert.equal(prefixed.text.split("\n")[1], "7");
   });
 });

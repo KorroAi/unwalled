@@ -2,6 +2,7 @@
 // (or while the user browses in interactive mode).
 import { closeProfile, launchProfile, saveCookies } from "../browser.js";
 import { attachRealtimeCapture } from "../realtime/capture.js";
+import { parseJsonLoose } from "../tools/formats.js";
 import { isTracker, registrableDomain } from "./infer.js";
 import { looksSensitive } from "./secrets.js";
 
@@ -163,15 +164,18 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
       (async () => {
         const contentType = response.headers()["content-type"] ?? "";
         const isJson = /json/i.test(contentType);
-        if (!isJson && (request.method() === "GET" || response.status() >= 400)) return;
+        // Many APIs answer JSON as text/plain or text/javascript, or behind a ")]}'" prefix: look at the body of those too.
+        const maybeJson = isJson || contentType === "" || /^text\/(plain|javascript)|^application\/(javascript|x-javascript)/i.test(contentType);
+        if (!maybeJson && (request.method() === "GET" || response.status() >= 400)) return;
         let responseJson;
-        if (isJson) {
+        if (maybeJson) {
           try {
             const body = await response.body();
-            if (body.length <= MAX_BODY_BYTES) responseJson = JSON.parse(body.toString("utf8"));
+            if (body.length <= MAX_BODY_BYTES) responseJson = parseJsonLoose(body.toString("utf8"));
           } catch {
-            return; // body unavailable (navigation, redirect) or invalid JSON
+            return; // body unavailable (navigation, redirect)
           }
+          if (responseJson === undefined && (isJson ? true : request.method() === "GET")) return; // not JSON after all
         }
         observations.push({
           method: request.method(),

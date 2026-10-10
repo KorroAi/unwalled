@@ -4,7 +4,7 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute } from "node:path";
 import { pick } from "./pick.js";
-import { convertToJson } from "./formats.js";
+import { convertToJson, parseJsonLoose } from "./formats.js";
 import { describeProtobuf } from "./protobuf.js";
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
@@ -240,10 +240,7 @@ export function formatResponse(result, { pick: pickExpression, maxChars, saveTo,
     // CSV and XML (RSS, Atom, SOAP...) are converted to JSON so that pick and pagination work on them.
     const text = decoded ?? result.body.toString("utf8");
     bodyText = decoded ?? (isError || raw ? undefined : convertToJson(text, result.contentType)) ?? text;
-    let json;
-    try {
-      json = JSON.parse(bodyText);
-    } catch {}
+    const json = parseJsonLoose(bodyText);
     if (json !== undefined) {
       parsed = json;
       if (pickExpression && !isError) {

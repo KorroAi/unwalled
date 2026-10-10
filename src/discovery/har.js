@@ -1,5 +1,6 @@
 // Reads a HAR file (browser devtools export, mitmproxy, Charles, Proxyman...) into observations.
 // Useful for traffic the browser capture cannot reach, such as mobile or desktop apps behind a proxy.
+import { parseJsonLoose } from "../tools/formats.js";
 import { isTracker, registrableDomain } from "./infer.js";
 
 /** @param {{ name: string, value: string }[] | undefined} list */
@@ -67,15 +68,17 @@ export function observationsFromHar(text, { hosts = [] } = {}) {
     if (wanted.length && !wanted.some((h) => url.hostname === h || url.hostname.endsWith(`.${h}`))) continue;
 
     const content = response.content ?? {};
-    const isJson = /json/i.test(content.mimeType ?? "");
-    if (!isJson && (request.method === "GET" || response.status >= 400)) continue;
+    const mimeType = content.mimeType ?? "";
+    const isJson = /json/i.test(mimeType);
+    // JSON served as text/plain or text/javascript, or behind a ")]}'" prefix, counts as JSON too.
+    const maybeJson = isJson || mimeType === "" || /^text\/(plain|javascript)|^application\/(javascript|x-javascript)/i.test(mimeType);
+    if (!maybeJson && (request.method === "GET" || response.status >= 400)) continue;
     let responseJson;
-    if (isJson && typeof content.text === "string") {
-      try {
-        const raw = content.encoding === "base64" ? Buffer.from(content.text, "base64").toString("utf8") : content.text;
-        responseJson = JSON.parse(raw);
-      } catch {}
+    if (maybeJson && typeof content.text === "string") {
+      const raw = content.encoding === "base64" ? Buffer.from(content.text, "base64").toString("utf8") : content.text;
+      responseJson = parseJsonLoose(raw);
     }
+    if (!isJson && responseJson === undefined && (request.method === "GET" || response.status >= 400)) continue;
     const body = postBody(request.postData);
     observations.push({
       method: request.method,
