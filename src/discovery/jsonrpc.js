@@ -93,6 +93,7 @@ export function buildRpcTools(recipe, runtime, name, format) {
   const methods = recipe.jsonrpc ?? [];
   let nextId = 1;
   const tools = methods.map((m) => ({
+    lazy: true,
     name: name(`rpc_${m.method}`),
     description: `[${recipe.name}] JSON-RPC ${m.version} method "${m.method}" at ${m.url} — observed ${m.observed}×. Params example: ${m.paramsExample}. Result: ${m.resultShape}.`.slice(0, 1200),
     inputSchema: {
@@ -103,8 +104,11 @@ export function buildRpcTools(recipe, runtime, name, format) {
         max_chars: { type: "integer", minimum: 20 },
       },
     },
-    // Method names do not say whether they write: only obvious readers are marked read-only.
-    annotations: { title: `${recipe.name} ${m.method}`, readOnlyHint: /^(get|list|find|search|read|query|fetch|describe|count|eth_(get|call|block|chain|gas|estimate)|net_|web3_)/i.test(m.method.replace(/^[\w]+\./, "")), destructiveHint: false, openWorldHint: true },
+    // Method names do not say whether they write: only obvious readers are read-only, anything else may change data.
+    annotations: (() => {
+      const readOnly = /^(get|list|find|search|read|query|fetch|describe|count|eth_(get|call|block|chain|gas|estimate)|net_|web3_)/i.test(m.method.replace(/^[\w]+\./, ""));
+      return { title: `${recipe.name} ${m.method}`, readOnlyHint: readOnly, destructiveHint: !readOnly, openWorldHint: true };
+    })(),
     /** @param {Record<string, any>} args */
     run: async (args) => {
       const payload = { ...(m.version === "2.0" ? { jsonrpc: "2.0" } : {}), id: nextId++, method: m.method, ...(args.params !== undefined || m.paramsKind !== "none" ? { params: args.params ?? (m.paramsKind === "array" ? [] : {}) } : {}) };

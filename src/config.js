@@ -24,6 +24,10 @@ export function loadConfig() {
     requestTimeoutMs: intFromEnv("UNIVERSAL_MCP_TIMEOUT_MS", 30_000),
     maxEndpoints: intFromEnv("UNIVERSAL_MCP_MAX_ENDPOINTS", 40),
     maxOpenApiTools: intFromEnv("UNIVERSAL_MCP_MAX_OPENAPI_TOOLS", 60),
+    /** Secrets are encrypted at rest unless UNIVERSAL_MCP_PLAINTEXT_SECRETS=1. */
+    encryptSecrets: process.env.UNIVERSAL_MCP_PLAINTEXT_SECRETS !== "1",
+    schemaBudget: intFromEnv("UNIVERSAL_MCP_SCHEMA_CHARS", 3000),
+    foldThreshold: process.env.UNIVERSAL_MCP_FOLD_THRESHOLD === "0" ? 0 : intFromEnv("UNIVERSAL_MCP_FOLD_THRESHOLD", 20),
     cacheSeconds: process.env.UNIVERSAL_MCP_CACHE_SECONDS === "0" ? 0 : intFromEnv("UNIVERSAL_MCP_CACHE_SECONDS", 0),
   };
 }

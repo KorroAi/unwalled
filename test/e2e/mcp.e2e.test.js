@@ -137,7 +137,8 @@ describe("universal-mcp end to end", () => {
     const inspected = await call("inspect_recipe", { name: "shop" });
     assert.match(inspected.text, /authorization/);
     assert.ok(!inspected.text.includes("tok-123"));
-    assert.ok(readFileSync(join(home, "secrets", "shop.json"), "utf8").includes("tok-123"));
+    const stored = readFileSync(join(home, "secrets", "shop.json"), "utf8");
+    assert.ok(!stored.includes("tok-123") && JSON.parse(stored).alg === "aes-256-gcm", "secrets are encrypted at rest");
   });
 
   it("supports free-form requests", async () => {

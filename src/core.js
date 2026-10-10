@@ -95,6 +95,8 @@ export class Engine {
       streamAuth: (recipe, url) => this.streamAuth(recipe, url),
       maxOutputChars: this.config.maxOutputChars,
       cacheSeconds: this.config.cacheSeconds,
+      schemaBudget: this.config.schemaBudget,
+      foldThreshold: this.config.foldThreshold,
     };
     /** @type {Map<string, import("./tools/generate.js").GeneratedTool>} */
     this.tools = new Map();

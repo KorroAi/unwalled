@@ -1,6 +1,7 @@
 // Persistence of recipes (shareable, no secrets) and secrets (local only, never in recipes).
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { decryptJson, encryptJson, isEncrypted, secretKey } from "./crypto.js";
 import { log } from "./log.js";
 
 export const RECIPE_SCHEMA_VERSION = 1;
@@ -74,11 +75,23 @@ export class Store {
     assertRecipeName(name);
     const file = join(this.config.secretsDir, `${name}.json`);
     if (!existsSync(file)) return {};
+    let stored;
     try {
-      return JSON.parse(readFileSync(file, "utf8"));
+      stored = JSON.parse(readFileSync(file, "utf8"));
     } catch {
       return {};
     }
+    if (isEncrypted(stored)) {
+      try {
+        return decryptJson(stored, secretKey(this.config.home).key);
+      } catch (error) {
+        log(`Cannot decrypt the secrets of "${name}" (${error.message}): wrong UNIVERSAL_MCP_SECRET_KEY or another user? Sign in again or set credentials.`);
+        return {};
+      }
+    }
+    // Secrets written by an older version (or with encryption off) are re-encrypted on first read.
+    if (this.config.encryptSecrets && Object.keys(stored).length) this.saveSecrets(name, stored);
+    return stored;
   }
 
   /** @param {string} name @param {Record<string, Record<string, string>>} secrets */
@@ -87,6 +100,9 @@ export class Store {
     const file = join(this.config.secretsDir, `${name}.json`);
     const hosts = Object.entries(secrets).filter(([, headers]) => Object.keys(headers).length);
     if (!hosts.length) rmSync(file, { force: true });
-    else writeJson(file, Object.fromEntries(hosts), true);
+    else {
+      const plain = Object.fromEntries(hosts);
+      writeJson(file, this.config.encryptSecrets ? encryptJson(plain, secretKey(this.config.home).key) : plain, true);
+    }
   }
 }

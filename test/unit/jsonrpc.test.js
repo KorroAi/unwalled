@@ -72,6 +72,8 @@ describe("JSON-RPC tools", () => {
     const names = engine.toolsOf("rpc").map((t) => t.name);
     assert.ok(names.includes("rpc__rpc_items_list") && names.includes("rpc__rpc_sum") && names.includes("rpc__rpc"), names.join(", "));
 
+    assert.deepEqual(engine.tools.get("rpc__rpc_items_list").annotations.destructiveHint, false);
+    assert.deepEqual(engine.tools.get("rpc__rpc_sum").annotations.destructiveHint, true, "a method that is not obviously a reader may change data");
     const list = await engine.tools.get("rpc__rpc_items_list").run({ params: { limit: 2 }, pick: "result.items[*].name" });
     assert.equal(list.isError, false, list.text);
     assert.deepEqual(JSON.parse(list.text.split("\n").slice(1).join("")), ["lamp", "chair"]);

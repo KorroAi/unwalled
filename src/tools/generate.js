@@ -5,6 +5,8 @@ import { buildSoapTools } from "../discovery/soap.js";
 import { buildStreamTools } from "../realtime/tools.js";
 import { formatResponse } from "./http.js";
 import { withCache } from "./cache.js";
+import { compactTool } from "./compact.js";
+import { foldTools } from "./lazy.js";
 import { withPagination } from "./paginate.js";
 
 const TOOL_NAME_MAX = 64;
@@ -16,6 +18,7 @@ const DESCRIPTION_MAX = 1200;
  * @property {string} description
  * @property {Record<string, any>} inputSchema
  * @property {Record<string, any>} annotations
+ * @property {boolean} [lazy] one tool per operation: folded into __operation / __call in compact mode
  * @property {(args: Record<string, any>) => Promise<{ text: string, isError: boolean }>} run
  */
 
@@ -24,6 +27,8 @@ const DESCRIPTION_MAX = 1200;
  * @property {(recipe: any, request: import("./http.js").OutgoingRequest) => Promise<import("./http.js").HttpResult>} send
  * @property {number} maxOutputChars
  * @property {number} [cacheSeconds] default cache duration of read-only tools (0 = off)
+ * @property {number} [schemaBudget] maximum characters of a tool's description + input schema
+ * @property {number} [foldThreshold] above this many operations, a recipe switches to compact mode (0 = never)
  * @property {import("../realtime/tools.js").StreamRuntime["streamAuth"]} [streamAuth]
  */
 
@@ -94,7 +99,8 @@ const OUTPUT_PROPERTIES = {
 const annotationsFor = (method, title) => ({
   title,
   readOnlyHint: method === "GET" || method === "HEAD",
-  destructiveHint: method === "DELETE",
+  // PUT and PATCH overwrite existing data; POST is treated as additive.
+  destructiveHint: ["DELETE", "PUT", "PATCH"].includes(method),
   idempotentHint: ["GET", "HEAD", "PUT", "DELETE"].includes(method),
   openWorldHint: true,
 });
@@ -156,6 +162,7 @@ function restTools(recipe, runtime, name) {
     }
     const label = `${endpoint.method} ${endpoint.origin}${endpoint.pathTemplate}`;
     return {
+      lazy: true,
       name: name(`${endpoint.method.toLowerCase()}_${endpoint.pathTemplate.replace(/[{}]/g, "")}`),
       description: clip(`[${recipe.name}] ${label} — observed ${endpoint.observed}×. Example: ${endpoint.exampleUrl}. Response: ${endpoint.responseShape}`),
       inputSchema: { type: "object", properties, required },
@@ -190,6 +197,7 @@ function graphqlTools(recipe, runtime, name) {
   const tools = recipe.graphql.map((op) => {
     const label = `GraphQL ${op.operationType} ${op.operationName ?? "(anonymous)"}`;
     return {
+      lazy: true,
       name: name(`gql_${op.operationName ?? `${op.operationType}_${shortHash(op.query ?? JSON.stringify(op.extensions))}`}`),
       description: clip(
         `[${recipe.name}] ${label} at ${op.url} — observed ${op.observed}×. Variables example: ${op.variablesExample ?? "none"}. Response: ${op.responseShape}.` +
@@ -203,8 +211,8 @@ function graphqlTools(recipe, runtime, name) {
           ...OUTPUT_PROPERTIES,
         },
       },
-      // Persisted queries have an unknown type: only a known "query" is read-only.
-      annotations: { ...annotationsFor(op.operationType === "query" ? "GET" : "POST", label) },
+      // Persisted queries have an unknown type: only a known "query" is read-only; mutations and unknown operations may change data.
+      annotations: { ...annotationsFor(op.operationType === "query" ? "GET" : "POST", label), destructiveHint: op.operationType !== "query" },
       run: async (args) => execute(runtime, recipe, graphqlRequest(op, args.variables, args.query), args),
     };
   });
@@ -257,6 +265,7 @@ function openApiTools(recipe, runtime, name) {
     }
     const label = `${op.method} ${op.path}`;
     return {
+      lazy: true,
       name: name(op.id),
       description: clip(`[${recipe.name}] ${label}${op.summary ? ` — ${op.summary}` : ""}`),
       inputSchema: { type: "object", properties, required },
@@ -338,5 +347,12 @@ export function buildTools(recipe, runtime) {
   const paginated = tools.map((tool) => (tool.annotations.readOnlyHint && tool.inputSchema.properties?.query && !tool.name.startsWith(`${recipe.name}__stream`) ? withPagination(tool, fetchUrl) : tool));
   // Read-only HTTP tools can reuse recent identical results.
   const cached = paginated.map((tool) => (tool.annotations.readOnlyHint && tool.annotations.openWorldHint && !tool.name.startsWith(`${recipe.name}__stream`) ? withCache(tool, { defaultSeconds: runtime.cacheSeconds }) : tool));
-  return cached.map((tool) => ({ ...tool, inputSchema: safeSchema(tool.inputSchema) }));
+  const budget = runtime.schemaBudget ?? 3000;
+  const final = cached.map((tool) => {
+    const { description, inputSchema } = compactTool(tool, budget);
+    return { ...tool, description, inputSchema: safeSchema(inputSchema) };
+  });
+  // Large recipes expose __operation + __call instead of one tool per operation.
+  const threshold = runtime.foldThreshold ?? 20;
+  return threshold > 0 && final.filter((t) => t.lazy).length > threshold ? foldTools(recipe, final, name) : final;
 }

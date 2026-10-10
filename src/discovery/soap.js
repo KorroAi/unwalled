@@ -160,6 +160,7 @@ export function buildSoapTools(recipe, runtime, name, format) {
     return runtime.send(recipe, { method: "POST", url: recipe.endpoint, headers, body: soapEnvelope(op, recipe.version, params), bodyKind: "text" });
   };
   return recipe.operations.map((/** @type {SoapOperation} */ op) => ({
+    lazy: true,
     name: name(op.name),
     description: `[${recipe.name}] SOAP ${recipe.version} operation ${op.name} at ${recipe.endpoint}.${op.documentation ? ` ${op.documentation}` : ""} Parameters are sent as XML elements; the XML response is returned as JSON.`.slice(0, 1200),
     inputSchema: {
@@ -170,7 +171,11 @@ export function buildSoapTools(recipe, runtime, name, format) {
         max_chars: { type: "integer", minimum: 20 },
       },
     },
-    annotations: { title: `${recipe.name} ${op.name}`, readOnlyHint: /^(get|list|find|search|read|query|check|validate|lookup|calculate|convert)/i.test(op.name), destructiveHint: false, openWorldHint: true },
+    // Operation names do not say whether they write: anything not obviously a reader may change data.
+    annotations: (() => {
+      const readOnly = /^(get|list|find|search|read|query|check|validate|lookup|calculate|convert)/i.test(op.name);
+      return { title: `${recipe.name} ${op.name}`, readOnlyHint: readOnly, destructiveHint: !readOnly, openWorldHint: true };
+    })(),
     /** @param {Record<string, any>} args */
     run: async (args) => format(unwrapEnvelope(await call(op, args.params ?? {})), args),
   }));

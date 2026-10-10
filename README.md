@@ -32,6 +32,9 @@ agent:  crates__get_api_v1_crates_crate(path={"crate": "tokio"}, pick="crate.max
 - **REST and GraphQL**: GraphQL operations become one tool each, with typed variables; batched and persisted (hash-only) queries are supported. A raw `graphql` tool is added as well.
 - **Smart path templates**: `/api/users/42` → `/api/users/{user}`; a page you visited (`/crates/serde`) turns `/api/v1/crates/serde` into `/api/v1/crates/{crate}`; sibling URLs returning the same kind of data are merged.
 - **Auth that works**: persistent browser profile per recipe (session cookies included), a `login` tool that opens a visible window, captured bearer tokens and API keys replayed **only to the host they came from**, and `set_credentials` for API keys.
+- **Encrypted secrets**: stored credentials are encrypted at rest (AES-256-GCM) with a key protected by Windows DPAPI, or derived from `UNIVERSAL_MCP_SECRET_KEY`.
+- **Small tool lists**: schemas are compacted to a per-tool budget, and recipes with more than 20 operations switch to compact mode
+  (`<recipe>__operation` to find an operation and read its parameters, `<recipe>__call` to call it): a 62-operation Google API costs about 2 KB of tool definitions instead of 165 KB.
 - **Secrets stay out of recipes**: auth headers, cookies, and sensitive query parameters or body fields (`token`, `password`, `api_key`...) are redacted from recipes and stored separately, so recipes are safe to share.
 - **CSV and XML too**: CSV, XML, RSS and Atom responses are converted to JSON, so `pick`, filters and pagination work on them.
 - **Resilient calls**: idempotent requests answered with 429, 502, 503 or 504 are retried twice, honouring `Retry-After` (up to 10 s).
@@ -211,6 +214,10 @@ universal-mcp forget crates --delete-profile
 | `UNIVERSAL_MCP_TIMEOUT_MS` | `30000` | Request timeout |
 | `UNIVERSAL_MCP_MAX_ENDPOINTS` | `40` | Endpoints kept per browser/HAR recipe (most frequent first) |
 | `UNIVERSAL_MCP_MAX_OPENAPI_TOOLS` | `60` | Operations turned into tools per OpenAPI recipe |
+| `UNIVERSAL_MCP_SECRET_KEY` | (unset) | Passphrase for the secrets encryption key. Unset: Windows DPAPI, or a key file next to the data elsewhere |
+| `UNIVERSAL_MCP_PLAINTEXT_SECRETS` | (unset) | `1` stores secrets unencrypted (not recommended) |
+| `UNIVERSAL_MCP_SCHEMA_CHARS` | `3000` | Budget of one tool's description + input schema |
+| `UNIVERSAL_MCP_FOLD_THRESHOLD` | `20` | Above this many operations a recipe uses compact mode (`0` = never) |
 | `UNIVERSAL_MCP_CACHE_SECONDS` | `0` | Default `cache_seconds` of read-only tools (0 = no cache unless asked) |
 
 Data layout:
@@ -218,7 +225,8 @@ Data layout:
 ```text
 ~/.universal-mcp/
   recipes/<name>.json    shareable: endpoints, schemas, examples (secrets redacted)
-  secrets/<name>.json    local only: auth headers, cookies from HAR, secret query parameters (mode 600)
+  secrets/<name>.json    local only, encrypted: auth headers, cookies from HAR, secret query parameters
+  secret.key.dpapi       Windows: the encryption key, protected for the current user (secret.key elsewhere)
   profiles/<name>/       local only: browser profile and saved cookies
 ```
 
