@@ -22,6 +22,24 @@ function writeJson(file, data, secret = false) {
   if (secret && process.platform !== "win32") chmodSync(file, 0o600);
 }
 
+/** @param {string} dir @returns {Map<string, any>} */
+function readRecipeDir(dir) {
+  const recipes = new Map();
+  for (const file of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
+    try {
+      const recipe = JSON.parse(readFileSync(join(dir, file), "utf8"));
+      if (recipe.schemaVersion !== RECIPE_SCHEMA_VERSION || !RECIPE_NAME.test(recipe.name) || `${recipe.name}.json` !== file) {
+        log(`Skipping ${join(dir, file)}: unsupported or inconsistent recipe (rediscover it).`);
+        continue;
+      }
+      recipes.set(recipe.name, recipe);
+    } catch (error) {
+      log(`Skipping ${join(dir, file)}: ${error.message}`);
+    }
+  }
+  return recipes;
+}
+
 export class Store {
   /** @param {import("./config.js").Config} config */
   constructor(config) {
@@ -35,27 +53,44 @@ export class Store {
     return join(this.config.profilesDir, name);
   }
 
-  /** @returns {Map<string, any>} */
+  /**
+   * Personal recipes, on top of the team catalogue (UNWALLED_TEAM_RECIPES) when there is one: a personal recipe with the
+   * same name replaces the team's. Team recipes are only read; changing one (annotations, macros) saves a personal copy.
+   * @returns {Map<string, any>}
+   */
   loadRecipes() {
-    const recipes = new Map();
-    for (const file of readdirSync(this.config.recipesDir).filter((f) => f.endsWith(".json"))) {
-      try {
-        const recipe = JSON.parse(readFileSync(join(this.config.recipesDir, file), "utf8"));
-        if (recipe.schemaVersion !== RECIPE_SCHEMA_VERSION || !RECIPE_NAME.test(recipe.name) || `${recipe.name}.json` !== file) {
-          log(`Skipping ${file}: unsupported or inconsistent recipe (rediscover it).`);
-          continue;
-        }
-        recipes.set(recipe.name, recipe);
-      } catch (error) {
-        log(`Skipping ${file}: ${error.message}`);
-      }
+    /** Names of the recipes currently served from the team catalogue. @type {Set<string>} */
+    this.teamNames = new Set();
+    const team = this.loadTeamRecipes();
+    for (const name of team.keys()) this.teamNames.add(name);
+    const recipes = new Map(team);
+    for (const [name, recipe] of readRecipeDir(this.config.recipesDir)) {
+      recipes.set(name, recipe);
+      this.teamNames.delete(name);
     }
     return recipes;
+  }
+
+  /** Recipes of the team catalogue (empty when there is none or it cannot be read). @returns {Map<string, any>} */
+  loadTeamRecipes() {
+    const dir = this.config.teamRecipesDir;
+    if (!dir) return new Map();
+    if (!existsSync(dir)) {
+      log(`Team recipes folder ${dir} not found: only personal recipes are loaded.`);
+      return new Map();
+    }
+    return readRecipeDir(dir);
+  }
+
+  /** @param {string} name */
+  isTeamRecipe(name) {
+    return !!this.teamNames?.has(name);
   }
 
   saveRecipe(recipe) {
     assertRecipeName(recipe.name);
     writeJson(join(this.config.recipesDir, `${recipe.name}.json`), recipe);
+    this.teamNames?.delete(recipe.name);
   }
 
   /** @param {string} name @param {{ profile?: boolean }} [options] */

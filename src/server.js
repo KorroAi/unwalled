@@ -480,8 +480,10 @@ export async function startServer(config) {
           return text(result.text, !!result.isError);
         }
         case "list_recipes": {
+          if (await engine.reloadRecipes()) notifyToolsChanged();
           if (!engine.recipes.size) return text("No recipe yet. Call discover (or discover_har) to create one.");
-          return text([...engine.recipes.values()].map((r) => describeRecipe(r, toolNames(r.name))).join("\n\n") + listingNote());
+          const describeOne = (r) => `${engine.store.isTeamRecipe(r.name) ? "[team catalogue] " : ""}${describeRecipe(r, toolNames(r.name))}`;
+          return text([...engine.recipes.values()].map(describeOne).join("\n\n") + listingNote());
         }
         case "inspect_recipe": {
           const recipe = engine.recipe(args.name);
@@ -495,9 +497,10 @@ export async function startServer(config) {
           );
         }
         case "forget": {
-          await engine.forget(args.name, { deleteProfile: args.delete_profile });
+          const { restoredFromTeam } = await engine.forget(args.name, { deleteProfile: args.delete_profile });
           [...pinned].filter((t) => t.startsWith(`${args.name}__`)).forEach((t) => pinned.delete(t));
           notifyToolsChanged();
+          if (restoredFromTeam) return text(`Your copy of "${args.name}" was deleted: the team catalogue's version is used again.`);
           return text(`Recipe "${args.name}" deleted${args.delete_profile ? " with its browser profile" : ""}.`);
         }
         case "search_tools": {

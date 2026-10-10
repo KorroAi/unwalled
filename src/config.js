@@ -34,6 +34,8 @@ export function loadConfig() {
   return {
     home,
     recipesDir: join(home, "recipes"),
+    /** Shared, read-only recipe folder of a team (UNWALLED_TEAM_RECIPES): a network share or a synced Git repository. */
+    teamRecipesDir: env("TEAM_RECIPES") ? resolve(/** @type {string} */ (env("TEAM_RECIPES"))) : null,
     profilesDir: join(home, "profiles"),
     secretsDir: join(home, "secrets"),
     /** Local per-recipe state (policy, discovery inputs, health): never shared. */

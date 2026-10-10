@@ -40,6 +40,7 @@ Environment:
   UNWALLED_TOOL_MODE     auto (default: search mode above UNWALLED_TOOL_THRESHOLD=60 tools) | all | search
   UNWALLED_AUDIT         0 disables the audit log (<home>/audit.log)
   UNWALLED_ORG_POLICY    Path of an organization policy (JSON) that agents cannot loosen; check it with "unwalled policy"
+  UNWALLED_TEAM_RECIPES  Shared, read-only recipe folder of a team (network share, synced Git repository)
   The former UNIVERSAL_MCP_* names are still read.
 `;
 
@@ -145,25 +146,26 @@ export async function main(argv) {
       }
       case "policy": {
         const org = config.orgPolicy;
-        console.log(org ? `${describeOrgPolicy(org) || "The organization policy sets no rule."}
-
-${JSON.stringify(org, null, 2)}` : "No organization policy (set UNWALLED_ORG_POLICY to the path of a JSON file).");
+        console.log(org ? `${describeOrgPolicy(org) || "The organization policy sets no rule."}\n\n${JSON.stringify(org, null, 2)}` : "No organization policy (set UNWALLED_ORG_POLICY to the path of a JSON file).");
         break;
       }
-      case "list":
-        console.log(engine.recipes.size ? [...engine.recipes.values()].map((r) => describeRecipe(r, toolNames(r.name))).join("\n\n") : "No recipe yet.");
+      case "list": {
+        const describeOne = (r) => `${engine.store.isTeamRecipe(r.name) ? "[team catalogue] " : ""}${describeRecipe(r, toolNames(r.name))}`;
+        console.log(engine.recipes.size ? [...engine.recipes.values()].map(describeOne).join("\n\n") : "No recipe yet.");
         break;
+      }
       case "inspect": {
         expect(rest, 1, "inspect <name>");
         const { spec, ...recipe } = engine.recipe(rest[0]);
         console.log(JSON.stringify(recipe, null, 2));
         break;
       }
-      case "forget":
+      case "forget": {
         expect(rest, 1, "forget <name> [--delete-profile]");
-        await engine.forget(rest[0], { deleteProfile: values["delete-profile"] });
-        console.log(`Recipe "${rest[0]}" deleted.`);
+        const { restoredFromTeam } = await engine.forget(rest[0], { deleteProfile: values["delete-profile"] });
+        console.log(restoredFromTeam ? `Your copy of "${rest[0]}" was deleted: the team catalogue's version is used again.` : `Recipe "${rest[0]}" deleted.`);
         break;
+      }
       default:
         throw new Error(`Unknown command "${command}". Run unwalled --help.`);
     }

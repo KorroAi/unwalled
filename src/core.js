@@ -678,16 +678,40 @@ export class Engine {
     return file;
   }
 
+  /** @returns {Promise<{ restoredFromTeam: boolean }>} */
   async forget(name, { deleteProfile = false } = {}) {
     this.recipe(name);
+    if (this.store.isTeamRecipe(name))
+      throw new Error(`"${name}" comes from the team catalogue (${this.config.teamRecipesDir}): it is shared with others, so remove it there.`);
     return this.withLock(name, async () => {
       await this.closeBrowser(name);
       const extension = this.recipes.get(name)?.source?.extension;
       if (extension) rmSync(cacheFile(this.config.home, name, extension), { force: true });
       this.store.deleteRecipe(name, { profile: deleteProfile });
-      this.recipes.delete(name);
+      // A personal copy of a team recipe: the team's version comes back.
+      const team = this.store.loadTeamRecipes().get(name);
+      if (team) {
+        this.recipes.set(name, team);
+        this.store.teamNames?.add(name);
+      } else this.recipes.delete(name);
       this.rebuildTools();
+      return { restoredFromTeam: !!team };
     });
+  }
+
+  /**
+   * Reads the recipe folders again (the team catalogue may have been updated by someone else). Returns whether anything changed.
+   * Recipes are compared by name and update time; browsers of removed recipes are closed.
+   */
+  async reloadRecipes() {
+    const before = new Map([...this.recipes].map(([name, recipe]) => [name, recipe.updatedAt]));
+    const fresh = this.store.loadRecipes();
+    const changed = fresh.size !== before.size || [...fresh].some(([name, recipe]) => before.get(name) !== recipe.updatedAt);
+    if (!changed) return false;
+    for (const name of before.keys()) if (!fresh.has(name)) await this.closeBrowser(name);
+    this.recipes = fresh;
+    this.rebuildTools();
+    return true;
   }
 
   // ---------------------------------------------------------------- semantics, macros, policy
