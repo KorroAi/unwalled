@@ -73,7 +73,7 @@ after(async () => {
 
 describe("universal-mcp end to end", () => {
   it("starts with only the management tools", async () => {
-    assert.deepEqual(await toolNames(), ["discover", "discover_har", "forget", "inspect_recipe", "list_recipes", "login", "set_credentials"]);
+    assert.deepEqual(await toolNames(), ["discover", "discover_har", "export_recipe", "forget", "import_file", "inspect_recipe", "list_recipes", "login", "set_credentials", "watch"]);
     assert.match((await call("list_recipes")).text, /No recipe yet/);
   });
 

@@ -1,6 +1,9 @@
 // Builds MCP tool definitions from a recipe.
 import { createHash } from "node:crypto";
+import { buildStreamTools } from "../realtime/tools.js";
 import { formatResponse } from "./http.js";
+import { withCache } from "./cache.js";
+import { withPagination } from "./paginate.js";
 
 const TOOL_NAME_MAX = 64;
 const DESCRIPTION_MAX = 1200;
@@ -18,6 +21,8 @@ const DESCRIPTION_MAX = 1200;
  * @typedef {object} Runtime
  * @property {(recipe: any, request: import("./http.js").OutgoingRequest) => Promise<import("./http.js").HttpResult>} send
  * @property {number} maxOutputChars
+ * @property {number} [cacheSeconds] default cache duration of read-only tools (0 = off)
+ * @property {import("../realtime/tools.js").StreamRuntime["streamAuth"]} [streamAuth]
  */
 
 /** @param {string} text */
@@ -74,7 +79,12 @@ export function safeSchema(schema, depth = 0) {
 }
 
 const OUTPUT_PROPERTIES = {
-  pick: { type: "string", description: 'Optional: keep only part of a JSON response, e.g. "items[*].name" or "data.user,meta.total".' },
+  pick: {
+    type: "string",
+    description:
+      'Optional: keep only part of a JSON response, e.g. "items[*].name", "data.user,meta.total", "items[0:5]", "items[?price>10].name", ' +
+      '"items[?status=open][?name~lamp]" (~ = contains), "items.#" (count).',
+  },
   max_chars: { type: "integer", minimum: 20, description: "Optional: maximum characters returned (default from server configuration)." },
 };
 
@@ -281,6 +291,7 @@ function openApiTools(recipe, runtime, name) {
 export function buildTools(recipe, runtime) {
   const name = toolNamer(recipe.name);
   const tools = recipe.kind === "openapi" ? openApiTools(recipe, runtime, name) : [...graphqlTools(recipe, runtime, name), ...restTools(recipe, runtime, name)];
+  tools.push(...buildStreamTools(recipe, runtime, name));
   tools.push({
     name: name("request"),
     description: clip(
@@ -307,5 +318,18 @@ export function buildTools(recipe, runtime) {
       return execute(runtime, recipe, { method: String(args.method).toUpperCase(), url: url.toString(), headers: args.headers, body: args.body, bodyKind: args.body_kind ?? "json" }, args);
     },
   });
-  return tools.map((tool) => ({ ...tool, inputSchema: safeSchema(tool.inputSchema) }));
+  /** @param {string} url */
+  const fetchUrl = async (url) => {
+    const result = await runtime.send(recipe, { method: "GET", url: new URL(url, `${recipe.baseUrl.replace(/\/$/, "")}/`).toString() });
+    let json;
+    try {
+      json = JSON.parse(result.body.toString("utf8"));
+    } catch {}
+    return { status: result.status, json };
+  };
+  // Read-only tools with a query string can merge several pages.
+  const paginated = tools.map((tool) => (tool.annotations.readOnlyHint && tool.inputSchema.properties?.query && !tool.name.startsWith(`${recipe.name}__stream`) ? withPagination(tool, fetchUrl) : tool));
+  // Read-only HTTP tools can reuse recent identical results.
+  const cached = paginated.map((tool) => (tool.annotations.readOnlyHint && tool.annotations.openWorldHint && !tool.name.startsWith(`${recipe.name}__stream`) ? withCache(tool, { defaultSeconds: runtime.cacheSeconds }) : tool));
+  return cached.map((tool) => ({ ...tool, inputSchema: safeSchema(tool.inputSchema) }));
 }

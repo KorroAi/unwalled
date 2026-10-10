@@ -1,5 +1,7 @@
 // Sends requests for generated tools and formats responses for the agent.
 import { pick } from "./pick.js";
+import { convertToJson } from "./formats.js";
+import { describeProtobuf } from "./protobuf.js";
 
 /**
  * @typedef {object} OutgoingRequest
@@ -45,12 +47,43 @@ export async function sendRequest(request, { timeoutMs, context }) {
   const headers = { accept: "application/json, */*;q=0.8", ...(request.headers ?? {}) };
   if (contentType && !Object.keys(headers).some((h) => h.toLowerCase() === "content-type")) headers["content-type"] = contentType;
 
-  if (context) {
-    const response = await context.request.fetch(url.toString(), { method: request.method, headers, data, timeout: timeoutMs, failOnStatusCode: false, maxRedirects: 10 });
-    return { status: response.status(), statusText: response.statusText(), contentType: response.headers()["content-type"] ?? "", body: await response.body(), finalUrl: response.url() };
+  const once = async () => {
+    if (context) {
+      const response = await context.request.fetch(url.toString(), { method: request.method, headers, data, timeout: timeoutMs, failOnStatusCode: false, maxRedirects: 10 });
+      const result = { status: response.status(), statusText: response.statusText(), contentType: response.headers()["content-type"] ?? "", body: await response.body(), finalUrl: response.url() };
+      return { result, retryAfter: response.headers()["retry-after"] };
+    }
+    const response = await fetch(url, { method: request.method, headers, body: data, signal: AbortSignal.timeout(timeoutMs), redirect: "follow" });
+    const result = { status: response.status, statusText: response.statusText, contentType: response.headers.get("content-type") ?? "", body: Buffer.from(await response.arrayBuffer()), finalUrl: response.url || url.toString() };
+    return { result, retryAfter: response.headers.get("retry-after") ?? undefined };
+  };
+  // Rate limits and temporary outages: idempotent requests are retried (at most twice), honouring Retry-After up to a limit.
+  const idempotent = ["GET", "HEAD", "PUT", "DELETE", "OPTIONS"].includes(request.method.toUpperCase());
+  for (let attempt = 0; ; attempt++) {
+    const { result, retryAfter } = await once();
+    if (!idempotent || attempt >= MAX_RETRIES || !RETRY_STATUS.has(result.status)) return result;
+    const delay = retryDelayMs(retryAfter, attempt);
+    if (delay === null) return result;
+    await new Promise((resolve) => setTimeout(resolve, delay));
   }
-  const response = await fetch(url, { method: request.method, headers, body: data, signal: AbortSignal.timeout(timeoutMs), redirect: "follow" });
-  return { status: response.status, statusText: response.statusText, contentType: response.headers.get("content-type") ?? "", body: Buffer.from(await response.arrayBuffer()), finalUrl: response.url || url.toString() };
+}
+
+const MAX_RETRIES = 2;
+const MAX_RETRY_DELAY_MS = 10_000;
+const RETRY_STATUS = new Set([429, 502, 503, 504]);
+
+/**
+ * Delay before retrying: Retry-After (seconds or HTTP date) when present, otherwise 0.5 s then 1.5 s.
+ * Returns null when the server asks to wait longer than the limit (the caller gets the response instead).
+ * @param {string | undefined} retryAfter @param {number} attempt
+ */
+export function retryDelayMs(retryAfter, attempt, now = Date.now()) {
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter) - now;
+    if (Number.isFinite(ms)) return ms > MAX_RETRY_DELAY_MS ? null : Math.max(ms, 0);
+  }
+  return attempt === 0 ? 500 : 1500;
 }
 
 /**
@@ -61,12 +94,16 @@ export async function sendRequest(request, { timeoutMs, context }) {
 export function formatResponse(result, { pick: pickExpression, maxChars }) {
   const isError = result.status >= 400;
   const header = `HTTP ${result.status}${result.statusText ? ` ${result.statusText}` : ""} — ${result.finalUrl}`;
-  const isText = /json|text|xml|javascript|html|csv|graphql/i.test(result.contentType) || result.contentType === "";
+  const isText = /json|text|xml|javascript|html|csv|graphql|event-stream/i.test(result.contentType) || result.contentType === "";
+  // Protobuf and gRPC-web bodies are decoded without schema into JSON keyed by field number.
+  const decoded = !isText && result.body.length ? describeProtobuf(result.body, result.contentType) : undefined;
   let bodyText;
   if (!result.body.length) bodyText = "(empty body)";
-  else if (!isText) bodyText = `(binary body: ${result.body.length} bytes, ${result.contentType})`;
+  else if (!isText && decoded === undefined) bodyText = `(binary body: ${result.body.length} bytes, ${result.contentType})`;
   else {
-    bodyText = result.body.toString("utf8");
+    // CSV and XML (RSS, Atom, SOAP...) are converted to JSON so that pick and pagination work on them.
+    const raw = decoded ?? result.body.toString("utf8");
+    bodyText = decoded ?? (isError ? undefined : convertToJson(raw, result.contentType)) ?? raw;
     let json;
     try {
       json = JSON.parse(bodyText);

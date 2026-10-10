@@ -1,5 +1,6 @@
 // Finds a published OpenAPI / Swagger description and normalizes its operations.
 import YAML from "yaml";
+import { discoveryToOpenApi, isGoogleDiscovery } from "./google.js";
 
 const DOC_PATHS = [
   "/openapi.json", "/openapi.yaml", "/openapi.yml", "/swagger.json", "/swagger.yaml",
@@ -17,6 +18,7 @@ function parseSpec(text, contentType) {
   } catch {
     return null;
   }
+  if (isGoogleDiscovery(spec)) return discoveryToOpenApi(spec);
   return spec && typeof spec === "object" && (spec.openapi || spec.swagger) && spec.paths && typeof spec.paths === "object" ? spec : null;
 }
 

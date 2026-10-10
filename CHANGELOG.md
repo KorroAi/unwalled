@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased (realtime branch)
+
+- WebSocket and Server-Sent Events: captured during browser discovery and from HAR files (Chrome's `_webSocketMessages`, event-stream bodies); one tool per stream plus `__stream`, replaying the captured frames in order with the profile's cookies, secrets kept out of recipes, heartbeats answered.
+- Google Discovery documents (YouTube, Drive, Gmail, Sheets, Calendar...) are read like OpenAPI descriptions.
+- `import_file`: OpenAPI / Swagger files, Google Discovery documents, Postman collections, Insomnia exports, Bruno collection folders, HAR files and shared recipes. `export_recipe` writes a recipe without secrets. CLI: `import`, `export`.
+- Read-only tools: `paginate` (next-page tokens and URLs, page numbers, offsets) and `cache_seconds` (`UNIVERSAL_MCP_CACHE_SECONDS`).
+- `watch`: polls a read-only tool and reports what changed.
+- `pick`: slices (`items[0:5]`), filters (`items[?price>10]`, `=`, `!=`, `<`, `>`, `~` contains, presence) and counts (`items.#`).
+- Responses with `text/event-stream` are shown as text.
+- Protobuf and gRPC-web responses are decoded without schema (fields by number, trailers shown).
+- CSV, XML, RSS and Atom responses are converted to JSON.
+- Idempotent requests are retried on 429 / 502 / 503 / 504 (twice, `Retry-After` honoured up to 10 s).
+
 ## 0.1.0 — 2026-10-10
 
 First release.

@@ -35,6 +35,25 @@ describe("pick", () => {
     assert.deepEqual(pick(data, "data.total, meta.page"), { "data.total": 2, "meta.page": 1 });
   });
 
+  it("slices, filters and counts lists", () => {
+    const shop = {
+      items: [
+        { id: 1, name: "Blue lamp", price: 12, status: "open", tags: ["a"], seller: { country: "FR" } },
+        { id: 2, name: "Red chair", price: 40, status: "sold", tags: [] , seller: { country: "DE" } },
+        { id: 3, name: "Lamp shade", price: 8, status: "open", seller: { country: "FR" } },
+      ],
+    };
+    assert.deepEqual(pick(shop, "items[0:2].id"), [1, 2]);
+    assert.deepEqual(pick(shop, "items[-1:].id"), [3]);
+    assert.deepEqual(pick(shop, "items[?price>10].id"), [1, 2]);
+    assert.deepEqual(pick(shop, "items[?price<=12][?status=open].name"), ["Blue lamp", "Lamp shade"]);
+    assert.deepEqual(pick(shop, "items[?name~lamp].id"), [1, 3]);
+    assert.deepEqual(pick(shop, "items[?seller.country!=FR].id"), [2]);
+    assert.deepEqual(pick(shop, "items[?tags].id"), [1, 2]);
+    assert.equal(pick(shop, "items.#"), 3);
+    assert.deepEqual(pick(shop, "items[?price>10].id, items.#"), { "items[?price>10].id": [1, 2], "items.#": 3 });
+  });
+
   it("returns undefined when nothing matches and rejects bad paths", () => {
     assert.equal(pick(data, "nope.x"), undefined);
     assert.throws(() => pick(data, "a..b"), /Invalid pick path/);

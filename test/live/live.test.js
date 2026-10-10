@@ -52,4 +52,15 @@ describe("live websites", { skip: !enabled && "set UNIVERSAL_MCP_LIVE=1 to run" 
     const pet = await call("petstore__find_pets_by_status", { query: { status: "available" }, max_chars: 300 });
     assert.match(pet.text, /HTTP 200/);
   });
+
+  it("YouTube Data API (Google Discovery document)", TIMEOUT, async () => {
+    const discovered = await call("discover", { name: "youtube", url: "https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest", include: "search_list|videos_list" });
+    assert.equal(discovered.isError, false, discovered.text);
+    assert.match(discovered.text, /YouTube Data API/);
+    // Without an API key Google refuses the call, which still proves the request is well formed.
+    const key = process.env.YOUTUBE_API_KEY;
+    if (key) await call("set_credentials", { name: "youtube", host: "youtube.googleapis.com", headers: { "x-goog-api-key": key } });
+    const search = await call("youtube__youtube_search_list", { query: { part: ["snippet"], q: "bitcoin", maxResults: 1 }, max_chars: 400 });
+    assert.match(search.text, key ? /HTTP 200/ : /HTTP 403[\s\S]*API Key/);
+  });
 });

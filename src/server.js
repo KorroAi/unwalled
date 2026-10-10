@@ -4,6 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { describeRecipe, Engine } from "./core.js";
 import { log } from "./log.js";
+import { watch } from "./watch.js";
 import { VERSION } from "./version.js";
 
 const NAME = { type: "string", pattern: "^[a-z][a-z0-9-]{0,30}$", description: 'Recipe name: lowercase letters, digits, dashes (e.g. "github", "my-shop").' };
@@ -54,6 +55,55 @@ const MANAGEMENT_TOOLS = [
       required: ["name", "har_path"],
     },
     annotations: { title: "Import a HAR capture", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "import_file",
+    description:
+      "Create tools from a local API description file (absolute path): OpenAPI 3 / Swagger 2 (JSON or YAML), Google Discovery document, " +
+      "Postman collection (v2.x), Insomnia export (v4), Bruno collection folder, HAR capture, or a recipe exported with export_recipe. The format is detected automatically.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: NAME,
+        path: { type: "string", description: "Absolute path to the file." },
+        base_url: { type: "string", description: "Override the API base URL (e.g. when a collection uses an undefined {{baseUrl}})." },
+        variables: { type: "object", additionalProperties: { type: "string" }, description: "Values for {{variables}} of Postman / Insomnia / Bruno collections." },
+        environment: { type: "string", description: "Bruno only: environment to use (default: the first one)." },
+        include: { type: "string", description: "Regular expression selecting which operations become tools." },
+        hosts: { type: "array", items: { type: "string" }, description: "HAR only: keep these hosts." },
+        merge: { type: "boolean", description: "HAR only: add to the existing recipe." },
+      },
+      required: ["name", "path"],
+    },
+    annotations: { title: "Import an API file", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+  },
+  {
+    name: "watch",
+    description:
+      "Call a generated tool repeatedly (every interval_seconds, for at most duration_seconds) and report only what changed between calls: " +
+      "prices, statuses, counters, new items. Stops early when the output matches \"until\". Changes are also sent as progress notifications.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tool: { type: "string", description: "Name of a generated tool, e.g. shop__get_api_products_product." },
+        arguments: { type: "object", additionalProperties: true, description: "Arguments for that tool (pick is recommended to watch only the relevant fields)." },
+        interval_seconds: { type: "number", minimum: 1, maximum: 3600, description: "Default 30." },
+        duration_seconds: { type: "number", minimum: 1, maximum: 3600, description: "Default 300." },
+        until: { type: "string", description: 'Stop when the output contains this text or matches "/regex/flags".' },
+      },
+      required: ["tool"],
+    },
+    annotations: { title: "Watch a tool", readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+  },
+  {
+    name: "export_recipe",
+    description: "Write a recipe to a JSON file to share it or move it to another machine. Recipes contain no secrets; import it with import_file.",
+    inputSchema: {
+      type: "object",
+      properties: { name: NAME, path: { type: "string", description: "Absolute path of the file to write." }, overwrite: { type: "boolean" } },
+      required: ["name", "path"],
+    },
+    annotations: { title: "Export a recipe", readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   },
   {
     name: "login",
@@ -151,6 +201,25 @@ export async function startServer(config) {
           const recipe = await engine.discoverHar({ name: args.name, harPath: args.har_path, hosts: args.hosts, maxEndpoints: args.max_endpoints, merge: args.merge });
           notifyToolsChanged();
           return text(describeRecipe(recipe, engine.toolsOf(recipe.name).map((t) => t.name)));
+        }
+        case "import_file": {
+          const recipe = await engine.importFile({ name: args.name, path: args.path, baseUrl: args.base_url, variables: args.variables, environment: args.environment, include: args.include, hosts: args.hosts, merge: args.merge });
+          notifyToolsChanged();
+          return text(describeRecipe(recipe, engine.toolsOf(recipe.name).map((t) => t.name)));
+        }
+        case "watch": {
+          const tool = engine.tools.get(args.tool);
+          if (!tool) return text(`Unknown tool "${args.tool}". Call list_recipes to see the generated tools.`, true);
+          if (!tool.annotations.readOnlyHint) return text(`"${args.tool}" is not read-only: watch only repeats read-only tools.`, true);
+          return await watch(tool.run, args.arguments ?? {}, {
+            intervalMs: Math.min(Math.max(Number(args.interval_seconds ?? 30), 1), 3600) * 1000,
+            durationMs: Math.min(Math.max(Number(args.duration_seconds ?? 300), 1), 3600) * 1000,
+            until: args.until, onChange: onProgress,
+          }).then((result) => text(result.text));
+        }
+        case "export_recipe": {
+          const { path, bytes } = engine.exportRecipe({ name: args.name, path: args.path, overwrite: args.overwrite });
+          return text(`Recipe "${args.name}" written to ${path} (${bytes} bytes, no secrets).`);
         }
         case "login": {
           const { timedOut } = await engine.login({ name: args.name, url: args.url, durationSeconds: args.duration_seconds });

@@ -13,7 +13,11 @@ Usage:
       --mode auto|openapi|browser   --interactive   --duration <seconds>
       --actions '<json array>'      --host <host> (repeatable)   --include <regex>   --merge
   universal-mcp har <name> <file.har> [--host <host>] [--merge]
+  universal-mcp import <name> <file> [--base-url <url>] [--include <regex>]
+                                                OpenAPI, Swagger, Google Discovery, Postman, Insomnia, HAR,
+                                                exported recipe, or Bruno collection folder
   universal-mcp login <name> <url> [--duration <seconds>]
+  universal-mcp export <name> <file.json>       Write a recipe (no secrets) to share it; import it with "import"
   universal-mcp list                            List recipes
   universal-mcp inspect <name>                  Show a recipe as JSON
   universal-mcp forget <name> [--delete-profile]
@@ -37,6 +41,7 @@ const OPTIONS = /** @type {const} */ ({
   host: { type: "string", multiple: true },
   include: { type: "string" },
   merge: { type: "boolean" },
+  "base-url": { type: "string" },
   "delete-profile": { type: "boolean" },
 });
 
@@ -86,6 +91,20 @@ export async function main(argv) {
         const { resolve } = await import("node:path");
         const recipe = await engine.discoverHar({ name: rest[0], harPath: resolve(rest[1]), hosts: values.host, merge: values.merge });
         console.log(describeRecipe(recipe, toolNames(recipe.name)));
+        break;
+      }
+      case "import": {
+        expect(rest, 2, "import <name> <file>");
+        const { resolve } = await import("node:path");
+        const recipe = await engine.importFile({ name: rest[0], path: resolve(rest[1]), baseUrl: values["base-url"], include: values.include, hosts: values.host, merge: values.merge });
+        console.log(describeRecipe(recipe, toolNames(recipe.name)));
+        break;
+      }
+      case "export": {
+        expect(rest, 2, "export <name> <file.json>");
+        const { resolve } = await import("node:path");
+        const { path, bytes } = engine.exportRecipe({ name: rest[0], path: resolve(rest[1]) });
+        console.log(`Written ${path} (${bytes} bytes, no secrets).`);
         break;
       }
       case "login":

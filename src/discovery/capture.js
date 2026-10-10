@@ -1,6 +1,7 @@
 // Records the API traffic of a real browser while it loads a page and replays scripted actions
 // (or while the user browses in interactive mode).
 import { closeProfile, launchProfile, saveCookies } from "../browser.js";
+import { attachRealtimeCapture } from "../realtime/capture.js";
 import { isTracker, registrableDomain } from "./infer.js";
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
@@ -56,6 +57,8 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
   };
 
   const context = await launchProfile(config, profileDir, { headless: !interactive });
+  const realtime = attachRealtimeCapture(context, allowed);
+  await realtime.ready();
   let closedByUser = false;
   context.on("close", () => (closedByUser = true));
   context.on("response", (response) => {
@@ -144,5 +147,5 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
     if (!closedByUser) await closeProfile(context, profileDir);
   }
   await drain();
-  return { observations, pageUrls, typedTexts, actionErrors };
+  return { observations, streams: realtime.streams, pageUrls, typedTexts, actionErrors };
 }

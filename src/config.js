@@ -24,6 +24,7 @@ export function loadConfig() {
     requestTimeoutMs: intFromEnv("UNIVERSAL_MCP_TIMEOUT_MS", 30_000),
     maxEndpoints: intFromEnv("UNIVERSAL_MCP_MAX_ENDPOINTS", 40),
     maxOpenApiTools: intFromEnv("UNIVERSAL_MCP_MAX_OPENAPI_TOOLS", 60),
+    cacheSeconds: process.env.UNIVERSAL_MCP_CACHE_SECONDS === "0" ? 0 : intFromEnv("UNIVERSAL_MCP_CACHE_SECONDS", 0),
   };
 }
 

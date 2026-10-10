@@ -23,12 +23,18 @@ agent:  crates__get_api_v1_crates_crate(path={"crate": "tokio"}, pick="crate.max
 
 ## Features
 
-- **Three sources**: live browser capture, HAR files (devtools, mitmproxy, Charles, Proxyman: mobile and desktop apps too), OpenAPI 3 / Swagger 2 (JSON or YAML, found automatically, including behind a Swagger UI page).
+- **Many sources**: live browser capture, HAR files (devtools, mitmproxy, Charles, Proxyman: mobile and desktop apps too), OpenAPI 3 / Swagger 2 (JSON or YAML, found automatically, including behind a Swagger UI page),
+  Google Discovery documents (YouTube Data and Analytics, Drive, Gmail, Sheets, Calendar and every other Google API), and local files: Postman collections, Insomnia exports, Bruno collection folders, shared recipes.
+- **Realtime streams**: WebSocket and Server-Sent Events connections opened by the page are captured with their protocol (subscribe and auth frames, in order) and become tools that connect, replay the handshake and return the messages received for a chosen duration.
 - **REST and GraphQL**: GraphQL operations become one tool each, with typed variables; batched and persisted (hash-only) queries are supported. A raw `graphql` tool is added as well.
 - **Smart path templates**: `/api/users/42` → `/api/users/{user}`; a page you visited (`/crates/serde`) turns `/api/v1/crates/serde` into `/api/v1/crates/{crate}`; sibling URLs returning the same kind of data are merged.
 - **Auth that works**: persistent browser profile per recipe (session cookies included), a `login` tool that opens a visible window, captured bearer tokens and API keys replayed **only to the host they came from**, and `set_credentials` for API keys.
 - **Secrets stay out of recipes**: auth headers, cookies, and sensitive query parameters or body fields (`token`, `password`, `api_key`...) are redacted from recipes and stored separately, so recipes are safe to share.
-- **Agent-friendly output**: `pick` extracts just the fields you need (`items[*].name`), `max_chars` bounds the response, and tool annotations mark read-only and destructive calls.
+- **CSV and XML too**: CSV, XML, RSS and Atom responses are converted to JSON, so `pick`, filters and pagination work on them.
+- **Resilient calls**: idempotent requests answered with 429, 502, 503 or 504 are retried twice, honouring `Retry-After` (up to 10 s).
+- **Binary responses**: protobuf and gRPC-web (binary or text) bodies are decoded into JSON keyed by field number, so `pick` works on them too.
+- **Agent-friendly output**: `pick` extracts just the fields you need (`items[*].name`, slices `items[0:5]`, filters `items[?price>10]`, counts `items.#`), `max_chars` bounds the response, and tool annotations mark read-only and destructive calls.
+- **Pagination, cache and watching**: read-only tools can merge several pages (`paginate`), reuse recent results (`cache_seconds`), and be polled with `watch`, which reports only what changed.
 - **Robust schemas**: property names that Claude's API would reject (e.g. `page[size]`) are kept out of tool schemas but remain usable, so one odd parameter never breaks the tool list.
 - **Hot reload**: new tools appear without restarting the client; recipes load at startup.
 - **CLI included**: discover, import, inspect and manage recipes from the terminal.
@@ -82,6 +88,9 @@ The agent calls the management tools below, then the generated ones.
 | --- | --- |
 | `discover` | Creates a recipe from a URL. Options: `mode` (`auto`, `openapi`, `browser`), `actions`, `interactive`, `duration_seconds`, `hosts` (extra API hosts), `include` (OpenAPI operation filter), `max_endpoints`, `merge`. |
 | `discover_har` | Creates a recipe from a `.har` file (absolute path). |
+| `import_file` | Creates a recipe from a local file or folder: OpenAPI / Swagger, Google Discovery document, Postman collection, Insomnia export, Bruno collection, HAR, or a recipe shared with `export_recipe`. Options: `base_url`, `variables`, `environment` (Bruno), `include`. |
+| `export_recipe` | Writes a recipe (never its secrets) to a JSON file. |
+| `watch` | Calls a read-only generated tool every `interval_seconds` for up to `duration_seconds`, and returns the changes (field by field for JSON); `until` stops early. |
 | `login` | Opens a visible browser on the recipe's profile so you can sign in; cookies are kept. |
 | `set_credentials` | Stores headers (or `?name` query parameters) sent to one host, e.g. `{"authorization": "Bearer ..."}`. |
 | `list_recipes` | Lists recipes, endpoints and tools. |
@@ -112,12 +121,24 @@ For flows that are hard to script, use `interactive: true`: a window opens, you 
 | Recipe type | Tools |
 | --- | --- |
 | Browser / HAR | one tool per REST endpoint (`<recipe>__get_api_items_item`), one per GraphQL operation (`<recipe>__gql_GetCart`), `<recipe>__graphql` when GraphQL is used, and `<recipe>__request` |
-| OpenAPI | one tool per operation (up to 60 by default), `<recipe>__routes` to list every route, and `<recipe>__request` |
+| OpenAPI / imported files | one tool per operation (up to 60 by default), `<recipe>__routes` to list every route, and `<recipe>__request` |
+| Recipes with streams | one tool per WebSocket / event stream (`<recipe>__stream_ws_prices`) and `<recipe>__stream` for any `ws(s)://` or event-stream URL |
 
 Generated tools take `path`, `query` and `body` (or `variables` for GraphQL), plus:
 
 - `pick`: comma-separated paths into the JSON response: `data.items[*].name`, `items.*.id`, `meta.total, data.user`.
 - `max_chars`: maximum characters returned (default 40,000).
+
+Read-only tools also accept:
+
+- `paginate`: `{ "max_pages": 5, "max_items": 1000, "items_path": "data.items" }`. Follows next-page tokens and URLs found in the response
+  (`nextPageToken`, `next_cursor`, `links.next`, `pageInfo.endCursor`...), otherwise increments a page number or offset passed in `query`
+  (`{"page": 1}`, `{"offset": 0}`), and returns the merged items. `pick` then applies to each item.
+- `cache_seconds`: reuse an identical successful call made less than this many seconds ago.
+
+Stream tools accept `duration_seconds` (default 10), `max_messages` (default 50), `filter` (text or `/regex/`), `pick` (applied to each JSON message),
+`query` (override URL parameters) and, for WebSockets, `send` (extra frames) and `skip_captured_frames`.
+Common heartbeats are answered automatically (Engine.IO / Socket.IO, graphql-ws and JSON `ping`).
 
 `<recipe>__request` sends any request (absolute URL, or a path relative to the recipe's base URL) with the recipe's cookies and credentials.
 
@@ -130,12 +151,36 @@ Generated tools take `path`, `query` and `body` (or `variables` for GraphQL), pl
 Then: `discover_har(name="myapp", har_path="/absolute/path/capture.har")`.
 Cookies and auth headers found in the file are stored as local secrets and replayed to their original hosts.
 
+### Google APIs (YouTube, Drive, Gmail...)
+
+Google publishes its APIs as Discovery documents, which `discover` reads like OpenAPI:
+
+```text
+discover(name="youtube", url="https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest", include="search_list|videos_list|channels_list")
+set_credentials(name="youtube", host="youtube.googleapis.com", headers={"x-goog-api-key": "<your API key>"})
+youtube__youtube_search_list(query={"part": ["snippet"], "q": "bitcoin", "maxResults": 5}, pick="items[*].snippet.title")
+```
+
+The list of documents is at `https://www.googleapis.com/discovery/v1/apis`. Public data needs an API key from the Google Cloud console;
+your own data (YouTube Analytics, Drive, Gmail) needs an OAuth access token: `set_credentials(..., headers={"authorization": "Bearer <token>"})`.
+
+### Importing API files
+
+```text
+import_file(name="stripe", path="/abs/path/openapi.yaml")
+import_file(name="team-api", path="/abs/path/Team.postman_collection.json", variables={"baseUrl": "https://api.example.com"})
+import_file(name="shop", path="/abs/path/bruno/shop", environment="prod")
+export_recipe(name="shop", path="/abs/path/shop-recipe.json")   # share it; the receiver runs import_file
+```
+
 ### Command line
 
 ```bash
 npx -y github:KorroAi/universal-mcp --help
 universal-mcp discover crates "https://crates.io/search?q=serde" --actions '[{"goto":"/crates/serde"}]'
 universal-mcp har myapp ./capture.har --host api.myapp.com
+universal-mcp import team-api ./Team.postman_collection.json --base-url https://api.example.com
+universal-mcp export crates ./crates-recipe.json
 universal-mcp login github https://github.com/login
 universal-mcp list
 universal-mcp inspect crates
@@ -152,6 +197,7 @@ universal-mcp forget crates --delete-profile
 | `UNIVERSAL_MCP_TIMEOUT_MS` | `30000` | Request timeout |
 | `UNIVERSAL_MCP_MAX_ENDPOINTS` | `40` | Endpoints kept per browser/HAR recipe (most frequent first) |
 | `UNIVERSAL_MCP_MAX_OPENAPI_TOOLS` | `60` | Operations turned into tools per OpenAPI recipe |
+| `UNIVERSAL_MCP_CACHE_SECONDS` | `0` | Default `cache_seconds` of read-only tools (0 = no cache unless asked) |
 
 Data layout:
 
@@ -184,7 +230,8 @@ Data layout:
 
 - **Server-rendered pages** (HTML built on the server, no JSON calls) expose no API to capture. Use the agent's browser tools for those.
 - **Tokens computed in the page** (request signing, short-lived tokens refreshed by JavaScript) may expire; rerun `discover` or `login`. Bearer tokens are replayed as captured.
-- **WebSockets, server-sent events and binary protocols** (gRPC-web, protobuf) are not captured.
+- **Binary protocols**: protobuf and gRPC-web responses are decoded without their .proto schema, so fields appear by number (`{"1": "name", "2": 150}`) and types are guessed; binary request bodies are not rebuilt. Event streams read with `fetch()` (rather than `EventSource`) are recorded without sample messages.
+- **Stream replays** come from Node, not from the page: servers that require a browser-only handshake may refuse them.
 - **Anti-bot protections** (CAPTCHAs, bot scoring) can block headless capture; `interactive: true` or `login` usually helps.
 - **Path inference is heuristic**: if a parameter was not detected, call the endpoint through `<recipe>__request` or capture more pages with `merge: true`.
 - Recipes can break when a site changes its API: rediscover.
