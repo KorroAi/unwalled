@@ -25,7 +25,7 @@ export class Store {
   /** @param {import("./config.js").Config} config */
   constructor(config) {
     this.config = config;
-    for (const dir of [config.recipesDir, config.profilesDir, config.secretsDir]) mkdirSync(dir, { recursive: true });
+    for (const dir of [config.recipesDir, config.profilesDir, config.secretsDir, config.stateDir]) mkdirSync(dir, { recursive: true });
   }
 
   /** @param {string} name */
@@ -62,6 +62,7 @@ export class Store {
     assertRecipeName(name);
     rmSync(join(this.config.recipesDir, `${name}.json`), { force: true });
     rmSync(join(this.config.secretsDir, `${name}.json`), { force: true });
+    rmSync(join(this.config.stateDir, `${name}.json`), { force: true });
     if (profile) rmSync(this.profileDir(name), { recursive: true, force: true });
   }
 
@@ -88,5 +89,27 @@ export class Store {
     const hosts = Object.entries(secrets).filter(([, headers]) => Object.keys(headers).length);
     if (!hosts.length) rmSync(file, { force: true });
     else writeJson(file, Object.fromEntries(hosts), true);
+  }
+
+  /**
+   * Local state of a recipe: policy, original discovery inputs (which may contain secrets), health results.
+   * @param {string} name @returns {{ policy?: import("./safety.js").Policy, discovery?: any, extraDiscoveries?: any[], health?: any, headers?: Record<string, string> }}
+   */
+  loadState(name) {
+    assertRecipeName(name);
+    const file = join(this.config.stateDir, `${name}.json`);
+    if (!existsSync(file)) return {};
+    try {
+      return JSON.parse(readFileSync(file, "utf8"));
+    } catch {
+      return {};
+    }
+  }
+
+  /** @param {string} name @param {(state: any) => any} update */
+  updateState(name, update) {
+    const next = update(this.loadState(name));
+    writeJson(join(this.config.stateDir, `${name}.json`), next, true);
+    return next;
   }
 }

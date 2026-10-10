@@ -2,6 +2,7 @@
 // path templates with named parameters, typed query parameters, inferred body schemas,
 // GraphQL operations, and secrets (auth headers) split away from the shareable recipe.
 import { describeShape, inferSchema } from "../tools/schema.js";
+import { isSecretHeader, isSecretParam, looksLikeSecret, looksSensitive, redact, redactGraphqlQuery, redactText, redactUrl, REDACTED } from "./secrets.js";
 
 /**
  * @typedef {object} Observation
@@ -17,43 +18,13 @@ const TRACKER_HOSTS =
   /(^|\.)(google-analytics\.com|googletagmanager\.com|doubleclick\.net|googlesyndication\.com|facebook\.(com|net)|sentry\.io|segment\.(io|com)|hotjar\.(com|io)|mixpanel\.com|amplitude\.com|clarity\.ms|datadoghq\.(com|eu)|browser-intake-datadoghq\.com|nr-data\.net|newrelic\.com|intercom\.io|cloudflareinsights\.com|plausible\.io|posthog\.com|fullstory\.com|bugsnag\.com|launchdarkly\.com|optimizely\.com|tiktok\.com|bat\.bing\.com|linkedin\.com|snapchat\.com)$/i;
 const TRACKER_PATHS = /\/(collect|beacon|telemetry|analytics|track|events?|log|metrics|rum|pixel|ping)(\/|$|\?)/i;
 
-const SENSITIVE_HEADER = /^(authorization|proxy-authorization|cookie|x-api-key|api-key|apikey)$|token|secret|session|auth|signature|password|csrf|xsrf/i;
 const DROPPED_HEADER =
   /^(:.*|accept-encoding|accept-language|user-agent|referer|origin|sec-.*|connection|host|content-length|content-type|priority|cache-control|pragma|dnt|upgrade-insecure-requests|te|if-none-match|if-modified-since|range|x-forwarded-.*)$/i;
 
-// Query parameters and body fields whose values must never be written into a shareable recipe.
-const SENSITIVE_FIELD = /^(key|sig|sid|auth|otp|pwd|passwd|code_verifier)$|token|secret|password|signature|session|api[_-]?key|apikey|credential/i;
+// Values that must be unique per request: replaying a captured one breaks writes (duplicates) or tracing.
+const PER_REQUEST_HEADER = /^(idempotency-key|x-idempotency-key|x-request-id|request-id|x-correlation-id|x-amzn-trace-id|traceparent|tracestate|baggage|sentry-trace|x-b3-.*|x-datadog-.*|x-client-transaction-id)$/i;
 
-/** Copy of a JSON value with sensitive fields replaced by "REDACTED". @param {unknown} value @returns {unknown} */
-export function redact(value, depth = 0) {
-  if (depth > 20) return value;
-  if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1));
-  if (value && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, SENSITIVE_FIELD.test(key) && (item === null || typeof item !== "object") ? "REDACTED" : redact(item, depth + 1)]),
-    );
-  }
-  return value;
-}
-
-/** @param {string} address */
-export function redactUrl(address) {
-  const url = new URL(address);
-  for (const key of [...url.searchParams.keys()]) if (SENSITIVE_FIELD.test(key)) url.searchParams.set(key, "REDACTED");
-  return url.toString();
-}
-
-/** Redacts sensitive "name=value" pairs in a text (form-encoded) body. @param {string} text */
-export function redactText(text) {
-  try {
-    const params = new URLSearchParams(text);
-    if ([...params.keys()].some((key) => SENSITIVE_FIELD.test(key))) {
-      for (const key of [...params.keys()]) if (SENSITIVE_FIELD.test(key)) params.set(key, "REDACTED");
-      return params.toString();
-    }
-  } catch {}
-  return text;
-}
+export { redact, redactText, redactUrl } from "./secrets.js";
 
 /** @param {string} host */
 export function isTracker(host) {
@@ -78,10 +49,10 @@ export function splitHeaders(headers, { secretCookies }) {
   /** @type {Record<string, string>} */ const secret = {};
   for (const [rawName, value] of Object.entries(headers)) {
     const name = rawName.toLowerCase();
-    if (name.startsWith(":")) continue; // HTTP/2 pseudo-headers (":authority" is not an auth header)
+    if (name.startsWith(":") || PER_REQUEST_HEADER.test(name)) continue; // HTTP/2 pseudo-headers (":authority" is not an auth header), per-request ids
     if (name === "cookie") {
       if (secretCookies) secret[name] = value;
-    } else if (SENSITIVE_HEADER.test(name)) secret[name] = value;
+    } else if (isSecretHeader(name, value)) secret[name] = value;
     else if (!DROPPED_HEADER.test(name)) keep[name] = value;
   }
   return { keep, secret };
@@ -96,7 +67,24 @@ export function parseBody(text, contentType = "") {
     } catch {}
   }
   if (/x-www-form-urlencoded/i.test(contentType)) return { kind: "form", value: Object.fromEntries(new URLSearchParams(text)) };
+  if (/multipart\/form-data/i.test(contentType)) return { kind: "multipart", ...parseMultipart(text, contentType) };
   return { kind: "text", value: text };
+}
+
+/** Text fields and file field names of a multipart/form-data body (file contents are never kept). @param {string} text @param {string} contentType */
+function parseMultipart(text, contentType) {
+  const boundary = /boundary="?([^";]+)"?/i.exec(contentType)?.[1];
+  /** @type {Record<string, string>} */ const value = {};
+  const fileFields = [];
+  if (boundary) {
+    for (const part of text.split(`--${boundary}`)) {
+      const name = /name="([^"]*)"/i.exec(part)?.[1];
+      if (!name) continue;
+      if (/filename="/i.test(part)) fileFields.push(name);
+      else value[name] = part.split(/\r?\n\r?\n/).slice(1).join("\n\n").replace(/\r?\n$/, "").slice(0, 200);
+    }
+  }
+  return { value, fileFields };
 }
 
 /** @param {string} segment */
@@ -140,6 +128,14 @@ function responseSignature(json) {
   if (Array.isArray(json)) return `[${json.length ? responseSignature(json[0]) : ""}]`;
   if (json && typeof json === "object") return Object.keys(json).sort().join(",");
   return typeof json;
+}
+
+/** Top-level keys of a response (of the first item for arrays, of "data" for GraphQL), used to detect API drift. @param {unknown} json */
+export function responseKeys(json) {
+  let value = json;
+  if (Array.isArray(value)) value = value[0];
+  if (value && typeof value === "object" && !Array.isArray(value)) return Object.keys(value).sort().slice(0, 40);
+  return [];
 }
 
 const truncate = (text, max) => (text.length > max ? `${text.slice(0, max)}…` : text);
@@ -239,7 +235,7 @@ function buildTemplates(items, variables) {
   /** @type {Map<string, { prefix: string, segments: (string|null)[], signature: string, members: number[] }>} */
   let patterns = new Map();
   items.forEach((item, index) => {
-    const segments = item.segments.map((s, i) => (s && (looksLikeId(s) || isVariable(item.segments, i, variables)) ? null : s));
+    const segments = item.segments.map((s, i) => (s && (looksLikeId(s) || looksLikeSecret(s) || isVariable(item.segments, i, variables)) ? null : s));
     const id = `${item.key}|${segments.map((s) => s ?? "{}").join("/")}`;
     const existing = patterns.get(id);
     if (existing) existing.members.push(index);
@@ -306,11 +302,13 @@ export function inferEndpoints(observations, { variables = navigationVariables([
     }
   });
 
-  // Secrets: sensitive headers, plus sensitive query parameters stored as "?name".
+  // Secrets: sensitive headers, sensitive query parameters stored as "?name", credentials written in the URL.
   for (const obs of usable) {
     const url = new URL(obs.url);
     const { secret } = splitHeaders(obs.requestHeaders, { secretCookies });
-    for (const [name, value] of url.searchParams) if (SENSITIVE_FIELD.test(name)) secret[`?${name}`] = value;
+    for (const [name, value] of url.searchParams) if (isSecretParam(name, value)) secret[`?${name}`] = value;
+    if ((url.username || url.password) && !secret.authorization)
+      secret.authorization = `Basic ${Buffer.from(`${safeDecode(url.username)}:${safeDecode(url.password)}`).toString("base64")}`;
     if (Object.keys(secret).length) secrets[url.host] = { ...(secrets[url.host] ?? {}), ...secret };
   }
 
@@ -333,7 +331,7 @@ export function inferEndpoints(observations, { variables = navigationVariables([
       const response = Array.isArray(obs.responseJson) ? obs.responseJson[index] : obs.responseJson;
       const op = operations.get(key) ?? {
         kind: "graphql", method: obs.method, url: endpoint, operationName: name ?? null, operationType: info.type,
-        query: payload.query ?? null, extensions: payload.extensions ?? null, headers: splitHeaders(obs.requestHeaders, { secretCookies }).keep,
+        query: redactGraphqlQuery(payload.query ?? null), extensions: payload.extensions ?? null, headers: splitHeaders(obs.requestHeaders, { secretCookies }).keep,
         variableSamples: [], responseSamples: [], observed: 0,
       };
       op.observed++;
@@ -357,14 +355,17 @@ export function inferEndpoints(observations, { variables = navigationVariables([
     const first = members[0];
     const url = new URL(first.url);
     const { template, params } = nameParameters(pattern.segments);
-    /** @type {Record<string, { type: string, example: string, seen: number }>} */ const query = {};
+    /** @type {Record<string, { type: string, example: string, seen: number, values?: string[] }>} */ const query = {};
     const bodies = [];
     let bodyKind = "none";
+    /** @type {string[]} */ const fileFields = [];
     const headers = {};
     for (const obs of members) {
       for (const [name, value] of new URL(obs.url).searchParams) {
-        if (SENSITIVE_FIELD.test(name)) continue; // injected from the stored secrets at call time
-        const entry = query[name] ?? { type: scalarType(value), example: truncate(value, 100), seen: 0 };
+        if (isSecretParam(name, value)) continue; // injected from the stored secrets at call time
+        const example = looksSensitive(value) ? REDACTED : truncate(value, 100);
+        const entry = /** @type {{ type: string, example: string, seen: number, values: string[] }} */ (query[name] ?? { type: scalarType(value), example, seen: 0, values: [] });
+        if (entry.values && !entry.values.includes(example) && entry.values.length < 8) entry.values.push(example);
         if (entry.type !== scalarType(value)) entry.type = "string";
         entry.seen++;
         query[name] = entry;
@@ -373,22 +374,38 @@ export function inferEndpoints(observations, { variables = navigationVariables([
       if (body.kind !== "none") {
         bodyKind = body.kind;
         bodies.push(body.value);
+        for (const field of /** @type {any} */ (body).fileFields ?? []) if (!fileFields.includes(field)) fileFields.push(field);
       }
       Object.assign(headers, splitHeaders(obs.requestHeaders, { secretCookies }).keep);
     }
     const responses = members.map((obs) => obs.responseJson).filter((v) => v !== undefined).slice(0, 5);
+    // Path parameters: example values for health checks; secret-looking values (webhook tokens...) go to the secret store.
+    const paramPositions = pattern.segments.flatMap((segment, index) => (segment === null ? [index] : []));
+    /** @type {Record<string, string>} */ const pathExamples = {};
+    const secretPathParams = [];
+    params.forEach((param, i) => {
+      const values = members.map((obs) => safeDecode(new URL(obs.url).pathname.split("/")[paramPositions[i]] ?? ""));
+      if (values.some((value) => looksLikeSecret(value))) {
+        secretPathParams.push(param);
+        secrets[url.host] = { ...(secrets[url.host] ?? {}), [`{${first.method} ${template}}${param}`]: values[0] };
+      } else if (!looksSensitive(values[0])) pathExamples[param] = values[0];
+    });
     return {
       kind: "rest",
       method: first.method,
       origin: url.origin,
       pathTemplate: template,
       pathParams: params,
+      pathExamples,
+      ...(fileFields.length ? { fileFields } : {}),
+      ...(secretPathParams.length ? { secretPathParams } : {}),
       query,
       bodyKind,
       bodySchema: bodies.length ? inferSchema(bodyKind === "text" ? bodies.map(String) : bodies) : null,
       bodyExample: bodies.length ? truncate(typeof bodies[0] === "string" ? redactText(bodies[0]) : JSON.stringify(redact(bodies[0])), 500) : null,
       headers,
       responseShape: responses.length ? truncate(describeShape(inferSchema(responses)), 700) : "no JSON body",
+      responseKeys: responses.length ? responseKeys(responses[0]) : [],
       exampleUrl: truncate(redactUrl(first.url), 300),
       observed: members.length,
     };
@@ -400,6 +417,7 @@ export function inferEndpoints(observations, { variables = navigationVariables([
     variablesSchema: variableSamples.length ? inferSchema(variableSamples) : { type: "object" },
     variablesExample: variableSamples.length ? truncate(JSON.stringify(redact(variableSamples[0])), 400) : null,
     responseShape: responseSamples.length ? truncate(describeShape(inferSchema(responseSamples.slice(0, 5))), 700) : "unknown",
+    responseKeys: responseSamples.length ? responseKeys(/** @type {any} */ (responseSamples[0])?.data ?? responseSamples[0]) : [],
   }));
 
   const all = [...graphql, ...endpoints].sort((a, b) => b.observed - a.observed);
