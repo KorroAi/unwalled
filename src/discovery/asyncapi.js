@@ -56,9 +56,13 @@ export function asyncApiToStreams(doc) {
     return { name, protocol, url };
   });
   const socketServers = servers.filter((s) => /^wss?$/.test(s.protocol) || /^wss?:\/\//i.test(s.url));
-  for (const s of servers) if (!socketServers.includes(s)) warnings.push(`Server "${s.name}" uses ${s.protocol || "an unknown protocol"}: only WebSocket servers become tools.`);
-  if (!socketServers.length) throw new Error("This AsyncAPI document has no WebSocket (ws/wss) server.");
-  const server = socketServers[0];
+  const mqttServers = servers.filter((s) => /^(mqtt|secure-mqtt|mqtts)$/.test(s.protocol) || /^mqtts?:\/\//i.test(s.url));
+  for (const s of servers) if (!socketServers.includes(s) && !mqttServers.includes(s)) warnings.push(`Server "${s.name}" uses ${s.protocol || "an unknown protocol"}: only WebSocket and MQTT servers become tools.`);
+  if (!socketServers.length && !mqttServers.length) throw new Error("This AsyncAPI document has no WebSocket (ws/wss) or MQTT server.");
+  const mqtt = !socketServers.length;
+  if (!mqtt) for (const s of mqttServers) warnings.push(`Server "${s.name}" (${s.protocol}) is not used: the WebSocket server is preferred.`);
+  const server = mqtt ? mqttServers[0] : socketServers[0];
+  if (mqtt) server.url = server.url.replace(/^[a-z-]+:\/\//i, /secure|mqtts/i.test(server.protocol) || /^mqtts:/i.test(server.url) ? "mqtts://" : "mqtt://");
 
   /** @type {{ id: string, address: string, receive: any[], send: any[], description: string }[]} */ const channels = [];
   const v3 = /^3\./.test(doc.asyncapi);
@@ -81,21 +85,23 @@ export function asyncApiToStreams(doc) {
       receive = messagesOf(doc, channel.subscribe?.message);
       send = messagesOf(doc, channel.publish?.message);
     }
-    channels.push({ id, address: address.startsWith("/") || !address ? address : `/${address}`, receive, send, description: channel.description ?? "" });
+    channels.push({ id, address: mqtt || address.startsWith("/") || !address ? address : `/${address}`, receive, send, description: channel.description ?? "" });
   }
 
   const base = new URL(server.url);
   /** @type {import("../realtime/infer.js").Stream[]} */ const streams = channels.map((channel, index) => {
     const url = new URL(base.toString());
-    if (channel.address && !channel.address.includes("{")) url.pathname = `${base.pathname.replace(/\/$/, "")}${channel.address}`;
+    if (!mqtt && channel.address && !channel.address.includes("{")) url.pathname = `${base.pathname.replace(/\/$/, "")}${channel.address}`;
     const id = (channel.id.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || `channel_${index + 1}`).slice(0, 40);
     const examples = channel.send.map(exampleOf).filter(Boolean);
     const receivePayloads = channel.receive.map((m) => resolveSchema(doc, m.payload)).filter(Boolean);
     const names = channel.receive.map((m) => m.name ?? m.title).filter(Boolean);
     return {
-      id, kind: "websocket", url: url.toString(), headers: {},
+      id, kind: mqtt ? "mqtt" : "websocket", url: mqtt ? `${base.protocol}//${base.host}` : url.toString(), headers: {},
+      // MQTT: the channel is the topic; {parameters} become single-level wildcards.
+      ...(mqtt ? { topics: [channel.address.replace(/\{[^}]+\}/g, "+")] } : {}),
       // Example messages the client may send are offered as the default frames (e.g. a subscription).
-      send: examples.slice(0, 5).map((data) => ({ data: String(data), afterReceived: 0 })),
+      send: mqtt ? [] : examples.slice(0, 5).map((data) => ({ data: String(data), afterReceived: 0 })),
       messageTypes: names.length ? [{ key: "message", values: Object.fromEntries(names.map((n) => [n, 0])) }] : [],
       messageShape: receivePayloads.length ? receivePayloads.map((p) => describeShape(p)).join(" | ").slice(0, 600) : "not described",
       samples: channel.receive.map(exampleOf).filter(Boolean).slice(0, 3).map((s) => String(s).slice(0, 300)),
@@ -103,6 +109,6 @@ export function asyncApiToStreams(doc) {
     };
   });
   const httpBase = new URL(base.toString());
-  httpBase.protocol = base.protocol === "wss:" ? "https:" : "http:";
+  httpBase.protocol = base.protocol === "wss:" || base.protocol === "mqtts:" ? "https:" : "http:";
   return { title: doc.info?.title ?? "AsyncAPI", baseUrl: httpBase.origin, streams, warnings };
 }

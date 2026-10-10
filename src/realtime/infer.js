@@ -6,7 +6,8 @@ import { sseMessageText, sseParser } from "./client.js";
 /**
  * @typedef {object} Stream
  * @property {string} id stable identifier within the recipe
- * @property {"websocket" | "sse"} kind
+ * @property {"websocket" | "sse" | "mqtt"} kind
+ * @property {string[]} [topics] MQTT only: topics subscribed by default
  * @property {string} url secrets replaced by "REDACTED" (their values are stored as "?name" secrets of the host)
  * @property {string} [method] SSE only
  * @property {string} [body] SSE only, redacted

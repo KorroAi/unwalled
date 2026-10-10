@@ -1,5 +1,6 @@
 // MCP tools for the WebSocket / SSE streams of a recipe: connect for a bounded time, send frames, collect messages.
 import { formatStreamResult, listenSse, listenWebSocket } from "./client.js";
+import { listenMqtt } from "./mqtt.js";
 
 /**
  * @typedef {object} StreamAuth
@@ -16,6 +17,26 @@ import { formatStreamResult, listenSse, listenWebSocket } from "./client.js";
 
 const DESCRIPTION_MAX = 1200;
 const NO_AUTH = async () => ({ headers: {}, query: {}, frames: {} });
+
+const MQTT_PROPERTIES = {
+  topics: { type: "array", items: { type: "string" }, description: 'Topic filters to subscribe to, wildcards allowed ("home/+/temperature", "zigbee2mqtt/#").' },
+  publish: {
+    type: "array",
+    items: { type: "object", properties: { topic: { type: "string" }, message: {}, retain: { type: "boolean" } }, required: ["topic", "message"] },
+    description: "Messages to publish once connected (objects are sent as JSON).",
+  },
+};
+
+/** Credentials: stored "mqtt-username" / "mqtt-password" of the host, or user:password in the URL. @param {StreamAuth} auth @param {URL} url */
+function mqttCredentials(auth, url) {
+  return {
+    username: auth.headers["mqtt-username"] ?? (url.username ? decodeURIComponent(url.username) : undefined),
+    password: auth.headers["mqtt-password"] ?? (url.password ? decodeURIComponent(url.password) : undefined),
+  };
+}
+
+/** @param {any} args */
+const mqttPublish = (args) => (Array.isArray(args.publish) ? args.publish : []).map((m) => ({ topic: String(m.topic), message: asFrame(m.message), retain: !!m.retain }));
 const clip = (/** @type {string} */ text) => (text.length > DESCRIPTION_MAX ? `${text.slice(0, DESCRIPTION_MAX - 1)}…` : text);
 
 const LISTEN_PROPERTIES = {
@@ -74,7 +95,7 @@ function describeStream(recipeName, stream) {
   const types = stream.messageTypes.map((t) => `${t.key}: ${Object.keys(t.values).slice(0, 12).join(", ")}`).join("; ");
   const sends = stream.send.length ? ` On connect it sends ${stream.send.length} captured frame(s), first: ${stream.send[0].data.slice(0, 200)}.` : "";
   return clip(
-    `[${recipeName}] ${stream.kind === "sse" ? "Server-Sent Events" : "WebSocket"} stream ${stream.url} — seen ${stream.observed}×, ${stream.received} message(s).` +
+    `[${recipeName}] ${stream.kind === "sse" ? "Server-Sent Events" : stream.kind === "mqtt" ? `MQTT (topics ${(stream.topics ?? []).join(", ")})` : "WebSocket"} stream ${stream.url} — seen ${stream.observed}×, ${stream.received} message(s).` +
       `${sends} Messages: ${stream.messageShape}.${types ? ` Message types (${types}).` : ""}` +
       `${stream.samples.length ? ` Sample: ${stream.samples[0].slice(0, 200)}` : ""} Connects for duration_seconds and returns the messages received.`,
   );
@@ -89,11 +110,13 @@ export function buildStreamTools(recipe, runtime, name) {
   const streams = recipe.streams ?? [];
   const tools = streams.map((stream) => {
     const isSocket = stream.kind === "websocket";
+    const isMqtt = stream.kind === "mqtt";
     /** @type {Record<string, any>} */ const properties = {
       ...LISTEN_PROPERTIES,
       query: { type: "object", additionalProperties: true, description: "Override or add URL query parameters (null removes one)." },
     };
-    if (isSocket) {
+    if (isMqtt) Object.assign(properties, MQTT_PROPERTIES);
+    else if (isSocket) {
       properties.send = { type: "array", items: {}, description: "Extra frames to send after the captured ones (objects are sent as JSON), e.g. a subscription." };
       properties.skip_captured_frames = { type: "boolean", description: "Do not replay the frames captured during discovery." };
     } else if (stream.method && stream.method !== "GET") {
@@ -109,7 +132,9 @@ export function buildStreamTools(recipe, runtime, name) {
         const auth = await (runtime.streamAuth ?? NO_AUTH)(recipe, stream.url);
         const url = streamUrl(stream.url, auth.query, args.query);
         const { durationMs, maxMessages, filter } = limits(args);
-        const result = isSocket
+        const result = isMqtt
+          ? await listenMqtt(url, { topics: Array.isArray(args.topics) && args.topics.length ? args.topics : (stream.topics ?? ["#"]), publish: mqttPublish(args), ...mqttCredentials(auth, new URL(url)), durationMs, maxMessages, filter })
+          : isSocket
           ? await listenWebSocket(url, { headers: auth.headers, send: framesToSend(stream, auth, args), durationMs, maxMessages, filter })
           : await listenSse(url, {
               headers: { ...stream.headers, ...auth.headers }, method: stream.method ?? "GET",
@@ -124,13 +149,14 @@ export function buildStreamTools(recipe, runtime, name) {
     tools.push({
       name: name("stream"),
       description: clip(
-        `[${recipe.name}] Connect to any WebSocket (ws:// wss://) or Server-Sent Events (http:// https://) URL with the recipe's cookies and credentials, ` +
-          "optionally send frames, and return the messages received during duration_seconds.",
+        `[${recipe.name}] Connect to any WebSocket (ws:// wss://), Server-Sent Events (http:// https://) or MQTT (mqtt:// mqtts://; ws:// with topics) URL ` +
+          "with the recipe's cookies and credentials, optionally send frames or publish, and return the messages received during duration_seconds.",
       ),
       inputSchema: {
         type: "object",
         properties: {
-          url: { type: "string", description: "ws://, wss:// (WebSocket) or http(s):// (event stream) URL." },
+          url: { type: "string", description: "ws://, wss:// (WebSocket), http(s):// (event stream) or mqtt://, mqtts:// (MQTT broker) URL." },
+          ...MQTT_PROPERTIES,
           send: { type: "array", items: {}, description: "WebSocket frames to send once connected (objects are sent as JSON)." },
           protocols: { type: "array", items: { type: "string" }, description: "WebSocket subprotocols, e.g. graphql-transport-ws." },
           headers: { type: "object", additionalProperties: { type: "string" } },
@@ -142,8 +168,14 @@ export function buildStreamTools(recipe, runtime, name) {
       /** @param {Record<string, any>} args */
       run: async (args) => {
         const url = new URL(String(args.url));
-        if (!/^(wss?|https?):$/.test(url.protocol)) return { text: "url must start with ws://, wss://, http:// or https://", isError: true };
+        if (!/^(wss?|https?|mqtts?):$/.test(url.protocol)) return { text: "url must start with ws://, wss://, http://, https://, mqtt:// or mqtts://", isError: true };
         const auth = await (runtime.streamAuth ?? NO_AUTH)(recipe, url.toString());
+        // MQTT over TCP/TLS, or over WebSocket when topics are given.
+        if (/^mqtts?:$/.test(url.protocol) || (/^wss?:$/.test(url.protocol) && Array.isArray(args.topics) && args.topics.length)) {
+          const { durationMs, maxMessages, filter } = limits(args);
+          const result = await listenMqtt(url.toString(), { topics: Array.isArray(args.topics) && args.topics.length ? args.topics : ["#"], publish: mqttPublish(args), ...mqttCredentials(auth, url), durationMs, maxMessages, filter });
+          return formatStreamResult(`mqtt ${url.host}`, result, { pick: args.pick, maxChars: args.max_chars ?? runtime.maxOutputChars });
+        }
         const headers = { ...auth.headers, ...Object.fromEntries(Object.entries(args.headers ?? {}).map(([k, v]) => [k.toLowerCase(), String(v)])) };
         const { durationMs, maxMessages, filter } = limits(args);
         const result = /^wss?:$/.test(url.protocol)
@@ -158,5 +190,5 @@ export function buildStreamTools(recipe, runtime, name) {
 
 /** One line per stream, for recipe summaries. @param {any} recipe */
 export function describeStreams(recipe) {
-  return (recipe.streams ?? []).map((s) => `  ${s.kind === "sse" ? "SSE" : "WebSocket"} ${s.url} (${s.observed}×, ${s.received} messages${s.send.length ? `, ${s.send.length} frame(s) sent on connect` : ""})`);
+  return (recipe.streams ?? []).map((s) => `  ${s.kind === "sse" ? "SSE" : s.kind === "mqtt" ? `MQTT [${(s.topics ?? []).join(", ")}]` : "WebSocket"} ${s.url} (${s.observed}×, ${s.received} messages${s.send.length ? `, ${s.send.length} frame(s) sent on connect` : ""})`);
 }

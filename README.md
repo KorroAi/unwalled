@@ -25,7 +25,8 @@ agent:  crates__get_api_v1_crates_crate(path={"crate": "tokio"}, pick="crate.max
 
 - **Many sources**: live browser capture, HAR files (devtools, mitmproxy, Charles, Proxyman: mobile and desktop apps too), OpenAPI 3 / Swagger 2 (JSON or YAML, found automatically, including behind a Swagger UI page),
   Google Discovery documents (YouTube Data and Analytics, Drive, Gmail, Sheets, Calendar and every other Google API), OData services (`$metadata`: SAP, Dynamics, SharePoint...), SOAP web services (WSDL),
-  and local files: Postman collections, Insomnia exports, Bruno collection folders, AsyncAPI 2/3 (WebSocket channels), `.http` / `.rest` files (VS Code REST Client, JetBrains), shared recipes.
+  and local files: Postman collections, Insomnia exports, Bruno collection folders, AsyncAPI 2/3 (WebSocket and MQTT channels), `.http` / `.rest` files (VS Code REST Client, JetBrains), shared recipes.
+- **MQTT**: IoT and home-automation brokers (Mosquitto, Home Assistant, Zigbee2MQTT...) over TCP, TLS or WebSocket: subscribe with wildcards, publish, collect messages for a chosen duration.
 - **cURL and JSON-RPC**: paste "Copy as cURL" commands to get tools without a browser (`import_curl`); JSON-RPC calls (Ethereum and Bitcoin nodes, Kodi, Transmission, Odoo...) become one tool per method.
 - **Realtime streams**: WebSocket and Server-Sent Events connections opened by the page are captured with their protocol (subscribe and auth frames, in order) and become tools that connect, replay the handshake and return the messages received for a chosen duration.
 - **REST and GraphQL**: GraphQL operations become one tool each, with typed variables; batched and persisted (hash-only) queries are supported. A raw `graphql` tool is added as well.
@@ -127,7 +128,7 @@ For flows that are hard to script, use `interactive: true`: a window opens, you 
 | OpenAPI / imported files | one tool per operation (up to 60 by default), `<recipe>__routes` to list every route, and `<recipe>__request` |
 | SOAP (WSDL) | one tool per operation (`<recipe>__GetQuote`) taking `params` as JSON, sent as XML; the SOAP Body comes back as JSON and a Fault is an error |
 | Recipes with JSON-RPC | one tool per method (`<recipe>__rpc_eth_getBalance`) taking `params`, and `<recipe>__rpc` for any method |
-| Recipes with streams | one tool per WebSocket / event stream (`<recipe>__stream_ws_prices`) and `<recipe>__stream` for any `ws(s)://` or event-stream URL |
+| Recipes with streams | one tool per WebSocket / event stream / MQTT channel (`<recipe>__stream_ws_prices`) and `<recipe>__stream` for any `ws(s)://`, event-stream or `mqtt(s)://` URL |
 
 Generated tools take `path`, `query` and `body` (or `variables` for GraphQL), plus:
 
@@ -144,6 +145,8 @@ Read-only tools also accept:
 Stream tools accept `duration_seconds` (default 10), `max_messages` (default 50), `filter` (text or `/regex/`), `pick` (applied to each JSON message),
 `query` (override URL parameters) and, for WebSockets, `send` (extra frames) and `skip_captured_frames`.
 Common heartbeats are answered automatically (Engine.IO / Socket.IO, graphql-ws and JSON `ping`).
+MQTT tools take `topics` (wildcards `+` and `#`) and `publish` (`[{"topic", "message", "retain"}]`); credentials come from `set_credentials(host, {"mqtt-username": ..., "mqtt-password": ...})`
+or from the URL (`mqtt://user:password@host`). Messages are returned as `{"topic", "payload"}`, so `pick="payload.celsius"` works.
 
 `<recipe>__request` sends any request (absolute URL, or a path relative to the recipe's base URL) with the recipe's cookies and credentials.
 
