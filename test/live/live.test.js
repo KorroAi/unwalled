@@ -79,4 +79,15 @@ describe("live websites", { skip: !enabled && "set UNIVERSAL_MCP_LIVE=1 to run" 
     const sum = await call("calc__Add", { params: { intA: 2, intB: 40 }, pick: "AddResponse.AddResult" });
     assert.match(sum.text, /HTTP 200[^\n]*\n"42"/);
   });
+
+  it("Hacker News search (browser capture of a third-party search API)", TIMEOUT, async () => {
+    const discovered = await call("discover", { name: "hn", url: "https://hn.algolia.com/?q=model%20context%20protocol", mode: "browser", hosts: ["algolia.net"] });
+    assert.equal(discovered.isError, false, discovered.text);
+    assert.doesNotMatch(discovered.text, /GraphQL|telemetry|isalive/, "search bodies are not GraphQL; telemetry and probes are dropped");
+    const { tools } = await client.listTools();
+    const search = tools.find((t) => t.name.startsWith("hn__post_1_indexes_"));
+    assert.ok(search, tools.map((t) => t.name).join(", "));
+    const result = await call(search.name, { body: { query: "rust", hitsPerPage: 3 }, pick: "hits[*].title" });
+    assert.match(result.text, /HTTP 200/, result.text);
+  });
 });

@@ -133,6 +133,23 @@ function asObjectSchema(schema) {
 }
 
 /** @param {Record<string, unknown> | undefined} query @param {URL} url */
+// Technical query parameters (application id, client, agent, version, locale, format) seen with one constant value
+// are part of how the site calls its API, not of the question asked: they are sent by default.
+const CONSTANT_PARAM = /(^|[-_.])(app|application|client|agent|sdk|version|platform|locale|lang|language|format)([-_.]?(id|name|version))?$/i;
+
+/**
+ * @param {Record<string, { example: string, seen: number, values?: string[] }>} query observed query parameters
+ * @param {number} observed number of observed calls
+ * @returns {Record<string, string>}
+ */
+export function constantQueryDefaults(query, observed) {
+  return Object.fromEntries(
+    Object.entries(query)
+      .filter(([key, q]) => CONSTANT_PARAM.test(key) && q.seen === observed && (q.values?.length ?? 1) <= 1 && q.example !== "REDACTED" && !q.example.endsWith("…"))
+      .map(([key, q]) => [key, q.example]),
+  );
+}
+
 function applyQuery(url, query) {
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value === undefined || value === null) continue;
@@ -238,10 +255,13 @@ function restTools(recipe, runtime, name) {
       if (requiredParams.length) required.push("path");
     }
     const queryEntries = Object.entries(endpoint.query);
+    const queryDefaults = constantQueryDefaults(endpoint.query, endpoint.observed);
     properties.query = {
       type: "object",
       description: queryEntries.length ? "Query string parameters (all optional; observed values shown as examples)." : "Optional query string parameters.",
-      properties: Object.fromEntries(queryEntries.map(([key, q]) => [key, { type: q.type, description: queryDescription(q) }])),
+      properties: Object.fromEntries(
+        queryEntries.map(([key, q]) => [key, { type: q.type, description: key in queryDefaults ? `Sent by default: ${queryDefaults[key]} (null to omit).` : queryDescription(q) }]),
+      ),
       additionalProperties: true,
     };
     if (!["GET", "HEAD"].includes(endpoint.method)) {
@@ -269,7 +289,7 @@ function restTools(recipe, runtime, name) {
         const stored = Object.fromEntries(secretParams.map((p) => [p, runtime.secret?.(recipe, host, `{${endpoint.method} ${endpoint.pathTemplate}}${p}`)]));
         const values = { ...Object.fromEntries(Object.entries(stored).filter(([, v]) => v !== undefined)), ...(args.path ?? {}) };
         const url = new URL(endpoint.origin + fillPath(endpoint.pathTemplate, values, endpoint.pathParams));
-        applyQuery(url, args.query);
+        applyQuery(url, { ...queryDefaults, ...(args.query ?? {}) });
         const bodyKind = endpoint.bodyKind === "none" ? "json" : endpoint.bodyKind;
         return execute(runtime, recipe, { method: endpoint.method, url: url.toString(), headers: endpoint.headers, body: args.body, bodyKind, files: args.files }, args, toolName);
       },

@@ -17,6 +17,9 @@ import { isSecretHeader, isSecretParam, looksLikeSecret, looksSensitive, redact,
 const TRACKER_HOSTS =
   /(^|\.)(google-analytics\.com|googletagmanager\.com|doubleclick\.net|googlesyndication\.com|facebook\.(com|net)|sentry\.io|segment\.(io|com)|hotjar\.(com|io)|mixpanel\.com|amplitude\.com|clarity\.ms|datadoghq\.(com|eu)|browser-intake-datadoghq\.com|nr-data\.net|newrelic\.com|intercom\.io|cloudflareinsights\.com|plausible\.io|posthog\.com|fullstory\.com|bugsnag\.com|launchdarkly\.com|optimizely\.com|tiktok\.com|bat\.bing\.com|linkedin\.com|snapchat\.com)$/i;
 const TRACKER_PATHS = /\/(collect|beacon|telemetry|analytics|track|events?|log|metrics|rum|pixel|ping)(\/|$|\?)/i;
+// Telemetry hosts of any vendor, and availability probes, are never part of the API an agent wants.
+const TRACKER_SUBDOMAIN = /^(telemetry|analytics|metrics|tracking|insights)\./i;
+const PROBE_PATHS = /\/(isalive|is_alive|healthz?|heartbeat|livez|readyz)(\/|$|\?)/i;
 
 const DROPPED_HEADER =
   /^(:.*|accept-encoding|accept-language|user-agent|referer|origin|sec-.*|connection|host|content-length|content-type|priority|cache-control|pragma|dnt|upgrade-insecure-requests|te|if-none-match|if-modified-since|range|x-forwarded-.*)$/i;
@@ -28,7 +31,7 @@ export { redact, redactText, redactUrl } from "./secrets.js";
 
 /** @param {string} host */
 export function isTracker(host) {
-  return TRACKER_HOSTS.test(host);
+  return TRACKER_HOSTS.test(host) || TRACKER_SUBDOMAIN.test(host);
 }
 
 /** Approximate registrable domain ("api.shop.co.uk" -> "shop.co.uk"). @param {string} hostname */
@@ -143,8 +146,13 @@ const truncate = (text, max) => (text.length > max ? `${text.slice(0, max)}…` 
 // ---------------------------------------------------------------- GraphQL
 
 /** @param {any} payload */
+// A "query" field alone is not enough (search APIs such as Algolia send {"query": "some words"}): it must look like a GraphQL document.
+const GRAPHQL_DOCUMENT = /^\s*(#[^\n]*\n\s*)*((query|mutation|subscription|fragment)\b|\{)/;
 const isGraphqlPayload = (payload) =>
-  !!payload && typeof payload === "object" && !Array.isArray(payload) && (typeof payload.query === "string" || !!payload.extensions?.persistedQuery);
+  !!payload &&
+  typeof payload === "object" &&
+  !Array.isArray(payload) &&
+  ((typeof payload.query === "string" && GRAPHQL_DOCUMENT.test(payload.query)) || !!payload.extensions?.persistedQuery);
 
 /** @param {Observation} obs @returns {any[] | null} GraphQL payloads carried by this request */
 function graphqlPayloads(obs) {
@@ -235,7 +243,9 @@ function buildTemplates(items, variables) {
   /** @type {Map<string, { prefix: string, segments: (string|null)[], signature: string, members: number[] }>} */
   let patterns = new Map();
   items.forEach((item, index) => {
-    const segments = item.segments.map((s, i) => (s && (looksLikeId(s) || looksLikeSecret(s) || isVariable(item.segments, i, variables)) ? null : s));
+    // A small number as the first segment is an API version ("/1/indexes/..."), not an id.
+    const isVersion = (/** @type {string} */ s, /** @type {number} */ i) => i === item.segments.findIndex(Boolean) && /^\d{1,2}$/.test(s);
+    const segments = item.segments.map((s, i) => (s && !isVersion(s, i) && (looksLikeId(s) || looksLikeSecret(s) || isVariable(item.segments, i, variables)) ? null : s));
     const id = `${item.key}|${segments.map((s) => s ?? "{}").join("/")}`;
     const existing = patterns.get(id);
     if (existing) existing.members.push(index);
@@ -296,7 +306,7 @@ export function inferEndpoints(observations, { variables = navigationVariables([
   const usable = observations.filter((obs) => {
     try {
       const url = new URL(obs.url);
-      return obs.status > 0 && obs.status < 400 && /^https?:$/.test(url.protocol) && !isTracker(url.hostname) && !(TRACKER_PATHS.test(url.pathname) && obs.responseJson === undefined);
+      return obs.status > 0 && obs.status < 400 && /^https?:$/.test(url.protocol) && !isTracker(url.hostname) && !PROBE_PATHS.test(url.pathname) && !(TRACKER_PATHS.test(url.pathname) && obs.responseJson === undefined);
     } catch {
       return false;
     }
