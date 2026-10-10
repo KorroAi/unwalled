@@ -1,7 +1,42 @@
 // Tools of a local data recipe: "<recipe>__tables" (schema, row counts, samples) and "<recipe>__sql" (read-only SQL).
 import { statSync } from "node:fs";
 import { pick } from "../tools/pick.js";
+import { connectPostgres, postgresTables } from "./postgres.js";
 import { assertReadOnly, dataFiles, describeTable, openData } from "./source.js";
+
+/** Open PostgreSQL connections by address, closed after a few idle minutes. @type {Map<string, { pg: Promise<Awaited<ReturnType<typeof connectPostgres>>>, timer?: NodeJS.Timeout }>} */
+const postgres = new Map();
+
+/** @param {string} url */
+async function postgresConnection(url) {
+  let entry = postgres.get(url);
+  if (!entry) {
+    entry = { pg: connectPostgres(url) };
+    postgres.set(url, entry);
+    entry.pg.catch(() => postgres.delete(url));
+  }
+  clearTimeout(entry.timer);
+  const current = entry;
+  current.timer = setTimeout(async () => {
+    if (postgres.get(url) === current) postgres.delete(url);
+    (await current.pg.catch(() => null))?.close();
+  }, IDLE_MS);
+  current.timer.unref?.();
+  return current.pg;
+}
+
+/** Runs fn on a cached connection, reconnecting once if the connection was lost. @template T @param {string} url @param {(pg: any) => Promise<T>} fn @returns {Promise<T>} */
+async function withPostgres(url, fn) {
+  try {
+    return await fn(await postgresConnection(url));
+  } catch (error) {
+    if (!/connection closed|ECONNRESET|EPIPE|did not answer/i.test(String(error?.message))) throw error;
+    const stale = postgres.get(url);
+    postgres.delete(url);
+    (await stale?.pg.catch(() => null))?.close();
+    return fn(await postgresConnection(url));
+  }
+}
 
 const IDLE_MS = 5 * 60 * 1000;
 
@@ -39,6 +74,11 @@ async function connection(path) {
 
 /** Closes every cached connection (tests, shutdown). */
 export async function closeDataConnections() {
+  for (const [url, entry] of postgres) {
+    postgres.delete(url);
+    clearTimeout(entry.timer);
+    (await entry.pg.catch(() => null))?.close();
+  }
   for (const [path, entry] of open) {
     open.delete(path);
     clearTimeout(entry.timer);
@@ -53,9 +93,10 @@ const plain = (row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [k
  * @param {any} recipe kind "data"
  * @param {(suffix: string) => string} name
  * @param {number} maxOutputChars
- * @param {(recipe: any) => Promise<string>} [dataPath] where the data is (remote data is downloaded into a cache)
+ * @param {(recipe: any) => Promise<string>} [dataPath] where the data is (remote data is downloaded into a cache); for databases, their address
  */
 export function buildDataTools(recipe, name, maxOutputChars, dataPath = async (r) => r.source.path) {
+  if (recipe.source?.db === "postgres") return postgresTools(recipe, name, maxOutputChars, dataPath);
   const path = recipe.source.remote ? `${recipe.source.origin} (remote, refreshed every ${recipe.source.refreshSeconds ?? 300}s)` : recipe.source.path;
   const summary = (recipe.tables ?? []).map((t) => `${t.name}(${t.columns.map((c) => c.name).slice(0, 12).join(", ")}${t.columns.length > 12 ? ", …" : ""}) ${t.rows} rows`).join("; ");
   return [
@@ -115,6 +156,73 @@ export function buildDataTools(recipe, name, maxOutputChars, dataPath = async (r
         const result = { columns: rows[0] ? Object.keys(rows[0]) : [], rows: rows.slice(0, maxRows), truncated };
         let text = JSON.stringify(args.pick ? pick(result, args.pick) : result);
         if (truncated) text += `\n… more rows than max_rows (${maxRows}): aggregate, filter or raise max_rows.`;
+        const limit = args.max_chars ?? maxOutputChars;
+        if (text.length > limit) text = `${text.slice(0, limit)}\n… [truncated: use pick, max_rows or a narrower query]`;
+        return { text, isError: false, json: result };
+      },
+    },
+  ];
+}
+
+/**
+ * Tools of a PostgreSQL recipe: same names and arguments as file data, queries run in READ ONLY transactions.
+ * @param {any} recipe @param {(suffix: string) => string} name @param {number} maxOutputChars @param {(recipe: any) => Promise<string>} address
+ */
+function postgresTools(recipe, name, maxOutputChars, address) {
+  const where = recipe.source.origin;
+  const summary = (recipe.tables ?? []).slice(0, 40).map((t) => `${t.name}(${t.columns.map((c) => c.name).slice(0, 10).join(", ")}${t.columns.length > 10 ? ", …" : ""})`).join("; ");
+  return [
+    {
+      name: name("tables"),
+      description: `[${recipe.name}] Tables and views of the PostgreSQL database ${where}: columns, types and estimated row counts. ${summary}`.slice(0, 1200),
+      inputSchema: { type: "object", properties: { table: { type: "string", description: "Only this table (schema.table outside public)." } } },
+      annotations: { title: `${recipe.name} tables`, readOnlyHint: true, openWorldHint: true },
+      /** @param {Record<string, any>} args */
+      run: async (args) => {
+        const tables = await withPostgres(await address(recipe), (pg) => postgresTables(pg));
+        const wanted = args.table ? tables.filter((t) => t.name === args.table) : tables;
+        if (args.table && !wanted.length) return { text: `Unknown table "${args.table}". Tables: ${tables.map((t) => t.name).join(", ")}`, isError: true };
+        return { text: JSON.stringify(wanted, null, 1).slice(0, maxOutputChars), isError: false };
+      },
+    },
+    {
+      name: name("sql"),
+      description: (
+        `[${recipe.name}] Read-only SQL (PostgreSQL dialect) on ${where}, inside a READ ONLY transaction with a statement timeout. Parameters: $1, $2... Tables: ${summary}. ` +
+        "Use aggregates and filters instead of reading everything."
+      ).slice(0, 1200),
+      inputSchema: {
+        type: "object",
+        properties: {
+          sql: { type: "string", description: "One SELECT / WITH / VALUES / EXPLAIN statement." },
+          params: { type: "array", items: {}, description: "Values for $1, $2..." },
+          max_rows: { type: "integer", minimum: 1, maximum: 10_000, description: "Default 200." },
+          timeout_seconds: { type: "integer", minimum: 1, maximum: 300, description: "Statement timeout (default 30)." },
+          pick: { type: "string", description: 'Optional: keep only part of the result, e.g. "rows[*].name".' },
+          max_chars: { type: "integer", minimum: 20 },
+        },
+        required: ["sql"],
+      },
+      annotations: { title: `${recipe.name} SQL`, readOnlyHint: true, openWorldHint: true },
+      /** @param {Record<string, any>} args */
+      run: async (args) => {
+        let sql;
+        try {
+          sql = assertReadOnly(String(args.sql ?? ""));
+        } catch (error) {
+          return { text: error.message, isError: true };
+        }
+        const maxRows = Math.min(Math.max(Number(args.max_rows ?? 200), 1), 10_000);
+        let result;
+        try {
+          result = await withPostgres(await address(recipe), (pg) =>
+            pg.query(sql, Array.isArray(args.params) ? args.params : [], { maxRows, statementTimeoutMs: Math.min(Math.max(Number(args.timeout_seconds ?? 30), 1), 300) * 1000 }),
+          );
+        } catch (error) {
+          return { text: `SQL error: ${error.message}`, isError: true };
+        }
+        let text = JSON.stringify(args.pick ? pick(result, args.pick) : result);
+        if (result.truncated) text += `\n… more rows than max_rows (${maxRows}): aggregate, filter or raise max_rows.`;
         const limit = args.max_chars ?? maxOutputChars;
         if (text.length > limit) text = `${text.slice(0, limit)}\n… [truncated: use pick, max_rows or a narrower query]`;
         return { text, isError: false, json: result };

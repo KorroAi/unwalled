@@ -14,6 +14,7 @@ import { assertHttpUrl, graphqlKey, MAX_FILE_BYTES, mergeByKey, restKey, rpcKey,
 import { assertRecipeName, RECIPE_SCHEMA_VERSION } from "./store.js";
 import { dataFiles, DATA_EXTENSIONS, describeTable, openData } from "./data/source.js";
 import { cacheFile, fetchToCache, remoteExtension } from "./data/remote.js";
+import { connectPostgres, isPostgresUrl, postgresTables } from "./data/postgres.js";
 
 /**
  * Local data: CSV, TSV, JSON Lines and SQLite files, and folders holding data files (Bruno collections excepted).
@@ -73,6 +74,30 @@ async function saveRemoteDataRecipe(engine, name, url, refreshSeconds = 300) {
 }
 
 /**
+ * PostgreSQL database (postgres://user:password@host:port/db?sslmode=...): queried read-only. The address (with its password)
+ * is stored with the secrets; the recipe keeps host, port and database name.
+ * @param {import("./core.js").Engine} engine @param {string} name @param {string} url
+ */
+async function savePostgresRecipe(engine, name, url) {
+  const pg = await connectPostgres(url, { timeoutMs: engine.config.requestTimeoutMs });
+  let tables;
+  try {
+    tables = (await postgresTables(pg)).map((t) => ({ name: t.name, columns: t.columns, rows: t.rows }));
+  } finally {
+    pg.close();
+  }
+  const target = new URL(url);
+  const origin = `postgres://${target.hostname}:${target.port || 5432}/${decodeURIComponent(target.pathname.replace(/^\//, ""))}`;
+  const now = new Date().toISOString();
+  const recipe = {
+    schemaVersion: RECIPE_SCHEMA_VERSION, name, kind: "data", source: { remote: true, db: "postgres", origin, format: "data" },
+    title: origin, baseUrl: origin, tables, createdAt: engine.recipes.get(name)?.createdAt ?? now, updatedAt: now,
+    warnings: tables.length ? [] : ["No table found (or no access to them)."],
+  };
+  return engine.withLock(name, async () => engine.saveRecipe(recipe, { [REMOTE_DATA_KEY]: { url } }));
+}
+
+/**
  * Recipe for local data queried with read-only SQL. The data stays in the files; the recipe keeps the path and a schema summary.
  * @param {import("./core.js").Engine} engine @param {string} name @param {string} path
  */
@@ -105,13 +130,14 @@ async function saveDataRecipe(engine, name, path) {
  */
 export async function importFile(engine, { name, path, include, baseUrl, variables: given = {}, variablesFile, environment, hosts, maxEndpoints, merge, refreshSeconds }) {
   assertRecipeName(name);
-  if (!isAbsolute(path) && !/^https?:\/\//i.test(path)) throw new Error("path must be an absolute path or an http(s) address of a data file");
+  if (!isAbsolute(path) && !/^https?:\/\//i.test(path) && !isPostgresUrl(path)) throw new Error("path must be an absolute path, an http(s) address of a data file or a postgres:// address");
   if (variablesFile && !isAbsolute(variablesFile)) throw new Error("variables_file must be an absolute path");
   // Explicit variables win over the file's.
   const variables = { ...(variablesFile ? readVariablesFile(variablesFile) : {}), ...given };
   if (include) new RegExp(include); // validate early
   if (baseUrl) assertHttpUrl(baseUrl);
   let described;
+  if (isPostgresUrl(path)) return savePostgresRecipe(engine, name, path);
   if (/^https?:\/\//i.test(path)) return saveRemoteDataRecipe(engine, name, path, refreshSeconds);
   if (isDataSource(path)) return saveDataRecipe(engine, name, path);
   if (isBrunoCollection(path)) described = { format: /** @type {const} */ ("bruno"), ...brunoToOpenApi(path, { variables, environment }) };

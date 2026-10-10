@@ -657,6 +657,7 @@ export class Engine {
     if (!recipe.source?.remote) return recipe.source.path;
     const url = this.store.loadSecrets(recipe.name)[REMOTE_DATA_KEY]?.url;
     if (!url) throw new Error(`The address of "${recipe.name}" is not stored on this machine: import it again with import_file.`);
+    if (recipe.source.db) return url; // databases are queried directly
     const file = cacheFile(this.config.home, recipe.name, recipe.source.extension);
     await fetchToCache(url, file, { maxAgeMs: (recipe.source.refreshSeconds ?? 300) * 1000, timeoutMs: this.config.requestTimeoutMs });
     return file;
@@ -942,7 +943,7 @@ async function refreshCsrfFromCookies(context, outgoing) {
 /** One-paragraph summary of a recipe, for tool results and the CLI. @param {any} recipe @param {string[]} toolNames */
 export function describeRecipe(recipe, toolNames) {
   const lines = [`Recipe "${recipe.name}" (${recipe.kind}) — base ${recipe.baseUrl} — updated ${recipe.updatedAt}`];
-  if (recipe.kind === "data") lines.push(`${recipe.source.remote ? `Remote data: ${recipe.source.origin}/… (refreshed every ${recipe.source.refreshSeconds}s)` : `Local data: ${recipe.source.path}`} — ${(recipe.tables ?? []).map((t) => `${t.name} (${t.rows} rows: ${t.columns.map((c) => c.name).slice(0, 10).join(", ")})`).join("; ")}`);
+  if (recipe.kind === "data") lines.push(`${recipe.source.db ? `PostgreSQL: ${recipe.source.origin}` : recipe.source.remote ? `Remote data: ${recipe.source.origin}/… (refreshed every ${recipe.source.refreshSeconds}s)` : `Local data: ${recipe.source.path}`} — ${(recipe.tables ?? []).map((t) => `${t.name} (${t.rows} rows: ${t.columns.map((c) => c.name).slice(0, 10).join(", ")})`).join("; ")}`);
   else if (recipe.kind === "soap") lines.push(`SOAP ${recipe.version}: ${recipe.endpoint} — ${recipe.title} — ${recipe.operations.length} operation(s): ${recipe.operations.map((o) => o.name).join(", ")}`);
   else if (recipe.kind === "openapi") lines.push(`${recipe.source.format ? `${recipe.source.format} file` : "OpenAPI"}: ${recipe.source.specUrl ?? recipe.source.file} — ${recipe.title ?? "untitled"} — ${recipe.routes.length} routes, ${recipe.operations.length} with dedicated tools.`);
   else {

@@ -91,6 +91,8 @@ The result is saved as a **recipe**. Discovery runs once (seconds); after that t
 - Ready-made sources: `discover(name, "preset:<id>")` for GitHub, Stripe, Vercel, ElevenLabs, Discord, Binance (REST and live streams), CoinGecko, Open-Meteo,
   YouTube, Gmail, Drive, Sheets, Calendar and any Google API (`preset:google:<api>/<version>`); the recipe says how to give credentials when the API needs them.
   In compact mode every operation of a large API is reachable (GitHub: about 1,200 operations through `__operation` / `__call`).
+- PostgreSQL (Supabase, Neon, Railway, your own server): `import_file(name, "postgres://user:password@host:5432/db?sslmode=require")` gives the same `__tables` / `__sql`
+  tools; every query runs in a READ ONLY transaction with a statement timeout, and the address (with its password) is stored with the encrypted secrets. No dependency.
 - Local and remote data: CSV, TSV, Excel (`.xlsx`, one table per sheet), iCalendar (`.ics`: events, to-dos), RSS / Atom feeds (YouTube channel feeds include views and ratings),
   JSON records, JSON Lines, SQLite databases or a folder of such files
   become tables queried with read-only SQL (`<recipe>__tables`, `<recipe>__sql`), joins across files included. An http(s) address works too (published spreadsheet, private
@@ -424,6 +426,7 @@ What is covered, and how it was checked. "Live" means a real public service in `
 | JSON-RPC 1.0 / 2.0 | local server (single and batch calls) | |
 | Postman, Insomnia, Bruno, `.http`, cURL, HAR | local servers and files | Postman scripts and Bruno scripts are not run |
 | Local / remote data (CSV, TSV, Excel, iCalendar, RSS / Atom, JSON, SQLite) | live: GitHub-hosted CSV, YouTube channel feed, Hacker News RSS; local files | Read-only SQL; Excel dates stay serial numbers |
+| PostgreSQL (`postgres://...`) | real PostgreSQL 17 in Docker: TLS (require / prefer / disable), SCRAM, types, read-only, timeouts (`test/live/postgres.test.js`) | Read-only by design; MySQL not supported |
 | OAuth sign-in (`oauth_login`) | local provider through a real browser (PKCE, refresh) | Needs an OAuth client created by the user |
 | Responses: protobuf, gRPC-web, CSV, XML, images | local | Protobuf decoded without schema |
 
