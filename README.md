@@ -24,7 +24,8 @@ agent:  crates__get_api_v1_crates_crate(path={"crate": "tokio"}, pick="crate.max
 ## Features
 
 - **Many sources**: live browser capture, HAR files (devtools, mitmproxy, Charles, Proxyman: mobile and desktop apps too), OpenAPI 3 / Swagger 2 (JSON or YAML, found automatically, including behind a Swagger UI page),
-  Google Discovery documents (YouTube Data and Analytics, Drive, Gmail, Sheets, Calendar and every other Google API), and local files: Postman collections, Insomnia exports, Bruno collection folders, shared recipes.
+  Google Discovery documents (YouTube Data and Analytics, Drive, Gmail, Sheets, Calendar and every other Google API), OData services (`$metadata`: SAP, Dynamics, SharePoint...),
+  and local files: Postman collections, Insomnia exports, Bruno collection folders, `.http` / `.rest` files (VS Code REST Client, JetBrains), shared recipes.
 - **cURL and JSON-RPC**: paste "Copy as cURL" commands to get tools without a browser (`import_curl`); JSON-RPC calls (Ethereum and Bitcoin nodes, Kodi, Transmission, Odoo...) become one tool per method.
 - **Realtime streams**: WebSocket and Server-Sent Events connections opened by the page are captured with their protocol (subscribe and auth frames, in order) and become tools that connect, replay the handshake and return the messages received for a chosen duration.
 - **REST and GraphQL**: GraphQL operations become one tool each, with typed variables; batched and persisted (hash-only) queries are supported. A raw `graphql` tool is added as well.
@@ -89,7 +90,7 @@ The agent calls the management tools below, then the generated ones.
 | --- | --- |
 | `discover` | Creates a recipe from a URL. Options: `mode` (`auto`, `openapi`, `browser`), `actions`, `interactive`, `duration_seconds`, `hosts` (extra API hosts), `include` (OpenAPI operation filter), `max_endpoints`, `merge`. |
 | `discover_har` | Creates a recipe from a `.har` file (absolute path). |
-| `import_file` | Creates a recipe from a local file or folder: OpenAPI / Swagger, Google Discovery document, Postman collection, Insomnia export, Bruno collection, HAR, or a recipe shared with `export_recipe`. Options: `base_url`, `variables`, `environment` (Bruno), `include`. |
+| `import_file` | Creates a recipe from a local file or folder: OpenAPI / Swagger, Google Discovery document, OData `$metadata` (with `base_url`), Postman collection, Insomnia export, Bruno collection, `.http` / `.rest` file, HAR, or a recipe shared with `export_recipe`. Options: `base_url`, `variables`, `environment` (Bruno), `include`. |
 | `import_curl` | Creates tools from cURL commands (devtools "Copy as cURL", bash or Windows cmd). Nothing is sent while importing; credentials go to local secrets. |
 | `export_recipe` | Writes a recipe (never its secrets) to a JSON file. |
 | `watch` | Calls a read-only generated tool every `interval_seconds` for up to `duration_seconds`, and returns the changes (field by field for JSON); `until` stops early. |
@@ -173,6 +174,8 @@ your own data (YouTube Analytics, Drive, Gmail) needs an OAuth access token: `se
 import_file(name="stripe", path="/abs/path/openapi.yaml")
 import_file(name="team-api", path="/abs/path/Team.postman_collection.json", variables={"baseUrl": "https://api.example.com"})
 import_file(name="shop", path="/abs/path/bruno/shop", environment="prod")
+import_file(name="api", path="/abs/path/requests.http", variables={"host": "https://api.example.com"})
+discover(name="erp", url="https://erp.example.com/odata/v4/sales/")      # OData: finds $metadata
 export_recipe(name="shop", path="/abs/path/shop-recipe.json")   # share it; the receiver runs import_file
 ```
 

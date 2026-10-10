@@ -4,13 +4,18 @@
 import YAML from "yaml";
 import { insomniaToOpenApi, isInsomniaExport, isPostmanCollection, postmanToOpenApi } from "./collections.js";
 import { discoveryToOpenApi, isGoogleDiscovery } from "./google.js";
+import { isODataMetadata, odataToOpenApi } from "./odata.js";
 
 /**
  * @param {string} text file content
- * @param {{ variables?: Record<string, string> }} [options] values for {{variables}} of collections
- * @returns {{ format: "har" } | { format: "recipe", recipe: any } | { format: "openapi" | "swagger" | "google" | "postman" | "insomnia", spec: any, warnings: string[] }}
+ * @param {{ variables?: Record<string, string>, serviceRoot?: string }} [options] values for {{variables}} of collections; service root of an OData $metadata file
+ * @returns {{ format: "har" } | { format: "recipe", recipe: any } | { format: "openapi" | "swagger" | "google" | "postman" | "insomnia" | "odata", spec: any, warnings: string[] }}
  */
-export function describeFile(text, { variables = {} } = {}) {
+export function describeFile(text, { variables = {}, serviceRoot } = {}) {
+  if (isODataMetadata(text)) {
+    if (!serviceRoot) throw new Error("OData $metadata file: pass base_url (the service root URL).");
+    return { format: "odata", spec: odataToOpenApi(text, serviceRoot), warnings: [] };
+  }
   let doc;
   try {
     doc = /^\s*[{[]/.test(text) ? JSON.parse(text) : YAML.parse(text);

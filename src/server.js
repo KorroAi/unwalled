@@ -60,18 +60,18 @@ const MANAGEMENT_TOOLS = [
     name: "import_file",
     description:
       "Create tools from a local API description file (absolute path): OpenAPI 3 / Swagger 2 (JSON or YAML), Google Discovery document, " +
-      "Postman collection (v2.x), Insomnia export (v4), Bruno collection folder, HAR capture, or a recipe exported with export_recipe. The format is detected automatically.",
+      "Postman collection (v2.x), Insomnia export (v4), Bruno collection folder, .http / .rest file (VS Code REST Client, JetBrains), HAR capture, or a recipe exported with export_recipe. The format is detected automatically.",
     inputSchema: {
       type: "object",
       properties: {
         name: NAME,
         path: { type: "string", description: "Absolute path to the file." },
         base_url: { type: "string", description: "Override the API base URL (e.g. when a collection uses an undefined {{baseUrl}})." },
-        variables: { type: "object", additionalProperties: { type: "string" }, description: "Values for {{variables}} of Postman / Insomnia / Bruno collections." },
+        variables: { type: "object", additionalProperties: { type: "string" }, description: "Values for {{variables}} of Postman / Insomnia / Bruno collections and .http files." },
         environment: { type: "string", description: "Bruno only: environment to use (default: the first one)." },
         include: { type: "string", description: "Regular expression selecting which operations become tools." },
         hosts: { type: "array", items: { type: "string" }, description: "HAR only: keep these hosts." },
-        merge: { type: "boolean", description: "HAR only: add to the existing recipe." },
+        merge: { type: "boolean", description: "HAR and .http files: add to the existing recipe." },
       },
       required: ["name", "path"],
     },

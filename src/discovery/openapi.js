@@ -1,6 +1,7 @@
 // Finds a published OpenAPI / Swagger description and normalizes its operations.
 import YAML from "yaml";
 import { discoveryToOpenApi, isGoogleDiscovery } from "./google.js";
+import { isODataMetadata, odataToOpenApi } from "./odata.js";
 
 const DOC_PATHS = [
   "/openapi.json", "/openapi.yaml", "/openapi.yml", "/swagger.json", "/swagger.yaml",
@@ -48,6 +49,13 @@ export async function findOpenApi(url, { timeoutMs = 8000 } = {}) {
     tried.add(candidate);
     const result = await fetchText(candidate, timeoutMs);
     if (!result) return null;
+    if (isODataMetadata(result.text)) {
+      try {
+        return { specUrl: result.url, spec: odataToOpenApi(result.text, result.url.replace(/\/?\$metadata.*$/, "")) };
+      } catch {
+        return null;
+      }
+    }
     const spec = parseSpec(result.text, result.contentType);
     if (spec) return { specUrl: result.url, spec };
     // A Swagger UI / Redoc page usually references its spec URL.
@@ -68,6 +76,9 @@ export async function findOpenApi(url, { timeoutMs = 8000 } = {}) {
   const start = new URL(url);
   const found = await attempt(start.toString());
   if (found) return found;
+  // OData services describe themselves at "<service root>/$metadata".
+  const odata = /odata|\.svc(\/|$)/i.test(start.href) ? await attempt(`${start.origin}${start.pathname.replace(/\/$/, "")}/$metadata`) : null;
+  if (odata) return odata;
   const prefixes = new Set([""]);
   const firstSegment = start.pathname.split("/").filter(Boolean)[0];
   if (firstSegment) prefixes.add(`/${firstSegment}`);

@@ -63,4 +63,13 @@ describe("live websites", { skip: !enabled && "set UNIVERSAL_MCP_LIVE=1 to run" 
     const search = await call("youtube__youtube_search_list", { query: { part: ["snippet"], q: "bitcoin", maxResults: 1 }, max_chars: 400 });
     assert.match(search.text, key ? /HTTP 200/ : /HTTP 403[\s\S]*API Key/);
   });
+
+  it("OData demo service (Northwind, $metadata)", TIMEOUT, async () => {
+    const discovered = await call("discover", { name: "northwind", url: "https://services.odata.org/V4/Northwind/Northwind.svc/", include: "customers" });
+    assert.equal(discovered.isError, false, discovered.text);
+    const one = await call("northwind__get_customers", { path: { CustomerID: "ALFKI" }, pick: "CompanyName" });
+    assert.match(one.text, /HTTP 200[\s\S]*Alfreds Futterkiste/);
+    const list = await call("northwind__list_customers", { query: { $filter: "Country eq 'France'", $top: 3, $select: "CompanyName" }, pick: "value[*].CompanyName" });
+    assert.match(list.text, /HTTP 200/);
+  });
 });

@@ -14,6 +14,8 @@
 - Idempotent requests are retried on 429 / 502 / 503 / 504 (twice, `Retry-After` honoured up to 10 s).
 - `import_curl` (CLI `curl`): tools from cURL commands, bash or Windows cmd syntax, credentials stored as secrets.
 - JSON-RPC 1.0 / 2.0 (single and batch calls): one tool per method plus `__rpc`; the generic POST endpoint is dropped.
+- `.http` / `.rest` request files (VS Code REST Client, JetBrains HTTP Client) imported with `import_file`.
+- OData v2 / v4 services: `$metadata` found from the service root (or imported with `base_url`) and turned into list / get / create / update / delete tools per entity set, with `$filter`, `$select`, `$expand`...
 
 ## 0.1.0 — 2026-10-10
 

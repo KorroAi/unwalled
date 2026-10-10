@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -44,6 +44,42 @@ describe("import_curl through the engine", () => {
     await engine?.close();
     await fixtures?.close();
     rmSync(home, { recursive: true, force: true });
+  });
+
+  it("imports a .http file (variables, headers, JSON body, several requests)", async () => {
+    const file = join(home, "pets.http");
+    writeFileSync(
+      file,
+      [
+        "@host = " + fixtures.petsUrl,
+        "@key = k1",
+        "",
+        "### List pets",
+        "GET {{host}}/v1/pets",
+        "    ?limit=1",
+        "Accept: application/json",
+        "",
+        "### Create a pet",
+        "# @name createPet",
+        "POST {{host}}/v1/pets HTTP/1.1",
+        "Content-Type: application/json",
+        "X-Api-Key: {{key}}",
+        "",
+        '{ "name": "Rex", "age": 3 }',
+        "",
+        "> {% client.global.set('id', response.body.id); %}",
+        "",
+        "### Unknown",
+        "GET {{missing}}/x",
+      ].join("\n"),
+    );
+    const recipe = await engine.importFile({ name: "httpfile", path: file });
+    assert.equal(recipe.source.format, "http");
+    assert.deepEqual(recipe.endpoints.map((e) => `${e.method} ${e.pathTemplate}`).sort(), ["GET /v1/pets", "POST /v1/pets"]);
+    assert.match(recipe.warnings.join(" "), /Unresolved variable/);
+    assert.ok(!readFileSync(join(home, "recipes", "httpfile.json"), "utf8").includes('"k1"'));
+    const created = await engine.tools.get("httpfile__post_v1_pets").run({ body: { name: "Tom" } });
+    assert.match(created.text, /HTTP 201[\s\S]*Tom/);
   });
 
   it("creates tools that replay the stored credentials, without sending anything at import", async () => {

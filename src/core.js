@@ -7,6 +7,7 @@ import { observationsFromHar } from "./discovery/har.js";
 import { inferEndpoints, navigationVariables } from "./discovery/infer.js";
 import { brunoToOpenApi, isBrunoCollection } from "./discovery/bruno.js";
 import { parseCurl, splitCurlCommands } from "./discovery/curl.js";
+import { parseHttpFile } from "./discovery/httpfile.js";
 import { describeFile } from "./discovery/files.js";
 import { inferJsonRpc } from "./discovery/jsonrpc.js";
 import { findOpenApi, normalizeOpenApi } from "./discovery/openapi.js";
@@ -292,10 +293,13 @@ export class Engine {
     if (baseUrl) assertHttpUrl(baseUrl);
     let described;
     if (isBrunoCollection(path)) described = { format: /** @type {const} */ ("bruno"), ...brunoToOpenApi(path, { variables, environment }) };
-    else {
+    else if (/\.(http|rest)$/i.test(path)) {
+      const { observations, warnings } = parseHttpFile(readFileSync(path, "utf8"), variables);
+      return this.recipeFromRequests({ name, observations, warnings, source: { file: path, format: "http" }, merge, maxEndpoints });
+    } else {
       const size = statSync(path).size;
       if (size > MAX_HAR_BYTES) throw new Error(`File too large (${size} bytes, limit ${MAX_HAR_BYTES})`);
-      described = describeFile(readFileSync(path, "utf8"), { variables });
+      described = describeFile(readFileSync(path, "utf8"), { variables, serviceRoot: baseUrl });
     }
     if (described.format === "har") return this.discoverHar({ name, harPath: path, hosts, maxEndpoints, merge });
     if (described.format === "recipe") {
@@ -340,13 +344,22 @@ export class Engine {
       warnings.push(...own.map((w) => `command ${index + 1}: ${w}`));
       return observation;
     });
+    return this.recipeFromRequests({ name, observations, warnings, source: { curl: list.length }, merge, maxEndpoints });
+  }
+
+  /**
+   * Builds a replayable recipe from requests written by hand or by another tool (cURL commands, .http files): no responses are known.
+   * @param {{ name: string, observations: import("./discovery/infer.js").Observation[], warnings: string[], source: Record<string, unknown>, merge?: boolean, maxEndpoints?: number }} options
+   */
+  async recipeFromRequests({ name, observations, warnings, source, merge = false, maxEndpoints }) {
+    if (!observations.length) throw new Error(`No usable request found.${warnings.length ? ` ${warnings.join(" ")}` : ""}`);
     const inferred = inferEndpoints(observations, { variables: navigationVariables([]), maxEndpoints: maxEndpoints ?? this.config.maxEndpoints, secretCookies: true });
     const rpc = withJsonRpc(observations, inferred.endpoints);
     const previous = this.recipes.get(name);
     const now = new Date().toISOString();
     const canMerge = merge && previous?.kind === "har";
     const recipe = {
-      schemaVersion: RECIPE_SCHEMA_VERSION, name, kind: "har", source: { curl: list.length + (canMerge ? (previous.source?.curl ?? 0) : 0) },
+      schemaVersion: RECIPE_SCHEMA_VERSION, name, kind: "har", source,
       baseUrl: new URL(observations[0].url).origin, createdAt: previous?.createdAt ?? now, updatedAt: now,
       endpoints: canMerge ? mergeByKey(previous.endpoints, rpc.endpoints, restKey) : rpc.endpoints,
       graphql: canMerge ? mergeByKey(previous.graphql, inferred.graphql, graphqlKey) : inferred.graphql,
