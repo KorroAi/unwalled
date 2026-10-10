@@ -8,6 +8,7 @@ import { inferEndpoints, navigationVariables, responseKeys } from "./discovery/i
 import { redactUrl, scrubRecipe, secretValues } from "./discovery/secrets.js";
 import { findOpenApi, normalizeOpenApi } from "./discovery/openapi.js";
 import { exportRecipe, importCurl, importFile, saveSoapRecipe } from "./imports.js";
+import { closeDataConnections } from "./data/tools.js";
 import { assertHttpUrl, graphqlKey, MAX_FILE_BYTES, mergeByKey, mergeSecrets, restKey, rpcKey, streamKey, withJsonRpc } from "./recipe-merge.js";
 import { inferStreams, SECRET_FRAME_HOST, streamsFromHar } from "./realtime/infer.js";
 import { describeStreams } from "./realtime/tools.js";
@@ -735,7 +736,14 @@ export class Engine {
     if (repair && needsRepair) {
       const before = new Set(this.toolsOf(name).map((t) => t.name));
       const state = this.store.loadState(name);
-      if (recipe.kind === "har") lines.push("Repair: HAR recipes cannot rediscover by themselves; import a fresh capture with discover_har (same name).");
+      const importedFrom = recipe.source?.path ?? (recipe.source?.format && recipe.source?.file);
+      if (importedFrom) {
+        // Recipes imported from a file or folder are rebuilt from it (it may have been updated).
+        lines.push(`Repair: importing ${importedFrom} again`);
+        await this.importFile({ name, path: importedFrom, ...(recipe.kind === "openapi" || recipe.kind === "soap" ? { baseUrl: recipe.baseUrl } : {}) });
+        const after = new Set(this.toolsOf(name).map((t) => t.name));
+        lines.push(`  added: ${[...after].filter((t) => !before.has(t)).join(", ") || "none"}`, `  removed: ${[...before].filter((t) => !after.has(t)).join(", ") || "none"}`);
+      } else if (recipe.kind === "har") lines.push("Repair: HAR recipes cannot rediscover by themselves; import a fresh capture with discover_har (same name).");
       else {
         const discovery = state.discovery ?? { url: this.siteUrl(recipe), mode: recipe.kind === "openapi" ? "openapi" : "browser" };
         lines.push(`Repair: rediscovering from ${redactUrl(discovery.url)}${state.extraDiscoveries?.length ? ` and ${state.extraDiscoveries.length} merged capture(s)` : ""}`);
@@ -807,6 +815,7 @@ export class Engine {
 
   async close() {
     await Promise.all([...this.browsers.keys()].map((name) => this.closeBrowser(name)));
+    await closeDataConnections();
   }
 }
 
@@ -838,7 +847,8 @@ async function refreshCsrfFromCookies(context, outgoing) {
 /** One-paragraph summary of a recipe, for tool results and the CLI. @param {any} recipe @param {string[]} toolNames */
 export function describeRecipe(recipe, toolNames) {
   const lines = [`Recipe "${recipe.name}" (${recipe.kind}) — base ${recipe.baseUrl} — updated ${recipe.updatedAt}`];
-  if (recipe.kind === "soap") lines.push(`SOAP ${recipe.version}: ${recipe.endpoint} — ${recipe.title} — ${recipe.operations.length} operation(s): ${recipe.operations.map((o) => o.name).join(", ")}`);
+  if (recipe.kind === "data") lines.push(`Local data: ${recipe.source.path} — ${(recipe.tables ?? []).map((t) => `${t.name} (${t.rows} rows: ${t.columns.map((c) => c.name).slice(0, 10).join(", ")})`).join("; ")}`);
+  else if (recipe.kind === "soap") lines.push(`SOAP ${recipe.version}: ${recipe.endpoint} — ${recipe.title} — ${recipe.operations.length} operation(s): ${recipe.operations.map((o) => o.name).join(", ")}`);
   else if (recipe.kind === "openapi") lines.push(`${recipe.source.format ? `${recipe.source.format} file` : "OpenAPI"}: ${recipe.source.specUrl ?? recipe.source.file} — ${recipe.title ?? "untitled"} — ${recipe.routes.length} routes, ${recipe.operations.length} with dedicated tools.`);
   else {
     if (recipe.stats) lines.push(`Captured ${recipe.stats.observed} requests, ${recipe.stats.usable} usable.`);

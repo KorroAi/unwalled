@@ -2,6 +2,7 @@
 // AsyncAPI, Postman, Insomnia, Bruno, .http files, cURL commands, HAR files and shared recipes; and recipe export.
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute } from "node:path";
+import { pathToFileURL } from "node:url";
 import { brunoToOpenApi, isBrunoCollection } from "./discovery/bruno.js";
 import { parseCurl, splitCurlCommands } from "./discovery/curl.js";
 import { describeFile } from "./discovery/files.js";
@@ -11,6 +12,48 @@ import { normalizeOpenApi } from "./discovery/openapi.js";
 import { readVariablesFile } from "./discovery/variables.js";
 import { assertHttpUrl, graphqlKey, MAX_FILE_BYTES, mergeByKey, restKey, rpcKey, withJsonRpc } from "./recipe-merge.js";
 import { assertRecipeName, RECIPE_SCHEMA_VERSION } from "./store.js";
+import { dataFiles, DATA_EXTENSIONS, describeTable, openData } from "./data/source.js";
+
+/**
+ * Local data: CSV, TSV, JSON Lines and SQLite files, and folders holding data files (Bruno collections excepted).
+ * JSON files are data only when they are not an API description (checked by the caller).
+ * @param {string} path
+ */
+function isDataSource(path) {
+  if (statSync(path).isDirectory()) {
+    if (isBrunoCollection(path)) return false;
+    try {
+      return dataFiles(path).length > 0;
+    } catch {
+      return false;
+    }
+  }
+  return DATA_EXTENSIONS.test(path) && !/\.json$/i.test(path);
+}
+
+/**
+ * Recipe for local data queried with read-only SQL. The data stays in the files; the recipe keeps the path and a schema summary.
+ * @param {import("./core.js").Engine} engine @param {string} name @param {string} path
+ */
+async function saveDataRecipe(engine, name, path) {
+  const data = await openData(path);
+  let tables;
+  try {
+    tables = data.tables.map((t) => {
+      const { columns, rows } = describeTable(data.db, t);
+      return { name: t, columns, rows };
+    });
+  } finally {
+    data.close();
+  }
+  const now = new Date().toISOString();
+  const recipe = {
+    schemaVersion: RECIPE_SCHEMA_VERSION, name, kind: "data", source: { path, format: "data" }, title: path,
+    baseUrl: pathToFileURL(path).toString(), tables, createdAt: engine.recipes.get(name)?.createdAt ?? now, updatedAt: now,
+    warnings: tables.length ? [] : ["No table found."],
+  };
+  return engine.withLock(name, async () => engine.saveRecipe(recipe));
+}
 
 /**
  * Creates a recipe from a local file: OpenAPI 3 / Swagger 2 (JSON or YAML), Google Discovery document,
@@ -28,6 +71,7 @@ export async function importFile(engine, { name, path, include, baseUrl, variabl
   if (include) new RegExp(include); // validate early
   if (baseUrl) assertHttpUrl(baseUrl);
   let described;
+  if (isDataSource(path)) return saveDataRecipe(engine, name, path);
   if (isBrunoCollection(path)) described = { format: /** @type {const} */ ("bruno"), ...brunoToOpenApi(path, { variables, environment }) };
   else if (/\.(http|rest)$/i.test(path)) {
     const { observations, warnings } = parseHttpFile(readFileSync(path, "utf8"), variables);
@@ -35,7 +79,13 @@ export async function importFile(engine, { name, path, include, baseUrl, variabl
   } else {
     const size = statSync(path).size;
     if (size > MAX_FILE_BYTES) throw new Error(`File too large (${size} bytes, limit ${MAX_FILE_BYTES})`);
-    described = describeFile(readFileSync(path, "utf8"), { variables, serviceRoot: baseUrl });
+    try {
+      described = describeFile(readFileSync(path, "utf8"), { variables, serviceRoot: baseUrl });
+    } catch (error) {
+      // A JSON file that is no API description is data (records to query with SQL).
+      if (/\.json$/i.test(path) && /Unrecognised file/.test(error.message)) return saveDataRecipe(engine, name, path);
+      throw error;
+    }
   }
   if (described.format === "har") return engine.discoverHar({ name, harPath: path, hosts, maxEndpoints, merge });
   if (described.format === "asyncapi") {

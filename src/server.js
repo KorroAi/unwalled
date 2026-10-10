@@ -62,7 +62,9 @@ export const MANAGEMENT_TOOLS = [
     name: "import_file",
     description:
       "Create tools from a local API description file (absolute path): OpenAPI 3 / Swagger 2 (JSON or YAML), Google Discovery document, " +
-      "Postman collection (v2.x), Insomnia export (v4), Bruno collection folder, AsyncAPI (WebSocket channels), .http / .rest file (VS Code REST Client, JetBrains), HAR capture, or a recipe exported with export_recipe. The format is detected automatically.",
+      "Postman collection (v2.x), Insomnia export (v4), Bruno collection folder, AsyncAPI (WebSocket and MQTT channels), .http / .rest file (VS Code REST Client, JetBrains), " +
+      "OData $metadata or WSDL (with base_url), HAR capture, a recipe exported with export_recipe, or local data to query with read-only SQL " +
+      "(CSV, TSV, JSON records, JSON Lines, SQLite database, or a folder of such files). The format is detected automatically.",
     inputSchema: {
       type: "object",
       properties: {

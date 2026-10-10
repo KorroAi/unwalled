@@ -27,7 +27,7 @@ export function describeFile(text, { variables = {}, serviceRoot } = {}) {
   }
   if (!doc || typeof doc !== "object") throw new Error("The file does not contain an object.");
   if (Array.isArray(doc?.log?.entries)) return { format: "har" };
-  if (typeof doc.schemaVersion === "number" && ["browser", "har", "openapi"].includes(doc.kind) && (Array.isArray(doc.endpoints) || Array.isArray(doc.operations)))
+  if (typeof doc.schemaVersion === "number" && ["browser", "har", "openapi", "soap", "data"].includes(doc.kind) && (Array.isArray(doc.endpoints) || Array.isArray(doc.operations) || Array.isArray(doc.tables)))
     return { format: "recipe", recipe: doc };
   if (isAsyncApi(doc)) return { format: "asyncapi", asyncapi: asyncApiToStreams(doc) };
   if (isGoogleDiscovery(doc)) return { format: "google", spec: discoveryToOpenApi(doc), warnings: [] };

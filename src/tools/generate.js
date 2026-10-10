@@ -1,6 +1,7 @@
 // Builds MCP tool definitions from a recipe: one tool per endpoint / GraphQL operation / OpenAPI operation,
 // macros chaining several calls, and a free-form request tool. Agent-written annotations (names, descriptions) are applied last.
 import { createHash } from "node:crypto";
+import { buildDataTools } from "../data/tools.js";
 import { buildRpcTools } from "../discovery/jsonrpc.js";
 import { buildSoapTools } from "../discovery/soap.js";
 import { buildStreamTools } from "../realtime/tools.js";
@@ -614,6 +615,8 @@ function applyAnnotations(tools, recipe) {
  */
 export function buildTools(recipe, runtime) {
   const name = toolNamer(recipe.name);
+  // Local data recipes only have their SQL tools.
+  if (recipe.kind === "data") return buildDataTools(recipe, name, runtime.maxOutputChars).map((tool) => ({ ...tool, inputSchema: safeSchema(tool.inputSchema) }));
   /** Sends through the recipe's pipeline (credentials, safety policy, formatting); `transform` adapts the raw response first. */
   const exec = (request, args, toolName, transform) => execute(runtime, recipe, request, args, toolName, transform);
   /** @type {GeneratedTool[]} */
