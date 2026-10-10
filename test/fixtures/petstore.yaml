@@ -1,0 +1,55 @@
+openapi: 3.0.3
+info:
+  title: Petstore fixture
+  version: 1.0.0
+servers:
+  - url: /v1
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List pets
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer }
+      responses:
+        "200": { description: ok }
+    post:
+      operationId: createPet
+      summary: Create a pet (requires an API key)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewPet" }
+      responses:
+        "201": { description: created }
+  /pets/{petId}:
+    parameters:
+      - $ref: "#/components/parameters/PetId"
+    get:
+      operationId: getPet
+      summary: Get one pet
+      responses:
+        "200": { description: ok }
+  /old:
+    get:
+      operationId: oldEndpoint
+      deprecated: true
+      responses:
+        "200": { description: ok }
+components:
+  parameters:
+    PetId:
+      name: petId
+      in: path
+      required: true
+      schema: { type: string }
+  schemas:
+    NewPet:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        tag: { type: string }

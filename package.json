@@ -1,0 +1,30 @@
+{
+  "name": "universal-mcp",
+  "version": "0.1.0",
+  "description": "Turn any website, HAR capture or OpenAPI spec into MCP tools. Discover once, call forever.",
+  "keywords": ["mcp", "model-context-protocol", "claude", "api-discovery", "reverse-engineering", "har", "openapi", "graphql", "playwright", "ai-agents"],
+  "license": "MIT",
+  "author": "korrocorp",
+  "repository": { "type": "git", "url": "git+https://github.com/KorroAi/universal-mcp.git" },
+  "type": "module",
+  "bin": { "universal-mcp": "bin/universal-mcp.js" },
+  "files": ["bin", "src", "README.md", "LICENSE", "CHANGELOG.md"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node bin/universal-mcp.js",
+    "test": "node --test \"test/unit/*.test.js\"",
+    "test:e2e": "node --test --test-concurrency=1 \"test/e2e/*.test.js\"",
+    "test:all": "npm test && npm run test:e2e",
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "npm run typecheck && npm run test:all"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "playwright-core": "1.63.0",
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "typescript": "5.9.3"
+  }
+}

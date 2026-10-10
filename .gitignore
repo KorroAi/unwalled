@@ -1,0 +1,11 @@
+node_modules/
+*.log
+*.tmp
+.DS_Store
+# Local data, if UNIVERSAL_MCP_HOME points inside the repository
+.universal-mcp/
+recipes/
+secrets/
+profiles/
+*.har
+!test/fixtures/*.har

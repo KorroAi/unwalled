@@ -1,0 +1,55 @@
+// Tests against real public websites. Skipped unless UNIVERSAL_MCP_LIVE=1 (they need network access
+// and depend on third-party sites that can change at any time).
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { after, before, describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+const enabled = process.env.UNIVERSAL_MCP_LIVE === "1";
+const BIN = fileURLToPath(new URL("../../bin/universal-mcp.js", import.meta.url));
+const TIMEOUT = { timeout: 240_000 };
+
+let home;
+/** @type {Client} */ let client;
+
+async function call(name, args = {}) {
+  const result = await client.callTool({ name, arguments: args }, undefined, { timeout: 230_000 });
+  return { text: /** @type {any} */ (result.content)[0].text, isError: !!result.isError };
+}
+
+describe("live websites", { skip: !enabled && "set UNIVERSAL_MCP_LIVE=1 to run" }, () => {
+  before(async () => {
+    home = mkdtempSync(join(tmpdir(), "universal-mcp-live-"));
+    client = new Client({ name: "live", version: "0.0.0" });
+    await client.connect(new StdioClientTransport({ command: process.execPath, args: [BIN], env: { ...process.env, UNIVERSAL_MCP_HOME: home } }));
+  });
+
+  after(async () => {
+    await client?.close().catch(() => {});
+    if (home) rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+  });
+
+  it("crates.io (single-page app, browser capture)", TIMEOUT, async () => {
+    const discovered = await call("discover", { name: "crates", url: "https://crates.io/search?q=serde", actions: [{ goto: "/crates/serde" }] });
+    assert.equal(discovered.isError, false, discovered.text);
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name);
+    assert.ok(names.includes("crates__get_api_v1_crates_crate"), names.join(", "));
+    const tokio = await call("crates__get_api_v1_crates_crate", { path: { crate: "tokio" }, pick: "crate.name,crate.max_version" });
+    assert.match(tokio.text, /HTTP 200[\s\S]*"tokio"/);
+    const search = await call("crates__get_api_v1_crates", { query: { q: "bevy", per_page: 2 }, pick: "crates[*].name" });
+    assert.match(search.text, /bevy/);
+  });
+
+  it("Swagger Petstore (OpenAPI found from the Swagger UI page)", TIMEOUT, async () => {
+    const discovered = await call("discover", { name: "petstore", url: "https://petstore3.swagger.io/" });
+    assert.equal(discovered.isError, false, discovered.text);
+    assert.match(discovered.text, /\(openapi\)/);
+    const pet = await call("petstore__find_pets_by_status", { query: { status: "available" }, max_chars: 300 });
+    assert.match(pet.text, /HTTP 200/);
+  });
+});
