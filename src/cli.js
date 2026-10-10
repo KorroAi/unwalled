@@ -12,11 +12,13 @@ Usage:
   universal-mcp discover <name> <url> [options] Discover an API from the terminal
       --mode auto|openapi|browser   --interactive   --duration <seconds>
       --actions '<json array>'      --host <host> (repeatable)   --include <regex>   --merge
+      --explore <pages>             also follow same-site links (never logout, delete, pay...)
   universal-mcp har <name> <file.har> [--host <host>] [--merge]
   universal-mcp import <name> <file> [--base-url <url>] [--include <regex>]
                                                 OpenAPI, Swagger, Google Discovery, Postman, Insomnia, HAR,
                                                 exported recipe, or Bruno collection folder
   universal-mcp login <name> <url> [--duration <seconds>]
+  universal-mcp check <name> [--repair]          Call read-only tools and report broken or changed ones
   universal-mcp curl <name> <file.txt> [--merge] Create tools from cURL commands saved in a text file
   universal-mcp export <name> <file.json>       Write a recipe (no secrets) to share it; import it with "import"
   universal-mcp list                            List recipes
@@ -30,6 +32,11 @@ Environment:
   UNIVERSAL_MCP_MAX_OUTPUT  Max characters returned per tool call (default 40000)
   UNIVERSAL_MCP_TIMEOUT_MS  Request timeout (default 30000)
   UNIVERSAL_MCP_MAX_ENDPOINTS, UNIVERSAL_MCP_MAX_OPENAPI_TOOLS  Tool count limits (default 40 / 60)
+  UNIVERSAL_MCP_CONFIRM     Calls needing confirm=true: destructive (default) | writes | none
+  UNIVERSAL_MCP_RATE_LIMIT  Requests per second per host (default 5, 0 = unlimited)
+  UNIVERSAL_MCP_RETRIES     Automatic retries of temporary failures (default 2)
+  UNIVERSAL_MCP_TOOL_MODE   auto (default: search mode above UNIVERSAL_MCP_TOOL_THRESHOLD=60 tools) | all | search
+  UNIVERSAL_MCP_AUDIT       0 disables the audit log (<home>/audit.log)
 `;
 
 const OPTIONS = /** @type {const} */ ({
@@ -42,6 +49,8 @@ const OPTIONS = /** @type {const} */ ({
   host: { type: "string", multiple: true },
   include: { type: "string" },
   merge: { type: "boolean" },
+  explore: { type: "string" },
+  repair: { type: "boolean" },
   "base-url": { type: "string" },
   "delete-profile": { type: "boolean" },
 });
@@ -81,7 +90,10 @@ export async function main(argv) {
           }
         }
         const recipe = await engine.discover(
-          { name: rest[0], url: rest[1], mode: /** @type {any} */ (values.mode), actions, interactive: values.interactive, durationSeconds: duration, hosts: values.host, include: values.include, merge: values.merge },
+          {
+            name: rest[0], url: rest[1], mode: /** @type {any} */ (values.mode), actions, interactive: values.interactive, durationSeconds: duration, hosts: values.host,
+            include: values.include, merge: values.merge, explorePages: values.explore ? Number(values.explore) : 0,
+          },
           (message) => process.stderr.write(`… ${message}\n`),
         );
         console.log(describeRecipe(recipe, toolNames(recipe.name)));
@@ -120,6 +132,13 @@ export async function main(argv) {
         await engine.login({ name: rest[0], url: rest[1], durationSeconds: duration });
         console.log(`Profile "${rest[0]}" saved.`);
         break;
+      case "check": {
+        expect(rest, 1, "check <name> [--repair]");
+        const result = await engine.checkRecipe(rest[0], { repair: values.repair });
+        console.log(result.text);
+        if ((result.counts.broken ?? 0) && !values.repair) process.exitCode = 1;
+        break;
+      }
       case "list":
         console.log(engine.recipes.size ? [...engine.recipes.values()].map((r) => describeRecipe(r, toolNames(r.name))).join("\n\n") : "No recipe yet.");
         break;

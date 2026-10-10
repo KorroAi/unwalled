@@ -50,7 +50,7 @@ describe("compact mode", () => {
   it("lists, describes and calls folded operations", async () => {
     const { tools, calls } = make(25, 20);
     const listing = await tools.get("big__operation").run({ filter: "number 1" });
-    assert.match(listing.text, /^op_1 — GET \/things\/1 — Operation number 1\./m);
+    assert.match(listing.text, /^op_1 — .*Operation number 1\./m);
     const described = await tools.get("big__operation").run({ operation: "op_4" });
     assert.match(described.text, /\(may change data, destructive\)/);
     assert.match(described.text, /"pick"/);

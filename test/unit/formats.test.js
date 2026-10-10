@@ -39,7 +39,9 @@ describe("XML", () => {
     assert.deepEqual(body(formatResponse(result, { pick: "rss.channel.item[*].title", maxChars: 1000 })), ["A", "B"]);
     const csv = { ...result, contentType: "text/csv", body: Buffer.from("sym,price\nBTC,60000\nETH,3000\n") };
     assert.deepEqual(body(formatResponse(csv, { pick: "[?price>5000].sym", maxChars: 1000 })), ["BTC"]);
+    // HTML is not converted to JSON (it is turned into readable text, or kept raw with raw=true).
     const html = { ...result, contentType: "text/html", body: Buffer.from("<p>hi</p>") };
-    assert.equal(formatResponse(html, { maxChars: 1000 }).text.split("\n")[1], "<p>hi</p>");
+    assert.equal(formatResponse(html, { maxChars: 1000 }).text.split("\n")[1], "hi");
+    assert.equal(formatResponse(html, { maxChars: 1000, raw: true }).text.split("\n")[1], "<p>hi</p>");
   });
 });

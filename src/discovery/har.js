@@ -12,6 +12,27 @@ function headersObject(list) {
 }
 
 /**
+ * Request body of a HAR entry. Some tools export form bodies as "params" without "text": they are rebuilt
+ * (form-encoded, or multipart with file names only).
+ * @param {any} postData @returns {{ text: string | null, contentType: string | undefined }}
+ */
+function postBody(postData) {
+  if (!postData) return { text: null, contentType: undefined };
+  const mime = postData.mimeType;
+  if (typeof postData.text === "string" && postData.text !== "") return { text: postData.text, contentType: mime };
+  const params = Array.isArray(postData.params) ? postData.params.filter((p) => p && typeof p.name === "string") : [];
+  if (!params.length) return { text: typeof postData.text === "string" ? postData.text : null, contentType: mime };
+  if (/multipart\/form-data/i.test(mime ?? "")) {
+    const boundary = "universal-mcp-har";
+    const parts = params.map((p) =>
+      `--${boundary}\r\nContent-Disposition: form-data; name="${p.name}"${p.fileName ? `; filename="${p.fileName}"` : ""}\r\n\r\n${p.fileName ? "" : (p.value ?? "")}\r\n`,
+    );
+    return { text: `${parts.join("")}--${boundary}--\r\n`, contentType: `multipart/form-data; boundary=${boundary}` };
+  }
+  return { text: new URLSearchParams(params.map((p) => [p.name, p.value ?? ""])).toString(), contentType: mime ?? "application/x-www-form-urlencoded" };
+}
+
+/**
  * @param {string} text HAR JSON
  * @param {{ hosts?: string[] }} [options] restrict to these hosts (and their subdomains)
  */
@@ -55,12 +76,13 @@ export function observationsFromHar(text, { hosts = [] } = {}) {
         responseJson = JSON.parse(raw);
       } catch {}
     }
+    const body = postBody(request.postData);
     observations.push({
       method: request.method,
       url: request.url,
       status: response.status,
-      requestHeaders: { ...headersObject(request.headers), ...(request.postData?.mimeType ? { "content-type": request.postData.mimeType } : {}) },
-      requestBody: typeof request.postData?.text === "string" ? request.postData.text : null,
+      requestHeaders: { ...headersObject(request.headers), ...(body.contentType ? { "content-type": body.contentType } : {}) },
+      requestBody: body.text,
       responseJson,
     });
   }

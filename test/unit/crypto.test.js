@@ -10,8 +10,8 @@ const homes = [];
 const makeConfig = (overrides = {}) => {
   const home = mkdtempSync(join(tmpdir(), "umcp-crypto-"));
   homes.push(home);
-  const config = { home, recipesDir: join(home, "recipes"), profilesDir: join(home, "profiles"), secretsDir: join(home, "secrets"), encryptSecrets: true, ...overrides };
-  for (const dir of [config.recipesDir, config.profilesDir, config.secretsDir]) mkdirSync(dir, { recursive: true });
+  const config = { home, recipesDir: join(home, "recipes"), profilesDir: join(home, "profiles"), secretsDir: join(home, "secrets"), stateDir: join(home, "state"), encryptSecrets: true, ...overrides };
+  for (const dir of [config.recipesDir, config.profilesDir, config.secretsDir, config.stateDir]) mkdirSync(dir, { recursive: true });
   return config;
 };
 

@@ -13,10 +13,10 @@ describe("cURL parsing", () => {
   });
 
   it("reads method, headers, body, cookies and basic auth", () => {
-    const { observation } = parseCurl(`curl 'https://api.shop.io/v1/orders' -H 'Authorization: Bearer t0k3n' -H 'Content-Type: application/json' -b 'sid=abc' --data-raw '{"sku":"a1"}' --compressed`);
+    const { observation } = parseCurl(`curl 'https://api.shop.io/v1/orders' -H 'Authorization: Bearer t0k3n' -H 'Content-Type: application/json' -b 'sid=abc' --data-raw '{"sku":"a1"}' --compressed`); // gitleaks:allow (fake test token)
     assert.equal(observation.method, "POST");
     assert.equal(observation.url, "https://api.shop.io/v1/orders");
-    assert.deepEqual(observation.requestHeaders, { authorization: "Bearer t0k3n", "content-type": "application/json", cookie: "sid=abc" });
+    assert.deepEqual(observation.requestHeaders, { authorization: "Bearer t0k3n", "content-type": "application/json", cookie: "sid=abc" }); // gitleaks:allow
     assert.equal(observation.requestBody, '{"sku":"a1"}');
     assert.equal(parseCurl("curl -u me:pw https://a.io").observation.requestHeaders.authorization, `Basic ${Buffer.from("me:pw").toString("base64")}`);
     assert.equal(parseCurl("curl -G https://a.io/s -d q=lamp -d page=2").observation.url, "https://a.io/s?q=lamp&page=2");

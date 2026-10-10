@@ -93,10 +93,13 @@ export async function findOpenApi(url, { timeoutMs = 8000 } = {}) {
   const prefixes = new Set([""]);
   const firstSegment = start.pathname.split("/").filter(Boolean)[0];
   if (firstSegment) prefixes.add(`/${firstSegment}`);
+  // A few requests at a time (not 17 at once), stopping at the first description found.
   for (const prefix of prefixes) {
-    const results = await Promise.all(DOC_PATHS.map((path) => attempt(`${start.origin}${prefix}${path}`)));
-    const hit = results.find(Boolean);
-    if (hit) return hit;
+    for (let i = 0; i < DOC_PATHS.length; i += 4) {
+      const results = await Promise.all(DOC_PATHS.slice(i, i + 4).map((path) => attempt(`${start.origin}${prefix}${path}`)));
+      const hit = results.find(Boolean);
+      if (hit) return hit;
+    }
   }
   return null;
 }

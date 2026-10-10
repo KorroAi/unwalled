@@ -5,6 +5,27 @@
 - `recipes/` — endpoints, schemas and redacted examples. Designed to be shareable.
 - `secrets/` — authorization headers, API keys, cookies from HAR files and secret query parameters, keyed by host. Local only, created with mode 600 on POSIX systems.
 - `profiles/` — browser profiles, including cookies for the sites you signed in to. Local only.
+- `state/` — per-recipe policy, the original discovery inputs (URL and actions, which may contain typed text) and the last health check. Local only.
+- `audit.log` — one line per request: time, recipe, tool, method, redacted URL, status. No bodies, no credentials.
+
+Before a recipe is written, credentials are detected by name and by value and moved to `secrets/`, and every stored secret value
+is scrubbed from the recipe. Detection is heuristic (see the README's limitations): review a recipe before sharing it.
+
+## Using a recipe someone else wrote
+
+A recipe describes endpoints, so it decides where its tools send requests. Treat a shared recipe like code from that person:
+
+- Credentials are only sent to the host they were captured or set for, never to another host named in the recipe.
+- Stored defaults and macro steps cannot confirm held calls, write files (`save_to`) or upload files (`files`): those arguments are dropped.
+- Calls still run with your cookies for the recipe's own hosts: read the endpoints (`inspect_recipe`) before using a recipe from an untrusted source,
+  and consider `configure_recipe` with `policy.readOnly` or `policy.allowedHosts`.
+- A malformed recipe file is skipped at startup rather than loaded.
+
+## Safety controls
+
+- DELETE calls and risky interface clicks need `confirm=true` (`UNIVERSAL_MCP_CONFIRM=writes` extends this to every write).
+- `dry_run` shows any request with credentials hidden. The default rate limit is 5 requests per second per host.
+- The audit log never contains request bodies or credentials.
 
 Credentials are only ever sent to the host they were captured for (or set for with `set_credentials`).
 The data directory defaults to `~/.universal-mcp` (`UNIVERSAL_MCP_HOME`). Treat `secrets/` and `profiles/` like a password store:
