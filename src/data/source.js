@@ -3,8 +3,9 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { parseCsv } from "../tools/formats.js";
+import { readIcs, readXlsx } from "./formats.js";
 
-export const DATA_EXTENSIONS = /\.(csv|tsv|json|jsonl|ndjson|sqlite|sqlite3|db)$/i;
+export const DATA_EXTENSIONS = /\.(csv|tsv|json|jsonl|ndjson|sqlite|sqlite3|db|xlsx|ics)$/i;
 const MAX_ROWS = 1_000_000;
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
 
@@ -57,9 +58,15 @@ function toSql(value, type) {
 export function readRecords(file) {
   const size = statSync(file).size;
   if (size > MAX_FILE_BYTES) throw new Error(`${file} is too large (${size} bytes, limit ${MAX_FILE_BYTES}).`);
-  const text = readFileSync(file, "utf8").replace(/^﻿/, "");
   const name = tableName(file);
   const ext = extname(file).toLowerCase();
+  // Excel: one table per sheet; iCalendar: events (and to-dos).
+  if (ext === ".xlsx") {
+    const sheets = readXlsx(readFileSync(file));
+    return Object.fromEntries(Object.entries(sheets).map(([sheet, rows]) => [Object.keys(sheets).length === 1 ? name : tableName(sheet), rows]));
+  }
+  const text = readFileSync(file, "utf8").replace(/^﻿/, "");
+  if (ext === ".ics") return readIcs(text);
   if (ext === ".csv" || ext === ".tsv") return { [name]: parseCsv(text) };
   if (ext === ".jsonl" || ext === ".ndjson") {
     return { [name]: text.split(/\r?\n/).filter((l) => l.trim()).map((line, i) => {
