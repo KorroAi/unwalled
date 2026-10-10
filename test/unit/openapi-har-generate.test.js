@@ -21,9 +21,9 @@ describe("OpenAPI normalization", () => {
   it("dereferences parameters and bodies", () => {
     const { operations, routes } = normalizeOpenApi(spec, "http://localhost:9000/openapi.yaml");
     assert.equal(routes.length, 4);
-    const getPet = operations.find((o) => o.id === "get_pet");
+    const getPet = /** @type {any} */ (operations.find((o) => o.id === "get_pet"));
     assert.deepEqual(getPet.params.map((p) => [p.in, p.name, p.required]), [["path", "petId", true]]);
-    const create = operations.find((o) => o.id === "create_pet");
+    const create = /** @type {any} */ (operations.find((o) => o.id === "create_pet"));
     assert.equal(create.body.schema.properties.name.type, "string");
     assert.deepEqual(create.body.schema.required, ["name"]);
     assert.ok(!operations.some((o) => o.id === "old_endpoint"), "deprecated operations are skipped");

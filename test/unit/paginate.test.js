@@ -79,7 +79,7 @@ describe("paginated tools against a local API", () => {
   /** @type {[string, Record<string, number>][]} */ const cases = [["api__token", {}], ["api__links", {}], ["api__pages", { page: 1 }], ["api__offset", { offset: 0 }]];
   for (const [name, query] of cases) {
     it(`merges every page (${name})`, async () => {
-      const tool = tools().get(name);
+      const tool = /** @type {any} */ (tools().get(name));
       assert.ok(tool.inputSchema.properties.paginate);
       const result = await tool.run({ query, paginate: { max_pages: 10 }, pick: "id" });
       assert.equal(result.isError, false, result.text);
@@ -89,7 +89,7 @@ describe("paginated tools against a local API", () => {
   }
 
   it("respects max_items and keeps the plain call when paginate is absent", async () => {
-    const tool = tools().get("api__token");
+    const tool = /** @type {any} */ (tools().get("api__token"));
     const limited = await tool.run({ paginate: { max_items: 12 } });
     assert.match(limited.text, /12 item\(s\)[\s\S]*max_items/);
     const plain = await tool.run({});

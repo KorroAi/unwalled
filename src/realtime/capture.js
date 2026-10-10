@@ -67,7 +67,8 @@ export function attachRealtimeCapture(context, allowed) {
         session.on("Network.requestWillBeSent", (event) => {
           if (event.type !== "EventSource" && event.type !== "Fetch") return;
           requests.set(event.requestId, { url: event.request.url, method: event.request.method, body: event.request.postData, headers: event.request.headers });
-          if (requests.size > 2000) requests.delete(requests.keys().next().value);
+          const oldest = requests.keys().next().value;
+          if (requests.size > 2000 && oldest !== undefined) requests.delete(oldest);
         });
         session.on("Network.responseReceived", (event) => {
           const contentType = event.response.headers["content-type"] ?? event.response.headers["Content-Type"] ?? event.response.mimeType ?? "";

@@ -37,7 +37,7 @@ describe("compact mode", () => {
     const calls = [];
     const recipe = { name: "big", kind: "openapi", baseUrl: "https://big.io", routes: [], operations: Array.from({ length: count }, (_, i) => operation(i)) };
     const runtime = { maxOutputChars: 10_000, foldThreshold: threshold, send: async (_r, request) => (calls.push(request), { status: 200, statusText: "OK", contentType: "application/json", body: Buffer.from('{"ok":true}'), finalUrl: request.url }) };
-    return { tools: new Map(buildTools(recipe, runtime).map((t) => [t.name, t])), calls };
+    return { tools: /** @type {Map<string, any>} */ (new Map(buildTools(recipe, runtime).map((t) => [t.name, t]))), calls };
   };
 
   it("is used above the threshold only", () => {

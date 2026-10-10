@@ -47,7 +47,9 @@ export function findItems(json, itemsPath) {
     consider(value, key, 0);
     if (value && typeof value === "object" && !Array.isArray(value)) for (const [sub, inner] of Object.entries(value)) consider(inner, `${key}.${sub}`, 1);
   }
-  return best ? { items: best.items, path: best.path } : { items: null, path: "" };
+  // TypeScript does not see the assignment made inside consider().
+  const chosen = /** @type {{ items: unknown[], path: string } | null} */ (best);
+  return chosen ? { items: chosen.items, path: chosen.path } : { items: null, path: "" };
 }
 
 /** Finds a next-page token or URL in a page (up to 3 levels deep). @param {unknown} json */
@@ -70,7 +72,9 @@ export function findNext(json) {
     for (const inner of Object.values(value)) visit(inner, depth + 1);
   };
   visit(json, 0);
-  return { next: found, hasMore };
+  // TypeScript does not see the assignment made inside visit().
+  const next = /** @type {{ key: string, value: string } | null} */ (found);
+  return { next, hasMore };
 }
 
 /**

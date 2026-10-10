@@ -38,7 +38,10 @@ export class Engine {
     this.limiter = new RateLimiter();
     this.cache = new ResponseCache();
     this.audit = new AuditLog(config.auditFile);
-    this.rebuildTools();
+    /** Generated tools by name (rebuilt whenever a recipe changes). @type {Map<string, import("./tools/generate.js").GeneratedTool>} */
+    this.tools = new Map();
+    /** @type {import("./tools/generate.js").Runtime} */
+    this.runtime = this.rebuildTools();
   }
 
   /**
@@ -59,6 +62,7 @@ export class Engine {
     }
   }
 
+  /** @returns {import("./tools/generate.js").Runtime} */
   rebuildTools() {
     const runtime = (this.runtime = {
       send: (recipe, request, options) => this.send(recipe, request, options),
@@ -69,7 +73,6 @@ export class Engine {
       schemaBudget: this.config.schemaBudget,
       foldThreshold: this.config.foldThreshold,
     });
-    /** @type {Map<string, import("./tools/generate.js").GeneratedTool>} */
     this.tools = new Map();
     for (const recipe of this.recipes.values()) {
       // One malformed recipe (edited by hand, copied from elsewhere) must not take the whole server down.
@@ -79,6 +82,7 @@ export class Engine {
         log(`Recipe "${recipe.name}" is malformed and was skipped (${error.message}); rediscover it or forget it.`);
       }
     }
+    return runtime;
   }
 
   /** @param {string} name */
@@ -247,6 +251,7 @@ export class Engine {
   async pageFor(name, url) {
     const context = await this.browserFor(name);
     const entry = this.browsers.get(name);
+    if (!entry) throw new Error(`The browser of "${name}" closed while opening a page.`);
     if (entry.page && !entry.page.isClosed()) {
       if (url) await entry.page.goto(url, { waitUntil: "domcontentloaded", timeout: this.config.requestTimeoutMs * 2 });
       return entry.page;

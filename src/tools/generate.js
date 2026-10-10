@@ -160,7 +160,11 @@ function parseJson(result) {
   }
 }
 
-/** @param {Runtime} runtime @param {any} recipe @param {import("./http.js").OutgoingRequest} request @param {Record<string, any>} args @param {string} tool @returns {Promise<ToolResult>} */
+/**
+ * @param {Runtime} runtime @param {any} recipe @param {import("./http.js").OutgoingRequest} request @param {Record<string, any>} args @param {string} tool
+ * @param {(result: any) => any} [transform] adapts the raw response before formatting (SOAP envelopes)
+ * @returns {Promise<ToolResult>}
+ */
 async function execute(runtime, recipe, request, args, tool, transform) {
   const cacheSeconds = Number.isFinite(args.cache_seconds) ? Math.max(0, Math.min(Number(args.cache_seconds), 86_400)) : undefined;
   if (Number.isFinite(args.timeout_ms)) request = { ...request, timeoutMs: Math.max(1000, Math.min(Number(args.timeout_ms), 300_000)) };

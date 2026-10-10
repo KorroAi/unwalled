@@ -139,7 +139,7 @@ describe("MQTT", () => {
       const result = await tool.run({ duration_seconds: 2, max_messages: 2, pick: "payload.celsius" });
       assert.equal(result.isError, false, result.text);
       assert.equal(result.text.split("\n").filter((line) => /^\[\+\d+ms\] \d+$/.test(line)).length, 2, result.text);
-      const generic = await engine.tools.get("home__stream").run({ url: `mqtt://u:p@127.0.0.1:${port}`, topics: ["home/door"], duration_seconds: 2, max_messages: 1 });
+      const generic = await /** @type {any} */ (engine.tools.get("home__stream")).run({ url: `mqtt://u:p@127.0.0.1:${port}`, topics: ["home/door"], duration_seconds: 2, max_messages: 1 });
       assert.match(generic.text, /"payload":"closed"/);
     } finally {
       await engine.close();

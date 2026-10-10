@@ -34,7 +34,7 @@ describe("collections", () => {
     assert.equal(baseUrl, "https://api.example.com");
     assert.deepEqual(operations.map((o) => `${o.method} ${o.path} ${o.id}`), ["GET /v1/pets pets_list_pets", "POST /v1/pets pets_create_pet", "GET /v1/pets/{petId} pets_get_pet"]);
     assert.deepEqual(operations[0].params.map((p) => p.name), ["limit"]);
-    assert.equal(operations[1].body.schema.properties.age.type, "integer");
+    assert.equal(/** @type {any} */ (operations[1]).body.schema.properties.age.type, "integer");
     assert.match(warnings.join(" "), /other\.example\.com/);
   });
 

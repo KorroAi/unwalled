@@ -39,8 +39,8 @@ describe("OData $metadata", () => {
       "GET /Customers", "POST /Customers", "GET /Customers('{Code}')", "PATCH /Customers('{Code}')", "DELETE /Customers('{Code}')",
       "GET /TopProducts",
     ]);
-    const list = operations.find((o) => o.id === "list_products");
+    const list = /** @type {any} */ (operations.find((o) => o.id === "list_products"));
     assert.ok(list.params.some((p) => p.name === "$filter") && list.params.some((p) => p.name === "$count"));
-    assert.equal(operations.find((o) => o.id === "create_customers").body.schema.properties.Tags.type, "array");
+    assert.equal(/** @type {any} */ (operations.find((o) => o.id === "create_customers")).body.schema.properties.Tags.type, "array");
   });
 });

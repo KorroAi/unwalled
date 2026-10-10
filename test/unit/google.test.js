@@ -47,8 +47,8 @@ describe("Google Discovery documents", () => {
     ]);
     const list = operations[0];
     assert.deepEqual(list.params.find((p) => p.name === "part"), { name: "part", in: "query", required: true, schema: { type: "array", items: { type: "string" } }, description: "" });
-    assert.match(list.params.find((p) => p.name === "order").schema.description, /date: Newest first/);
-    assert.equal(operations[1].body.schema.properties.snippet.properties.title.type, "string");
+    assert.match(/** @type {any} */ (list.params.find((p) => p.name === "order")).schema.description, /date: Newest first/);
+    assert.equal(/** @type {any} */ (operations[1]).body.schema.properties.snippet.properties.title.type, "string");
     assert.deepEqual(operations[2].params.map((p) => [p.name, p.in, p.required]), [["name", "path", true]]);
   });
 });
