@@ -83,43 +83,47 @@ export function inferJsonRpc(observations) {
   return { methods: /** @type {RpcMethod[]} */ (methods), rpcUrls: new Set([...onlyRpc].filter(([, only]) => only).map(([endpoint]) => endpoint)) };
 }
 
+/** Method names do not say whether they write: only obvious readers are read-only. @param {string} method */
+const isReader = (method) => /^(get|list|find|search|read|query|fetch|describe|count|eth_(get|call|block|chain|gas|estimate)|net_|web3_)/i.test(method.replace(/^[\w]+\./, ""));
+
 /**
  * @param {any} recipe
- * @param {{ send: (recipe: any, request: any) => Promise<any> }} runtime
  * @param {(suffix: string) => string} name
- * @param {(result: any, args: Record<string, any>) => { text: string, isError: boolean }} format
+ * @param {(request: any, args: Record<string, any>, toolName: string, transform?: (result: any) => any) => Promise<{ text: string, isError: boolean }>} exec
+ *   sends a request through the recipe's pipeline (credentials, safety policy, formatting) and returns the tool result
+ * @param {Record<string, any>} outputProperties shared output options of generated tools (pick, max_chars...)
  */
-export function buildRpcTools(recipe, runtime, name, format) {
+export function buildRpcTools(recipe, name, exec, outputProperties) {
   const methods = recipe.jsonrpc ?? [];
   let nextId = 1;
-  const tools = methods.map((m) => ({
-    lazy: true,
-    name: name(`rpc_${m.method}`),
-    description: `[${recipe.name}] JSON-RPC ${m.version} method "${m.method}" at ${m.url} — observed ${m.observed}×. Params example: ${m.paramsExample}. Result: ${m.resultShape}.`.slice(0, 1200),
-    inputSchema: {
-      type: "object",
-      properties: {
-        params: m.paramsKind === "array" ? { type: "array", items: {}, description: "Positional parameters." } : { type: "object", additionalProperties: true, ...(m.paramsKind === "object" ? { properties: m.paramsSchema.properties ?? {} } : {}), description: "Named parameters." },
-        pick: { type: "string", description: 'Optional: keep only part of the JSON response, e.g. "result.items[*].name".' },
-        max_chars: { type: "integer", minimum: 20 },
+  const tools = methods.map((m) => {
+    const toolName = name(`rpc_${m.method}`);
+    const readOnly = isReader(m.method);
+    return {
+      lazy: true,
+      name: toolName,
+      description: `[${recipe.name}] JSON-RPC ${m.version} method "${m.method}" at ${m.url} — observed ${m.observed}×. Params example: ${m.paramsExample}. Result: ${m.resultShape}.`.slice(0, 1200),
+      inputSchema: {
+        type: "object",
+        properties: {
+          params: m.paramsKind === "array" ? { type: "array", items: {}, description: "Positional parameters." } : { type: "object", additionalProperties: true, ...(m.paramsKind === "object" ? { properties: m.paramsSchema.properties ?? {} } : {}), description: "Named parameters." },
+          ...outputProperties,
+        },
       },
-    },
-    // Method names do not say whether they write: only obvious readers are read-only, anything else may change data.
-    annotations: (() => {
-      const readOnly = /^(get|list|find|search|read|query|fetch|describe|count|eth_(get|call|block|chain|gas|estimate)|net_|web3_)/i.test(m.method.replace(/^[\w]+\./, ""));
-      return { title: `${recipe.name} ${m.method}`, readOnlyHint: readOnly, destructiveHint: !readOnly, openWorldHint: true };
-    })(),
-    /** @param {Record<string, any>} args */
-    run: async (args) => {
-      const payload = { ...(m.version === "2.0" ? { jsonrpc: "2.0" } : {}), id: nextId++, method: m.method, ...(args.params !== undefined || m.paramsKind !== "none" ? { params: args.params ?? (m.paramsKind === "array" ? [] : {}) } : {}) };
-      const result = await runtime.send(recipe, { method: "POST", url: m.url, body: payload, bodyKind: "json" });
-      return format(result, args);
-    },
-  }));
+      // Anything that is not obviously a reader may change data.
+      annotations: { title: `${recipe.name} ${m.method}`, readOnlyHint: readOnly, destructiveHint: !readOnly, openWorldHint: true },
+      /** @param {Record<string, any>} args */
+      run: async (args) => {
+        const payload = { ...(m.version === "2.0" ? { jsonrpc: "2.0" } : {}), id: nextId++, method: m.method, ...(args.params !== undefined || m.paramsKind !== "none" ? { params: args.params ?? (m.paramsKind === "array" ? [] : {}) } : {}) };
+        return exec({ method: "POST", url: m.url, body: payload, bodyKind: "json", intent: readOnly ? "read" : "write" }, args, toolName);
+      },
+    };
+  });
   if (methods.length) {
     const urls = [...new Set(methods.map((m) => m.url))];
+    const toolName = name("rpc");
     tools.push({
-      name: name("rpc"),
+      name: toolName,
       description: `[${recipe.name}] Call any JSON-RPC method on ${urls.join(", ")}.`,
       inputSchema: {
         type: "object",
@@ -127,8 +131,7 @@ export function buildRpcTools(recipe, runtime, name, format) {
           method: { type: "string" },
           params: { description: "Array (positional) or object (named) parameters." },
           endpoint: { type: "string", enum: urls, description: `Defaults to ${urls[0]}.` },
-          pick: { type: "string" },
-          max_chars: { type: "integer", minimum: 20 },
+          ...outputProperties,
         },
         required: ["method"],
       },
@@ -138,7 +141,7 @@ export function buildRpcTools(recipe, runtime, name, format) {
         const url = args.endpoint ?? urls[0];
         const version = methods.find((m) => m.url === url)?.version ?? "2.0";
         const payload = { ...(version === "2.0" ? { jsonrpc: "2.0" } : {}), id: nextId++, method: String(args.method), ...(args.params !== undefined ? { params: args.params } : {}) };
-        return format(await runtime.send(recipe, { method: "POST", url, body: payload, bodyKind: "json" }), args);
+        return exec({ method: "POST", url, body: payload, bodyKind: "json", intent: isReader(String(args.method)) ? "read" : "write" }, args, toolName);
       },
     });
   }

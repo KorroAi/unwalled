@@ -145,40 +145,43 @@ export function soapEnvelope(op, version, params) {
   return `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="${envelopeNs}"><soap:Body><${op.element} xmlns="${escapeXml(op.namespace)}">${toXml(params)}</${op.element}></soap:Body></soap:Envelope>`;
 }
 
+/** Operation names do not say whether they write: only obvious readers are read-only. @param {string} name */
+const isReader = (name) => /^(get|list|find|search|read|query|check|validate|lookup|calculate|convert)/i.test(name);
+
 /**
  * @param {any} recipe kind "soap"
- * @param {{ send: (recipe: any, request: any) => Promise<any> }} runtime
  * @param {(suffix: string) => string} name
- * @param {(result: any, args: Record<string, any>) => { text: string, isError: boolean }} format
+ * @param {(request: any, args: Record<string, any>, toolName: string, transform?: (result: any) => any) => Promise<{ text: string, isError: boolean }>} exec
+ *   sends a request through the recipe's pipeline (credentials, safety policy, formatting) and returns the tool result
+ * @param {Record<string, any>} outputProperties shared output options of generated tools (pick, max_chars...)
  */
-export function buildSoapTools(recipe, runtime, name, format) {
+export function buildSoapTools(recipe, name, exec, outputProperties) {
   /** @param {SoapOperation} op @param {Record<string, unknown>} params */
-  const call = (op, params) => {
+  const request = (op, params) => {
     const headers = recipe.version === "1.2"
       ? { "content-type": `application/soap+xml; charset=utf-8${op.soapAction ? `; action="${op.soapAction}"` : ""}`, accept: "application/soap+xml, text/xml" }
       : { "content-type": "text/xml; charset=utf-8", soapaction: `"${op.soapAction}"`, accept: "text/xml" };
-    return runtime.send(recipe, { method: "POST", url: recipe.endpoint, headers, body: soapEnvelope(op, recipe.version, params), bodyKind: "text" });
+    return { method: "POST", url: recipe.endpoint, headers, body: soapEnvelope(op, recipe.version, params), bodyKind: "text", intent: isReader(op.name) ? "read" : "write" };
   };
-  return recipe.operations.map((/** @type {SoapOperation} */ op) => ({
-    lazy: true,
-    name: name(op.name),
-    description: `[${recipe.name}] SOAP ${recipe.version} operation ${op.name} at ${recipe.endpoint}.${op.documentation ? ` ${op.documentation}` : ""} Parameters are sent as XML elements; the XML response is returned as JSON.`.slice(0, 1200),
-    inputSchema: {
-      type: "object",
-      properties: {
-        params: { ...op.paramsSchema, additionalProperties: true, description: "Request elements (nested objects and arrays allowed)." },
-        pick: { type: "string", description: 'Optional: part of the JSON-converted response, e.g. "Envelope.Body.AddResponse.AddResult".' },
-        max_chars: { type: "integer", minimum: 20 },
+  return recipe.operations.map((/** @type {SoapOperation} */ op) => {
+    const toolName = name(op.name);
+    return {
+      lazy: true,
+      name: toolName,
+      description: `[${recipe.name}] SOAP ${recipe.version} operation ${op.name} at ${recipe.endpoint}.${op.documentation ? ` ${op.documentation}` : ""} Parameters are sent as XML elements; the XML response is returned as JSON.`.slice(0, 1200),
+      inputSchema: {
+        type: "object",
+        properties: {
+          params: { ...op.paramsSchema, additionalProperties: true, description: "Request elements (nested objects and arrays allowed)." },
+          ...outputProperties,
+        },
       },
-    },
-    // Operation names do not say whether they write: anything not obviously a reader may change data.
-    annotations: (() => {
-      const readOnly = /^(get|list|find|search|read|query|check|validate|lookup|calculate|convert)/i.test(op.name);
-      return { title: `${recipe.name} ${op.name}`, readOnlyHint: readOnly, destructiveHint: !readOnly, openWorldHint: true };
-    })(),
-    /** @param {Record<string, any>} args */
-    run: async (args) => format(unwrapEnvelope(await call(op, args.params ?? {})), args),
-  }));
+      // Anything that is not obviously a reader may change data.
+      annotations: { title: `${recipe.name} ${op.name}`, readOnlyHint: isReader(op.name), destructiveHint: !isReader(op.name), openWorldHint: true },
+      /** @param {Record<string, any>} args */
+      run: async (args) => exec(request(op, args.params ?? {}), args, toolName, unwrapEnvelope),
+    };
+  });
 }
 
 /**

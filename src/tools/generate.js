@@ -301,12 +301,16 @@ function openApiTools(recipe, runtime, name) {
  */
 export function buildTools(recipe, runtime) {
   const name = toolNamer(recipe.name);
-  const format = (result, args) => formatResponse(result, { pick: args.pick, maxChars: args.max_chars ?? runtime.maxOutputChars });
+  /** Sends through the recipe's pipeline; `transform` adapts the raw response first (e.g. SOAP envelopes). */
+  const exec = async (request, args, _toolName, transform) => {
+    const result = await runtime.send(recipe, request);
+    return formatResponse(transform ? transform(result) : result, { pick: args.pick, maxChars: args.max_chars ?? runtime.maxOutputChars });
+  };
   const tools =
     recipe.kind === "openapi" ? openApiTools(recipe, runtime, name)
-    : recipe.kind === "soap" ? buildSoapTools(recipe, runtime, name, format)
+    : recipe.kind === "soap" ? buildSoapTools(recipe, name, exec, OUTPUT_PROPERTIES)
     : [...graphqlTools(recipe, runtime, name), ...restTools(recipe, runtime, name)];
-  tools.push(...buildRpcTools(recipe, runtime, name, format));
+  tools.push(...buildRpcTools(recipe, name, exec, OUTPUT_PROPERTIES));
   tools.push(...buildStreamTools(recipe, runtime, name));
   tools.push({
     name: name("request"),
