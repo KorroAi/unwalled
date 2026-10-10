@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-10-11
+
+- **Renamed to unwalled.** The former names keep working: `UNIVERSAL_MCP_*` variables are still read, an existing `~/.universal-mcp` data directory is still used, saved browser cookies are still found, and `universal-mcp` remains as a command alias.
+- **Organization policy** (`UNWALLED_ORG_POLICY`): rules set by an administrator for every recipe that the agent cannot loosen (read-only, allowed hosts, minimum confirmation level, disabled management tools, mandatory audit log). Allowed hosts are checked before discovery, sign-in, remote imports, streams and interface pages are contacted. A missing or invalid policy stops the server; `unwalled policy` checks and shows it.
+- **Shared team catalogue** (`UNWALLED_TEAM_RECIPES`): a read-only folder of recipes shared by a team; personal copies take precedence, deleting one brings the team version back, and new recipes are picked up by `list_recipes` without a restart.
+- **Fix: stream tools now go through the safety policy.** WebSocket, Server-Sent Events and MQTT tools were not checked against a recipe's policy: a read-only recipe could still publish MQTT messages or send WebSocket frames, and allowed hosts were not enforced for streams. Sending or publishing now counts as a write; listening stays a read; stream tools accept `confirm`.
+- Example internal app (`examples/intranet`), benchmark against a scripted browser (`bench/run.js`, results in `bench/RESULTS.md`), recorded demo (`docs/demo.gif`, `docs/demo/make-gif.js`).
+- Documentation: a short README; the full reference moved to `docs/REFERENCE.md`; `docs/FOR-TEAMS.md` for companies.
+
+### Also since 0.2.0
 
 - MySQL / MariaDB data source: built-in client (TLS, caching_sha2_password with TLS or RSA, mysql_native_password), read-only session and transaction, statement timeout, `?` parameters escaped client-side.
 - Database clients refuse anything but reading statements before sending them (MySQL DDL would otherwise commit implicitly, outside the read-only transaction).

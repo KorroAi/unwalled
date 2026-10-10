@@ -342,12 +342,22 @@ export function orgAddressBlock(org, args) {
   return null;
 }
 
-/** @param {import("./config.js").Config} config */
-export async function startServer(config) {
-  const org = config.orgPolicy;
+/**
+ * Management tools the organization policy disables. A name that is not a management tool is an error (a typo would
+ * otherwise leave the tool enabled without anyone noticing).
+ * @param {import("./safety.js").OrgPolicy | null} org @returns {Set<string>}
+ */
+export function disabledTools(org) {
   const disabled = new Set(org?.disabledTools ?? []);
   const unknown = [...disabled].filter((tool) => !MANAGEMENT_TOOLS.some((t) => t.name === tool));
   if (unknown.length) throw new Error(`The organization policy disables unknown tool(s) ${unknown.join(", ")}. Valid names: ${MANAGEMENT_TOOLS.map((t) => t.name).join(", ")}.`);
+  return disabled;
+}
+
+/** @param {import("./config.js").Config} config */
+export async function startServer(config) {
+  const org = config.orgPolicy;
+  const disabled = disabledTools(org);
   const managementTools = MANAGEMENT_TOOLS.filter((tool) => !disabled.has(tool.name));
   const engine = new Engine(config);
   /** Tools listed even in search mode (pinned with search_tools). @type {Set<string>} */

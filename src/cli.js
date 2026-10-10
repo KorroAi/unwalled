@@ -3,7 +3,7 @@ import { parseArgs } from "node:util";
 import { loadConfig } from "./config.js";
 import { describeRecipe, Engine } from "./core.js";
 import { describeOrgPolicy } from "./safety.js";
-import { startServer } from "./server.js";
+import { disabledTools, startServer } from "./server.js";
 import { VERSION } from "./version.js";
 
 const HELP = `unwalled ${VERSION} — open any website, app, API, file or database to AI agents, as MCP tools.
@@ -146,6 +146,7 @@ export async function main(argv) {
       }
       case "policy": {
         const org = config.orgPolicy;
+        disabledTools(org);
         console.log(org ? `${describeOrgPolicy(org) || "The organization policy sets no rule."}\n\n${JSON.stringify(org, null, 2)}` : "No organization policy (set UNWALLED_ORG_POLICY to the path of a JSON file).");
         break;
       }

@@ -9,7 +9,7 @@
 - `audit.log` — one line per request: time, recipe, tool, method, redacted URL, status. No bodies, no credentials.
 
 Before a recipe is written, credentials are detected by name and by value and moved to `secrets/`, and every stored secret value
-is scrubbed from the recipe. Detection is heuristic (see the README's limitations): review a recipe before sharing it.
+is scrubbed from the recipe. Detection is heuristic (see the limitations in docs/REFERENCE.md): review a recipe before sharing it.
 
 ## Using a recipe someone else wrote
 
@@ -26,6 +26,11 @@ A recipe describes endpoints, so it decides where its tools send requests. Treat
 - DELETE calls and risky interface clicks need `confirm=true` (`UNWALLED_CONFIRM=writes` extends this to every write).
 - `dry_run` shows any request with credentials hidden. The default rate limit is 5 requests per second per host.
 - The audit log never contains request bodies or credentials.
+- Stream tools (WebSocket, Server-Sent Events, MQTT) follow the same policy: sending frames or publishing is a write.
+- An administrator can set an organization policy (`UNWALLED_ORG_POLICY`) that applies to every recipe and that the agent cannot
+  loosen: read-only, allowed hosts, confirmation level, disabled tools, mandatory audit. A missing or invalid policy file stops the
+  server. Protect the file with the operating system's permissions. See [docs/FOR-TEAMS.md](docs/FOR-TEAMS.md).
+- Recipes of a shared team catalogue (`UNWALLED_TEAM_RECIPES`) are treated like any shared recipe; protect who can write to that folder.
 
 Credentials are only ever sent to the host they were captured for (or set for with `set_credentials`).
 The data directory defaults to `~/.unwalled` (`UNWALLED_HOME`). Treat `secrets/` and `profiles/` like a password store:
