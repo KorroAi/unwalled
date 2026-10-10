@@ -4,6 +4,7 @@ node_modules/
 .DS_Store
 # Local data, if UNWALLED_HOME points inside the repository
 .unwalled/
+.universal-mcp/
 recipes/
 secrets/
 profiles/
