@@ -44,6 +44,7 @@ const DESCRIPTION_MAX = 1200;
  * @property {number} [schemaBudget] maximum characters of a tool's description + input schema
  * @property {number} [foldThreshold] above this many operations, a recipe switches to compact mode (0 = never)
  * @property {import("../realtime/tools.js").StreamRuntime["streamAuth"]} [streamAuth]
+ * @property {(recipe: any) => Promise<string>} [dataPath] local path of a data recipe's data (remote data is cached)
  */
 
 /** @param {string} text */
@@ -616,7 +617,7 @@ function applyAnnotations(tools, recipe) {
 export function buildTools(recipe, runtime) {
   const name = toolNamer(recipe.name);
   // Local data recipes only have their SQL tools.
-  if (recipe.kind === "data") return buildDataTools(recipe, name, runtime.maxOutputChars).map((tool) => ({ ...tool, inputSchema: safeSchema(tool.inputSchema) }));
+  if (recipe.kind === "data") return buildDataTools(recipe, name, runtime.maxOutputChars, runtime.dataPath).map((tool) => ({ ...tool, inputSchema: safeSchema(tool.inputSchema) }));
   /** Sends through the recipe's pipeline (credentials, safety policy, formatting); `transform` adapts the raw response first. */
   const exec = (request, args, toolName, transform) => execute(runtime, recipe, request, args, toolName, transform);
   /** @type {GeneratedTool[]} */

@@ -53,9 +53,10 @@ const plain = (row) => Object.fromEntries(Object.entries(row).map(([k, v]) => [k
  * @param {any} recipe kind "data"
  * @param {(suffix: string) => string} name
  * @param {number} maxOutputChars
+ * @param {(recipe: any) => Promise<string>} [dataPath] where the data is (remote data is downloaded into a cache)
  */
-export function buildDataTools(recipe, name, maxOutputChars) {
-  const path = recipe.source.path;
+export function buildDataTools(recipe, name, maxOutputChars, dataPath = async (r) => r.source.path) {
+  const path = recipe.source.remote ? `${recipe.source.origin} (remote, refreshed every ${recipe.source.refreshSeconds ?? 300}s)` : recipe.source.path;
   const summary = (recipe.tables ?? []).map((t) => `${t.name}(${t.columns.map((c) => c.name).slice(0, 12).join(", ")}${t.columns.length > 12 ? ", …" : ""}) ${t.rows} rows`).join("; ");
   return [
     {
@@ -65,7 +66,7 @@ export function buildDataTools(recipe, name, maxOutputChars) {
       annotations: { title: `${recipe.name} tables`, readOnlyHint: true, openWorldHint: false },
       /** @param {Record<string, any>} args */
       run: async (args) => {
-        const { db, tables } = await connection(path);
+        const { db, tables } = await connection(await dataPath(recipe));
         const wanted = args.table ? tables.filter((t) => t === args.table) : tables;
         if (args.table && !wanted.length) return { text: `Unknown table "${args.table}". Tables: ${tables.join(", ")}`, isError: true };
         return { text: JSON.stringify(wanted.map((t) => describeTable(db, t)), null, 1).slice(0, maxOutputChars), isError: false };
@@ -97,7 +98,7 @@ export function buildDataTools(recipe, name, maxOutputChars) {
         } catch (error) {
           return { text: error.message, isError: true };
         }
-        const { db } = await connection(path);
+        const { db } = await connection(await dataPath(recipe));
         const maxRows = Math.min(Math.max(Number(args.max_rows ?? 200), 1), 10_000);
         let rows;
         try {

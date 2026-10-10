@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Local data sources: CSV, TSV, JSON records, JSON Lines, SQLite databases and folders of such files, queried with read-only SQL through `__tables` and `__sql` (node:sqlite, no extra dependency); data is reloaded when files change.
+- Excel workbooks (`.xlsx`) and iCalendar files (`.ics`) as data; remote data addresses (CSV, JSON, Excel, iCalendar, SQLite) cached and refreshed, with the address kept as a secret.
 - Repair re-imports recipes that came from a file or folder; exported SOAP and data recipes can be imported again.
 - In-page requests are opt-in: requests leave from Node unless a recipe sets `policy.transport` to `auto` or `page`; a bot challenge returns a hint instead of an automatic in-page retry.
 - Read-only tools: `paginate` (next-page tokens and URLs, page numbers, offsets).

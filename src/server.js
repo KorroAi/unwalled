@@ -69,7 +69,8 @@ export const MANAGEMENT_TOOLS = [
       type: "object",
       properties: {
         name: NAME,
-        path: { type: "string", description: "Absolute path to the file." },
+        path: { type: "string", description: "Absolute path to the file or folder, or the http(s) address of a data file (CSV, JSON, Excel, iCalendar...)." },
+        refresh_seconds: { type: "integer", minimum: 10, description: "Remote data: refresh the downloaded copy after this many seconds (default 300)." },
         base_url: { type: "string", description: "Override the API base URL (e.g. when a collection uses an undefined {{baseUrl}})." },
         variables: { type: "object", additionalProperties: { type: "string" }, description: "Values for {{variables}} of Postman / Insomnia / Bruno collections and .http files." },
         variables_file: { type: "string", description: "Absolute path to a variables file: Postman environment, Insomnia export, .env or a JSON object." },
@@ -348,7 +349,7 @@ export async function startServer(config) {
           return text(`${describeRecipe(recipe, toolNames(recipe.name))}${listingNote()}`);
         }
         case "import_file": {
-          const recipe = await engine.importFile({ name: args.name, path: args.path, baseUrl: args.base_url, variables: args.variables, variablesFile: args.variables_file, environment: args.environment, include: args.include, hosts: args.hosts, merge: args.merge });
+          const recipe = await engine.importFile({ name: args.name, path: args.path, baseUrl: args.base_url, variables: args.variables, variablesFile: args.variables_file, refreshSeconds: args.refresh_seconds, environment: args.environment, include: args.include, hosts: args.hosts, merge: args.merge });
           notifyToolsChanged();
           return text(describeRecipe(recipe, engine.toolsOf(recipe.name).map((t) => t.name)));
         }

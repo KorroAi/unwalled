@@ -1,5 +1,5 @@
 // Engine shared by the MCP server and the CLI: discovery, recipe management, request execution.
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute } from "node:path";
 import { closeProfile, launchProfile, saveCookies } from "./browser.js";
 import { captureTraffic, validateActions } from "./discovery/capture.js";
@@ -9,6 +9,8 @@ import { redactUrl, scrubRecipe, secretValues } from "./discovery/secrets.js";
 import { findOpenApi, normalizeOpenApi } from "./discovery/openapi.js";
 import { exportRecipe, importCurl, importFile, saveSoapRecipe } from "./imports.js";
 import { closeDataConnections } from "./data/tools.js";
+import { cacheFile, fetchToCache } from "./data/remote.js";
+import { REMOTE_DATA_KEY } from "./imports.js";
 import { assertHttpUrl, graphqlKey, MAX_FILE_BYTES, mergeByKey, mergeSecrets, restKey, rpcKey, streamKey, withJsonRpc } from "./recipe-merge.js";
 import { inferStreams, SECRET_FRAME_HOST, streamsFromHar } from "./realtime/infer.js";
 import { describeStreams } from "./realtime/tools.js";
@@ -70,6 +72,7 @@ export class Engine {
       findTool: (name) => this.tools.get(name),
       secret: (recipe, host, key) => this.store.loadSecrets(recipe.name)[host]?.[key],
       streamAuth: (recipe, url) => this.streamAuth(recipe, url),
+      dataPath: (recipe) => this.dataPath(recipe),
       maxOutputChars: this.config.maxOutputChars,
       schemaBudget: this.config.schemaBudget,
       foldThreshold: this.config.foldThreshold,
@@ -569,10 +572,25 @@ export class Engine {
   }
 
   /** @param {string} name @param {{ deleteProfile?: boolean }} [options] */
+  /**
+   * Local file or folder holding a data recipe's data: the source path, or (remote data) a cache refreshed after source.refreshSeconds.
+   * @param {any} recipe @returns {Promise<string>}
+   */
+  async dataPath(recipe) {
+    if (!recipe.source?.remote) return recipe.source.path;
+    const url = this.store.loadSecrets(recipe.name)[REMOTE_DATA_KEY]?.url;
+    if (!url) throw new Error(`The address of "${recipe.name}" is not stored on this machine: import it again with import_file.`);
+    const file = cacheFile(this.config.home, recipe.name, recipe.source.extension);
+    await fetchToCache(url, file, { maxAgeMs: (recipe.source.refreshSeconds ?? 300) * 1000, timeoutMs: this.config.requestTimeoutMs });
+    return file;
+  }
+
   async forget(name, { deleteProfile = false } = {}) {
     this.recipe(name);
     return this.withLock(name, async () => {
       await this.closeBrowser(name);
+      const extension = this.recipes.get(name)?.source?.extension;
+      if (extension) rmSync(cacheFile(this.config.home, name, extension), { force: true });
       this.store.deleteRecipe(name, { profile: deleteProfile });
       this.recipes.delete(name);
       this.rebuildTools();
@@ -847,7 +865,7 @@ async function refreshCsrfFromCookies(context, outgoing) {
 /** One-paragraph summary of a recipe, for tool results and the CLI. @param {any} recipe @param {string[]} toolNames */
 export function describeRecipe(recipe, toolNames) {
   const lines = [`Recipe "${recipe.name}" (${recipe.kind}) — base ${recipe.baseUrl} — updated ${recipe.updatedAt}`];
-  if (recipe.kind === "data") lines.push(`Local data: ${recipe.source.path} — ${(recipe.tables ?? []).map((t) => `${t.name} (${t.rows} rows: ${t.columns.map((c) => c.name).slice(0, 10).join(", ")})`).join("; ")}`);
+  if (recipe.kind === "data") lines.push(`${recipe.source.remote ? `Remote data: ${recipe.source.origin}/… (refreshed every ${recipe.source.refreshSeconds}s)` : `Local data: ${recipe.source.path}`} — ${(recipe.tables ?? []).map((t) => `${t.name} (${t.rows} rows: ${t.columns.map((c) => c.name).slice(0, 10).join(", ")})`).join("; ")}`);
   else if (recipe.kind === "soap") lines.push(`SOAP ${recipe.version}: ${recipe.endpoint} — ${recipe.title} — ${recipe.operations.length} operation(s): ${recipe.operations.map((o) => o.name).join(", ")}`);
   else if (recipe.kind === "openapi") lines.push(`${recipe.source.format ? `${recipe.source.format} file` : "OpenAPI"}: ${recipe.source.specUrl ?? recipe.source.file} — ${recipe.title ?? "untitled"} — ${recipe.routes.length} routes, ${recipe.operations.length} with dedicated tools.`);
   else {

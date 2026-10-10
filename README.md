@@ -88,7 +88,9 @@ The result is saved as a **recipe**. Discovery runs once (seconds); after that t
 - Shared recipes cannot act on your behalf: stored defaults and macro steps cannot confirm calls, write or upload local files.
 
 **More sources and protocols**
-- Local data: CSV, TSV, JSON records, JSON Lines, SQLite databases or a folder of such files become tables queried with read-only SQL (`<recipe>__tables`, `<recipe>__sql`), joins across files included.
+- Local and remote data: CSV, TSV, Excel (`.xlsx`, one table per sheet), iCalendar (`.ics`: events, to-dos), JSON records, JSON Lines, SQLite databases or a folder of such files
+  become tables queried with read-only SQL (`<recipe>__tables`, `<recipe>__sql`), joins across files included. An http(s) address works too (published spreadsheet, private
+  calendar feed, open data): it is cached and refreshed (`refresh_seconds`), and the address itself is stored with the secrets, not in the recipe.
 - Google Discovery documents (YouTube Data and Analytics, Drive, Gmail, Sheets, Calendar and every other Google API), OData services (`$metadata`: SAP, Dynamics, SharePoint...), SOAP web services (WSDL), JSON-RPC (one tool per method: Ethereum and Bitcoin nodes, Kodi, Transmission, Odoo...).
 - Local files with `import_file`: OpenAPI / Swagger, Postman collections (and environments), Insomnia exports, Bruno collection folders, AsyncAPI 2/3, `.http` / `.rest` files, `.env` variables, shared recipes; `import_curl` for "Copy as cURL" commands; `export_recipe` to share a recipe without its secrets.
 - Realtime: WebSocket and Server-Sent Events captured with their protocol (subscribe and auth frames, in order) become tools that connect, replay the handshake and return the messages received for a chosen duration; MQTT brokers (TCP, TLS, WebSocket; wildcards, publishing).
@@ -333,7 +335,8 @@ import_file(name="team", path="/abs/path/Team.postman_collection.json", variable
 import_file(name="ticker", path="/abs/path/asyncapi.yaml")                # WebSocket channels -> stream tools
 discover(name="erp", url="https://erp.example.com/odata/v4/sales/")      # OData: finds $metadata
 discover(name="calc", url="http://www.dneonline.com/calculator.asmx")    # SOAP: finds ?wsdl
-import_file(name="sales", path="/abs/path/exports")                     # folder of CSV / JSON / SQLite files -> SQL tables
+import_file(name="sales", path="/abs/path/exports")                     # folder of CSV / Excel / JSON / SQLite files -> SQL tables
+import_file(name="agenda", path="https://calendar.example.com/private-.../basic.ics", refresh_seconds=600)
 export_recipe(name="shop", path="/abs/path/shop-recipe.json")   # share it; the receiver runs import_file
 ```
 
