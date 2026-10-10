@@ -1,5 +1,6 @@
 // Readers for data files that are not plain text tables: Excel workbooks (.xlsx) and iCalendar files (.ics).
 import { inflateRawSync } from "node:zlib";
+import { xmlToJson } from "../tools/formats.js";
 
 // ---------------------------------------------------------------- ZIP (enough for .xlsx)
 
@@ -112,6 +113,66 @@ export function readXlsx(file) {
       .map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] ?? null])));
   }
   return result;
+}
+
+// ---------------------------------------------------------------- RSS / Atom feeds
+
+/** Text of an XML node converted by xmlToJson (string, {#text}, or CDATA already merged). @param {any} node */
+const nodeText = (node) => (node == null ? null : typeof node === "string" ? node : typeof node === "object" ? (node["#text"] ?? null) : String(node));
+/** @param {any} value @returns {any[]} */
+const many = (value) => (value === undefined ? [] : Array.isArray(value) ? value : [value]);
+/** Plain text of an HTML snippet (feed descriptions are often HTML). @param {string | null} html */
+const stripHtml = (html) => (html ? html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim() : null);
+/** RFC 822 dates of RSS ("Sat, 10 Oct 2026 18:16:19 +0000") to ISO. @param {string | null} value */
+const isoDate = (value) => {
+  if (!value) return null;
+  const time = Date.parse(value);
+  return Number.isNaN(time) ? value : new Date(time).toISOString();
+};
+
+/**
+ * Items of an RSS 2.0 / RSS 1.0 / Atom feed (YouTube channel feeds included: video id, views, rating).
+ * @param {Record<string, any> | string} xml feed text, or a document converted by xmlToJson
+ * @returns {Record<string, unknown>[] | null} null when the document is not a feed
+ */
+export function readFeed(xml) {
+  if (typeof xml === "string") {
+    const parsed = xmlToJson(xml);
+    if (!parsed) return null;
+    xml = parsed;
+  }
+  const strip = (/** @type {any} */ node) =>
+    Array.isArray(node) ? node.map(strip) : node && typeof node === "object" ? Object.fromEntries(Object.entries(node).map(([k, v]) => [k.startsWith("@") ? k : k.replace(/^[\w.-]+:/, ""), strip(v)])) : node;
+  if (xml.rss?.channel || xml["rdf:RDF"]) {
+    const channel = xml.rss?.channel ?? xml["rdf:RDF"];
+    const items = many(channel.item ?? xml["rdf:RDF"]?.item);
+    return items.map((raw) => {
+      const item = strip(raw);
+      return {
+        title: nodeText(item.title), link: nodeText(item.link), published: isoDate(nodeText(item.pubDate) ?? nodeText(item.date)),
+        author: nodeText(item.creator) ?? nodeText(item.author), summary: stripHtml(nodeText(item.description)),
+        id: nodeText(item.guid) ?? nodeText(item.link), categories: many(item.category).map(nodeText).filter(Boolean).join(", ") || null,
+        comments: nodeText(item.comments),
+      };
+    });
+  }
+  if (xml.feed) {
+    return many(xml.feed.entry).map((raw) => {
+      const entry = strip(raw);
+      const links = many(entry.link);
+      const link = links.find((l) => !l?.["@rel"] || l["@rel"] === "alternate")?.["@href"] ?? links[0]?.["@href"] ?? null;
+      const group = entry.group ?? {};
+      const stats = group.community?.statistics;
+      const rating = group.community?.starRating;
+      return {
+        title: nodeText(entry.title), link, published: isoDate(nodeText(entry.published)), updated: isoDate(nodeText(entry.updated)),
+        author: nodeText(many(entry.author)[0]?.name), summary: stripHtml(nodeText(entry.summary) ?? nodeText(entry.content) ?? nodeText(group.description)),
+        id: nodeText(entry.id), categories: many(entry.category).map((c) => c?.["@term"]).filter(Boolean).join(", ") || null,
+        ...(entry.videoId ? { video_id: nodeText(entry.videoId), views: stats?.["@views"] ? Number(stats["@views"]) : null, rating: rating?.["@average"] ? Number(rating["@average"]) : null, ratings: rating?.["@count"] ? Number(rating["@count"]) : null } : {}),
+      };
+    });
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- iCalendar

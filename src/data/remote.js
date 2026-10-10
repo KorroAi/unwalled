@@ -14,11 +14,13 @@ const TYPES = [
   [/ndjson|jsonl|json-seq/i, ".jsonl"],
   [/json/i, ".json"],
   [/sqlite/i, ".sqlite"],
+  // Last: Excel content types contain "xml" too.
+  [/rss|atom|xml/i, ".xml"],
 ];
 
 /** File extension of a remote data address: from the URL path, else from the content type. @param {string} url @param {string} [contentType] */
 export function remoteExtension(url, contentType = "") {
-  const fromPath = /\.(csv|tsv|json|jsonl|ndjson|xlsx|ics|sqlite|db)$/i.exec(new URL(url).pathname)?.[0].toLowerCase();
+  const fromPath = /\.(csv|tsv|json|jsonl|ndjson|xlsx|ics|sqlite|db|rss|atom|xml)$/i.exec(new URL(url).pathname)?.[0].toLowerCase();
   if (fromPath) return fromPath;
   const format = new URL(url).searchParams.get("format") ?? new URL(url).searchParams.get("output");
   if (format && /^(csv|tsv|xlsx|json|ics)$/i.test(format)) return `.${format.toLowerCase()}`;

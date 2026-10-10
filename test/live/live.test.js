@@ -110,4 +110,11 @@ describe("live websites", { skip: !enabled && "set UNIVERSAL_MCP_LIVE=1 to run" 
     const repo = await call("gh__call", { operation: "repos_get", arguments: { path: { owner: "nodejs", repo: "node" }, pick: "full_name" } });
     assert.match(repo.text, /HTTP 200[\s\S]*"nodejs\/node"/);
   });
+
+  it("a YouTube channel feed as SQL data (no key)", TIMEOUT, async () => {
+    const imported = await call("import_file", { name: "ytfeed", path: "https://www.youtube.com/feeds/videos.xml?channel_id=UC_x5XG1OV2P6uZZ5FSM9Ttw" });
+    assert.equal(imported.isError, false, imported.text);
+    const top = await call("ytfeed__sql", { sql: "SELECT title, views FROM ytfeed ORDER BY views DESC LIMIT 1" });
+    assert.match(top.text, /"views":\d+/);
+  });
 });

@@ -29,7 +29,8 @@ function isDataSource(path) {
       return false;
     }
   }
-  return DATA_EXTENSIONS.test(path) && !/\.json$/i.test(path);
+  // .json and .xml files may be API descriptions (OpenAPI, Postman, WSDL, OData...): the caller tries those first.
+  return DATA_EXTENSIONS.test(path) && !/\.(json|xml)$/i.test(path);
 }
 
 /** Secret entry holding the full address of remote data (it may contain a private token, e.g. a calendar's secret address). */
@@ -123,8 +124,8 @@ export async function importFile(engine, { name, path, include, baseUrl, variabl
     try {
       described = describeFile(readFileSync(path, "utf8"), { variables, serviceRoot: baseUrl });
     } catch (error) {
-      // A JSON file that is no API description is data (records to query with SQL).
-      if (/\.json$/i.test(path) && /Unrecognised file/.test(error.message)) return saveDataRecipe(engine, name, path);
+      // A JSON or XML file that is no API description is data (records or a feed to query with SQL).
+      if (/\.(json|xml)$/i.test(path) && /Unrecognised file|Cannot parse|does not contain an object/.test(error.message)) return saveDataRecipe(engine, name, path);
       throw error;
     }
   }

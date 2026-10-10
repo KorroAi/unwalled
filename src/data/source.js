@@ -3,9 +3,9 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { parseCsv } from "../tools/formats.js";
-import { readIcs, readXlsx } from "./formats.js";
+import { readFeed, readIcs, readXlsx } from "./formats.js";
 
-export const DATA_EXTENSIONS = /\.(csv|tsv|json|jsonl|ndjson|sqlite|sqlite3|db|xlsx|ics)$/i;
+export const DATA_EXTENSIONS = /\.(csv|tsv|json|jsonl|ndjson|sqlite|sqlite3|db|xlsx|ics|rss|atom|xml)$/i;
 const MAX_ROWS = 1_000_000;
 const MAX_FILE_BYTES = 500 * 1024 * 1024;
 
@@ -67,6 +67,11 @@ export function readRecords(file) {
   }
   const text = readFileSync(file, "utf8").replace(/^﻿/, "");
   if (ext === ".ics") return readIcs(text);
+  if (ext === ".rss" || ext === ".atom" || ext === ".xml") {
+    const items = readFeed(text);
+    if (!items) throw new Error(`${file} is XML but not an RSS or Atom feed.`);
+    return { [name]: items };
+  }
   if (ext === ".csv" || ext === ".tsv") return { [name]: parseCsv(text) };
   if (ext === ".jsonl" || ext === ".ndjson") {
     return { [name]: text.split(/\r?\n/).filter((l) => l.trim()).map((line, i) => {
@@ -93,7 +98,8 @@ export function readRecords(file) {
 /** Files of a data source (one file, or the data files of a folder). @param {string} path */
 export function dataFiles(path) {
   if (statSync(path).isDirectory()) {
-    const files = readdirSync(path).filter((f) => DATA_EXTENSIONS.test(f)).sort().map((f) => join(path, f));
+    // In folders, generic .xml files (configuration, sitemaps...) are not taken as data: only .rss / .atom feeds.
+    const files = readdirSync(path).filter((f) => DATA_EXTENSIONS.test(f) && !/\.xml$/i.test(f)).sort().map((f) => join(path, f));
     if (!files.length) throw new Error(`No data file (CSV, TSV, JSON, JSON Lines, SQLite) in ${path}.`);
     return files;
   }
