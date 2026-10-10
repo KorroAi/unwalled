@@ -146,6 +146,10 @@ function makeShop() {
       const id = decodeURIComponent(product[1]);
       return product[2] ? json(res, 200, [{ product: id, stars: 5 }]) : json(res, 200, { id, name: `Product ${id}`, price: 42 });
     }
+    if (path === "/assets/logo.png") {
+      res.writeHead(200, { "content-type": "image/png" });
+      return res.end(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64"));
+    }
     if (path === "/api/search") return json(res, 200, { query: url.searchParams.get("q"), results: [{ id: "blue-lamp" }] });
     if (path === "/api/team") return json(res, 200, [{ name: "Ada" }]);
     if (path === "/api/upload" && req.method === "POST") {

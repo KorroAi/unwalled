@@ -196,10 +196,25 @@ export function htmlToText(html) {
   return title ? `# ${title}\n${text}` : text;
 }
 
+/** Largest image returned inline (bigger ones: save_to). */
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+/** The bytes really are a PNG, JPEG, GIF or WebP image (the content type alone is not trusted). @param {Buffer} body */
+function hasImageSignature(body) {
+  if (body.length < 12) return false;
+  return (
+    body.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ||
+    (body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) ||
+    body.subarray(0, 4).toString("latin1") === "GIF8" ||
+    (body.subarray(0, 4).toString("latin1") === "RIFF" && body.subarray(8, 12).toString("latin1") === "WEBP")
+  );
+}
+
 /**
  * @param {HttpResult} result
  * @param {{ pick?: string, maxChars: number, saveTo?: string, raw?: boolean }} options
- * @returns {{ text: string, isError: boolean, status: number, json?: unknown }} status and the full parsed JSON (before pick) for callers such as pagination
+ * @returns {{ text: string, isError: boolean, status: number, json?: unknown, image?: string, imageType?: string }} status and the full parsed JSON
+ *   (before pick) for callers such as pagination; image: base64 of an image response, shown to the agent as an image
  */
 export function formatResponse(result, { pick: pickExpression, maxChars, saveTo, raw = false }) {
   const isError = result.status >= 400;
@@ -208,6 +223,11 @@ export function formatResponse(result, { pick: pickExpression, maxChars, saveTo,
     if (!isAbsolute(saveTo)) return { text: `${header}\nsave_to must be an absolute path.`, isError: true, status: result.status };
     writeFileSync(saveTo, result.body);
     return { text: `${header}\nSaved ${result.body.length} bytes (${result.contentType || "unknown type"}) to ${saveTo}`, isError: false, status: result.status };
+  }
+  // Images (charts, thumbnails, QR codes, captchas shown to the user...) are handed to the agent as images.
+  const imageType = /^image\/(png|jpeg|gif|webp)\b/i.exec(result.contentType)?.[0].toLowerCase();
+  if (imageType && !isError && result.body.length <= MAX_IMAGE_BYTES && hasImageSignature(result.body)) {
+    return { text: `${header}\n(image: ${imageType}, ${result.body.length} bytes)`, isError: false, status: result.status, image: result.body.toString("base64"), imageType };
   }
   const isText = /json|text|xml|javascript|html|csv|graphql|event-stream/i.test(result.contentType) || result.contentType === "";
   // Protobuf and gRPC-web bodies are decoded without schema into JSON keyed by field number.

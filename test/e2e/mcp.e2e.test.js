@@ -198,6 +198,9 @@ describe("universal-mcp end to end", () => {
     assert.equal(upload.isError, false, upload.text);
     assert.match(upload.text, /"multipart":true,"file":"hello.txt","note":"hi","hasContent":true/);
     const target = join(home, "report.bin");
+    const image = /** @type {any} */ (await client.callTool({ name: "shop__request", arguments: { method: "GET", url: "/assets/logo.png" } }));
+    assert.equal(image.content[1]?.type, "image", "image responses reach the agent as images");
+    assert.equal(image.content[1].mimeType, "image/png");
     const download = await call("shop__request", { method: "GET", url: "/files/report.bin", save_to: target });
     assert.match(download.text, /Saved 10 bytes/);
     assert.equal(statSync(target).size, 10);

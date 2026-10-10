@@ -20,6 +20,8 @@ const DESCRIPTION_MAX = 1200;
  * @property {boolean} isError
  * @property {number} [status] HTTP status
  * @property {unknown} [json] parsed JSON body before pick (pagination)
+ * @property {string} [image] base64 image returned to the agent as an image
+ * @property {string} [imageType] its media type
  * @property {unknown} [data] parsed JSON body, for macros
  * @property {any} [request] request that a dry run would send (credentials included: internal use only, never shown)
  */

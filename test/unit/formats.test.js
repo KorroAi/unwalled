@@ -44,4 +44,14 @@ describe("XML", () => {
     assert.equal(formatResponse(html, { maxChars: 1000 }).text.split("\n")[1], "hi");
     assert.equal(formatResponse(html, { maxChars: 1000, raw: true }).text.split("\n")[1], "<p>hi</p>");
   });
+
+  it("hands small images to the agent as images", () => {
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
+    const result = formatResponse({ status: 200, statusText: "OK", contentType: "image/png", body: png, finalUrl: "https://x.io/chart.png" }, { maxChars: 1000 });
+    assert.equal(result.image, png.toString("base64"));
+    assert.equal(result.imageType, "image/png");
+    assert.match(result.text, /image: image\/png, \d+ bytes/);
+    const svg = formatResponse({ status: 200, statusText: "OK", contentType: "image/svg+xml", body: Buffer.from("<svg/>"), finalUrl: "https://x.io/a.svg" }, { maxChars: 1000 });
+    assert.equal(svg.image, undefined, "SVG stays text");
+  });
 });

@@ -270,6 +270,11 @@ export const MANAGEMENT_TOOLS = [
 ];
 
 const text = (value, isError = false) => ({ content: [{ type: "text", text: value }], isError });
+/** Result of a generated tool, with its image when the response was one. @param {{ text: string, isError: boolean, image?: string, imageType?: string }} result */
+const toolContent = (result) =>
+  result.image
+    ? { content: [{ type: "text", text: result.text }, { type: "image", data: result.image, mimeType: result.imageType ?? "image/png" }], isError: !!result.isError }
+    : text(result.text, result.isError);
 
 /** Keyword search over generated tools. @param {Iterable<import("./tools/generate.js").GeneratedTool>} tools @param {string} query @param {string} [recipe] */
 export function searchTools(tools, query, recipe) {
@@ -442,13 +447,13 @@ export async function startServer(config) {
           const tool = engine.tools.get(args.name);
           if (!tool) return text(`Unknown tool "${args.name}". Use search_tools to find generated tools.`, true);
           const result = await tool.run(args.arguments ?? {});
-          return text(result.text, result.isError);
+          return toolContent(result);
         }
         default: {
           const tool = engine.tools.get(name);
           if (!tool) return text(`Unknown tool "${name}". Call list_recipes to see available recipes.`, true);
           const result = await tool.run(args);
-          return text(result.text, result.isError);
+          return toolContent(result);
         }
       }
     } catch (error) {
