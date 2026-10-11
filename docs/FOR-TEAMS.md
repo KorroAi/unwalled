@@ -20,13 +20,17 @@ node examples/intranet/server.js 8099        # sign in as alice / demo
 
 Then ask your agent:
 
-> Use unwalled to discover http://127.0.0.1:8099/login: sign in as alice with password demo, then open order 1001.
-> After that, tell me the status and total of orders 1042 and 1150, and list the orders waiting for payment.
+> Use unwalled to discover http://127.0.0.1:8099/login: sign in as alice with password demo, then open order 1001,
+> the customers page and customer 512. After that, tell me the status and total of orders 1042 and 1150,
+> list the orders waiting for payment, and tell me how much customer 530 has ordered in total.
 
 The agent signs in through a real browser once, then answers every question with one tool call
-(`acme__get_api_v2_orders_order`, `acme__get_api_v2_orders`...), with the session kept.
-On this app, a tool call answers in about 17 ms with under 100 characters to read, where reading the page in a browser
-takes about 52 ms and 1,000 characters even in the most favourable setup ([benchmark](../bench/RESULTS.md)).
+(`acme__get_api_v2_orders_order`, `acme__get_api_v2_orders`...), with the session kept. Its customer pages are
+server-rendered, like a Django or Rails admin: they become `acme__page_customers` and `acme__page_customers_customer`,
+which return the page's table rows and fields as JSON, and the "add a note" form becomes a tool whose CSRF field is filled for you.
+On this app, a tool call answers in about 20 ms with under 100 characters to read, where reading the page in a browser
+takes about 54 ms and 1,100 characters even in the most favourable setup ([benchmark](../bench/RESULTS.md)). With a real agent,
+a question costs 3 model turns instead of 9 with a browser agent ([agent benchmark](../bench/AGENT.md)).
 
 ## Organization policy: rules agents cannot loosen
 
@@ -85,7 +89,8 @@ UNWALLED_TEAM_RECIPES=/shared/unwalled-recipes           # in each person's MCP 
 ## What is stored and logged
 
 - **Recipes** (shareable): endpoints, schemas, redacted examples. Credentials are detected and moved out before saving.
-- **Secrets** (per person, encrypted at rest with Windows DPAPI or a passphrase): headers, tokens, cookies.
+- **Secrets** (per person, encrypted at rest with Windows DPAPI or a passphrase): headers, tokens, cookies. Saved session
+  cookies and the local state (which holds the sign-in steps used during discovery) are encrypted the same way.
 - **Audit log** (`<home>/audit.log`, JSON Lines, rotated at 5 MB): time, recipe, tool, method, redacted URL, status,
   and blocked calls. No request or response bodies, no credentials.
 
@@ -95,7 +100,9 @@ See [SECURITY.md](../SECURITY.md) for the threat model and how to report a vulne
 
 - Captured internal APIs change when the tool is updated: `unwalled check <recipe> --repair` (or the `check_recipe` tool)
   detects broken tools and rediscovers them.
-- Requests signed by the page's own JavaScript, or tools that only render server-side HTML, have no API to capture:
-  the agent can still use them through the `ui` tool (unless the policy disables it).
+- Tools that render their pages on the server (Django or Rails admin, PHP back offices) become page tools: tables and
+  fields come back as JSON, and their HTML forms become tools. Requests signed by the page's own JavaScript cannot be
+  replayed: the agent can still use those screens through the `ui` tool (unless the policy disables it).
+- A call that lands on the sign-in page (the session ended) is reported as such, never read as data.
 - Using a vendor's internal API may be restricted by its license or terms, even for your own data. For software you build
   or own, there is no such question.

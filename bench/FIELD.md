@@ -7,30 +7,30 @@ to the site's main data tool, **with a term never seen during discovery** (disco
 It counts as answered when the call returns HTTP 2xx and the expected word is in the answer. The list includes
 server-rendered and bot-protected sites on purpose, and nothing was tuned per site except the question.
 
-**12 of 20 sites answered.** Of the others, 6 refused the automated browser (unwalled said so instead of failing silently) and 2 gave no usable data call (dockerhub, wikipedia).
+**13 of 20 sites answered.** Of the others, 6 refused the automated browser (unwalled said so instead of failing silently) and 1 gave no usable data call (wikipedia).
 
 | Site | Kind | Source | Answered | Tools | Discover | Data tool, or why not |
 | --- | --- | --- | --- | --- | --- | --- |
-| crates | single-page app | browser capture | **yes** | 3 | 4.9 s | `crates__get_api_v1_crates` |
-| hn | search app | browser capture | **yes** | 2 | 7.7 s | `hn__post_1_indexes_Item_dev_query` |
-| mdn | documentation search | browser capture | **yes** | 4 | 10.4 s | `mdn__get_api_v1_search` |
-| bluesky | social network | browser capture | **yes** | 13 | 11.1 s | `bluesky__get_xrpc_app_bsky_actor_getProfile` |
-| mastodon | social network | browser capture | **yes** | 8 | 47.5 s | `mastodon__get_api_v1_trends_tags` |
-| flathub | app store | browser capture | **yes** | 2 | 9.3 s | `flathub__post_api_v2_search` |
-| archive | library | browser capture | **yes** | 8 | 21.0 s | `archive__get_services_search_beta_page_production` |
-| vscode | extension marketplace | browser capture | **yes** | 3 | 8.6 s | `vscode__post_apis_public_gallery_extensionquery` |
-| huggingface | model hub | OpenAPI found | **yes** | 4 | 1.3 s | `huggingface__call` |
-| openlibrary | library | OpenAPI found | **yes** | 4 | 2.5 s | `openlibrary__call` |
-| github | code hosting | browser capture | **yes** | 4 | 9.2 s | `github__get_modelcontextprotocol_param2_deferred_c2e490` |
-| openstreetmap | map | browser capture | **yes** | 2 | 22.7 s | `openstreetmap__post_search_nominatim_query` |
-| dockerhub | server-rendered | browser capture | no | 3 | 8.5 s | no data tool generated |
-| pypi | server-rendered | browser capture | no | 1 | 6.2 s | Blocked: the site refused the automated browser (HTTP 200, "Client Challenge"): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself |
-| wikipedia | server-rendered | browser capture | no | 1 | 5.4 s | No API call was observed. The page may be server-rendered, or the data appears only after interaction: pass actions, use interactive mode, or log in first. |
-| stackoverflow | server-rendered | browser capture | no | 1 | 7.5 s | Blocked: the site refused the automated browser (HTTP 403, "Just a moment"): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself, o |
-| npm | protected | browser capture | no | 1 | 16.8 s | Blocked: the site refused the automated browser (HTTP 403): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself, or import a HAR sa |
-| gitlab | protected | browser capture | no | 1 | 19.8 s | Blocked: the site refused the automated browser (HTTP 403): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself, or import a HAR sa |
-| reddit | protected | browser capture | no | 1 | 7.2 s | Blocked: the site refused the automated browser (HTTP 200, "Prove your humanity"): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yours |
-| leboncoin | protected | browser capture | no | 1 | 4.3 s | Blocked: the site refused the automated browser (HTTP 403, "datadome"): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself, or imp |
+| crates | single-page app | browser capture | **yes** | 3 | 5.6 s | `crates__get_api_v1_crates` |
+| hn | search app | browser capture | **yes** | 2 | 7.4 s | `hn__post_1_indexes_Item_dev_query` |
+| mdn | documentation search | browser capture | **yes** | 5 | 8.7 s | `mdn__get_api_v1_search` |
+| bluesky | social network | browser capture | **yes** | 13 | 10.1 s | `bluesky__get_xrpc_app_bsky_actor_getProfile` |
+| mastodon | social network | browser capture | **yes** | 8 | 47.6 s | `mastodon__get_api_v1_trends_tags` |
+| flathub | app store | browser capture | **yes** | 3 | 9.1 s | `flathub__post_api_v2_search` |
+| archive | library | browser capture | **yes** | 8 | 20.4 s | `archive__get_services_search_beta_page_production` |
+| vscode | extension marketplace | browser capture | **yes** | 4 | 8.5 s | `vscode__post_apis_public_gallery_extensionquery` |
+| huggingface | model hub | OpenAPI found | **yes** | 4 | 1.1 s | `huggingface__call` |
+| openlibrary | library | OpenAPI found | **yes** | 4 | 4.2 s | `openlibrary__call` |
+| github | code hosting | browser capture | **yes** | 5 | 20.4 s | `github__get_modelcontextprotocol_param2_deferred_c2e490` |
+| openstreetmap | map | browser capture | **yes** | 3 | 22.4 s | `openstreetmap__post_search_nominatim_query` |
+| dockerhub | server-rendered | browser capture | **yes** | 4 | 8.7 s | `dockerhub__page_search` |
+| pypi | server-rendered | browser capture | no | 1 | 5.6 s | Blocked: the site refused the automated browser (HTTP 200, "Client Challenge"): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself |
+| wikipedia | server-rendered | browser capture | no | 2 | 5.8 s | HTTP 200 OK — https://en.wikipedia.org/wiki/Model_Context_Protocol |
+| stackoverflow | server-rendered | browser capture | no | 2 | 6.9 s | Error: Missing path parameter(s): question, param2 |
+| npm | protected | browser capture | no | 1 | 16.4 s | Blocked: the site refused the automated browser (HTTP 403): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself, or import a HAR sa |
+| gitlab | protected | browser capture | no | 1 | 6.2 s | Blocked: the site refused the automated browser (HTTP 429): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself, or import a HAR sa |
+| reddit | protected | browser capture | no | 2 | 6.5 s | Blocked: the site refused the automated browser (HTTP 200, "Prove your humanity"): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yours |
+| leboncoin | protected | browser capture | no | 1 | 5.1 s | Blocked: the site refused the automated browser (HTTP 403, "datadome"): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself, or imp |
 
 ## Reading this table
 

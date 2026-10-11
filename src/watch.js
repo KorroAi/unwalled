@@ -52,7 +52,8 @@ export async function watch(run, args, { intervalMs, durationMs, until, onChange
   let errors = 0;
   let reason = "duration elapsed";
   for (;;) {
-    const result = await run({ ...args, cache_seconds: 0 });
+    // The whole response is compared: a shortened view would hide changes past its first items.
+    const result = await run({ ...args, cache_seconds: 0, max_chars: args.max_chars ?? 40_000 });
     calls++;
     const current = body(result.text);
     const elapsed = Math.round((now() - started) / 1000);

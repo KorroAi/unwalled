@@ -9,7 +9,7 @@ export const SENSITIVE_HEADER = /^(authorization|proxy-authorization|cookie)$|ke
 
 // Query parameters and body fields whose values must never be written into a shareable recipe.
 export const SENSITIVE_FIELD =
-  /^(key|sig|sid|auth|otp|pwd|pin|pass|passcode|cvv|cvc|csc|ssn|iban|code_verifier)$|token|secret|passw|signature|session|api[_-]?key|apikey|credential|jwt|private[_-]?key|privatekey|access[_-]?key|client[_-]?key|card[_-]?(number|num|no)|cardnumber|security[_-]?code|refresh/i;
+  /^(key|sig|sid|auth|otp|pw|pwd|pin|pass|passcode|cvv|cvc|csc|ssn|iban|code_verifier)$|token|secret|passw|signature|session|api[_-]?key|apikey|credential|jwt|private[_-]?key|privatekey|access[_-]?key|client[_-]?key|card[_-]?(number|num|no)|cardnumber|security[_-]?code|refresh/i;
 
 // Names that carry opaque but non-secret values (pagination cursors...): never moved to the secret store.
 const OPAQUE_NON_SECRET = /^(cursor|after|before|next|prev|previous|page|page_?token|continuation|offset|etag|hash|sha|checksum|id|ids)$/i;
@@ -109,7 +109,6 @@ export function redact(value, depth = 0, sensitiveParent = false) {
   return value;
 }
 
-/** URL safe to show: no user:password, no fragment, sensitive query values and secret-looking path segments hidden. @param {string} address */
 // Path segments that announce a secret in the next one: "/hooks/abc123", "/invite/x7k2", "/reset/9fe1".
 const SECRET_CONTEXT = /^(hooks?|webhooks?|tokens?|api-?keys?|keys?|secrets?|invites?|invitations?|share[ds]?|reset(-password)?|verify|verification|magic(-link)?|signatures?|sig|activate|activation|unsubscribe|access-?tokens?|private)$/i;
 // Ordinary words found after such segments ("/tokens/new", "/keys/list"): not secrets.
@@ -126,6 +125,7 @@ export function isSecretSegment(segment, previous) {
   return !!previous && SECRET_CONTEXT.test(previous) && segment.length >= 4 && !COMMON_SEGMENT.test(segment) && /\d/.test(segment) && /[a-z]/i.test(segment);
 }
 
+/** URL safe to show: no user:password, no fragment, sensitive query values and secret-looking path segments hidden. @param {string} address */
 export function redactUrl(address) {
   const url = new URL(address);
   url.username = "";
@@ -167,10 +167,14 @@ function safeDecode(segment) {
 /**
  * Last line of defence before a recipe is written: removes every known secret value (from the secret store)
  * and every credential-looking substring from all strings of the recipe.
- * @template T @param {T} recipe @param {Iterable<string>} knownSecrets @returns {T}
+ * @template T @param {T} recipe @param {Iterable<string>} knownSecrets @param {string[]} [wordSecrets] short secrets replaced as whole words only @returns {T}
  */
-export function scrubRecipe(recipe, knownSecrets) {
+export function scrubRecipe(recipe, knownSecrets, wordSecrets = []) {
   const needles = [...new Set([...knownSecrets].filter((s) => typeof s === "string" && s.length >= 6))].sort((a, b) => b.length - a.length);
+  // Short secrets (a typed password such as "demo") are replaced only as whole words, so that "demonstration" survives.
+  const words = [...new Set(wordSecrets.filter((s) => typeof s === "string" && s.length >= 3))].map(
+    (word) => new RegExp(`(?<![\\p{L}\\p{N}_])${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}_])`, "gu"),
+  );
   // Values like "Bearer xyz" are also stored as their bare token.
   for (const value of [...needles]) {
     const bare = /^(?:Bearer|Basic|Token)\s+(.+)$/i.exec(value)?.[1];
@@ -182,6 +186,7 @@ export function scrubRecipe(recipe, knownSecrets) {
     if (typeof node === "string") {
       let out = node;
       for (const needle of needles) if (out.includes(needle)) out = out.split(needle).join(REDACTED);
+      for (const word of words) out = out.replace(word, REDACTED);
       return scrubText(out);
     }
     if (Array.isArray(node)) return node.map((item) => walk(item, depth + 1));

@@ -32,6 +32,19 @@ describe("secrets encryption", () => {
     assert.throws(() => decryptJson(envelope, Buffer.alloc(32, 8)));
   });
 
+  it("stores the local state encrypted (it holds the sign-in steps of discovery), and still reads older plain files", () => {
+    process.env.UNWALLED_SECRET_KEY = "correct horse battery staple";
+    const config = makeConfig();
+    const store = new Store(/** @type {any} */ (config));
+    store.updateState("shop", () => ({ discovery: { url: "https://shop.io/login", actions: [{ fill: "#pw", text: "hunter22" }] } }));
+    const raw = readFileSync(join(config.stateDir, "shop.json"), "utf8");
+    assert.equal(isEncrypted(JSON.parse(raw)), true);
+    assert.doesNotMatch(raw, /hunter22/);
+    assert.equal(store.loadState("shop").discovery.actions[0].text, "hunter22");
+    writeFileSync(join(config.stateDir, "old.json"), JSON.stringify({ policy: { readOnly: true } }));
+    assert.deepEqual(store.loadState("old"), { policy: { readOnly: true } });
+  });
+
   it("stores secrets encrypted with a passphrase, and migrates plaintext files", () => {
     process.env.UNWALLED_SECRET_KEY = "correct horse battery staple";
     const config = makeConfig();

@@ -2,23 +2,43 @@
 
 ## 0.4.0 — 2026-10-11
 
-Found by testing on 20 real websites (`bench/field.js`), on a real Grafana behind a sign-in (`test/live/grafana.test.js`) and with a real agent (`bench/agent.js`):
+Built from what testing on 20 real websites (`bench/field.js`), a real Grafana behind a sign-in (`test/live/grafana.test.js`)
+and a real agent (`bench/agent.js`, Claude Code against Playwright MCP) showed, followed by a line-by-line audit.
 
-- **Fix: cookie sessions that rotate were lost.** Re-authentication only looked for new auth headers after reloading the site, so an app whose session cookie rotates (Grafana, every few minutes by default) answered 401 for good. A reload that renews the cookies now counts, and the call is retried.
-- **Fix: a site parameter named `query` or `path`** (Grafana's search is `?query=`) given as a plain value was spread letter by letter into the URL; it is now sent as that parameter.
-- `pick` reads `[]` as `[*]` (`[].title`), as agents often write it.
+### New
 
-- **Bot protection pages are reported.** Discovery said "the page may be server-rendered" when a site had answered with a challenge (Reddit, npm, GitLab, Stack Overflow, leboncoin): it now says the site refused the automated browser and what to do (`interactive=true`, or a HAR from your own browser). `ui` flags CAPTCHA and challenge pages the same way. Nothing is bypassed.
-- **Sign-in steps survive guessed selectors.** Agents write discovery actions without seeing the page, and a wrong selector made the sign-in fail silently. A `fill` or `click` aimed at a user, password or submit field that is not on the page now uses the page's own field (and says so); when a step still fails, the result lists the page's real fields and their selectors.
-- **Form CSRF tokens** (Rails `authenticity_token`, Django `csrfmiddlewaretoken`, Laravel `_token`...) are filled with the session's current token when a call does not give one (found on OpenStreetMap).
-- **Fix: `check_recipe` called tools without their query values**, so search and lookup tools were reported broken while they worked (MDN, Bluesky). Health checks now replay the query parameters seen on every captured call.
-- **Fix: a secret query parameter of one endpoint was added to every call to its host** (archive.org's `config.php?key=...` broke its search). Recipes now record which endpoints were called with which secret parameters, and only those get them; free-form `__request` calls and recipes discovered before 0.4 keep the previous behaviour.
-- The example back office has order notes protected by a Rails-style CSRF token, covered end to end with guessed sign-in selectors and top-level arguments.
-- REST tools accept path and query values at the top level (`{"order": "1042"}`), a common agent mistake that returned "Missing path parameter".
-- Long tool names keep the verb and the end of the path, which tell tools apart, instead of the start (`github__get_modelcontextprotocol_param2_deferred_c2e490`).
+- **Server-rendered tools become tools too.** Pages whose HTML carries the data (Django or Rails admin, PHP back offices, wikis) become `<recipe>__page_*` tools that return the page's tables as rows, its "label: value" fields, links and text as JSON; three or more pages of the same shape become one tool with a parameter. HTML forms posted during discovery become tools, with their CSRF field filled automatically. Docker Hub's search, which has no API call, now answers through a page tool.
+- **Large answers are shortened instead of cut.** An unpicked JSON answer above `UNWALLED_COMPACT_CHARS` (6,000 by default) comes back with its lists cut to their first items, long texts clipped, every key kept, and the list of field paths `pick` accepts. crates.io's 445,000-character crate answer becomes about 6,400 characters. `max_chars` or `raw` returns the whole answer; pagination and `watch` always work on whole answers.
+- **The result of `discover` (and of imports) is a ready-to-use guide**: every tool with what it does and a call that works, so the agent answers at once instead of searching the tools first.
+- **Sign-in steps survive guessed selectors.** Agents write discovery actions without seeing the page; a wrong selector made the sign-in fail silently. A `fill` or `click` aimed at a user, password or submit field that is not on the page now uses the page's own field (and says so); when a step still fails, the result lists the page's real fields and their selectors.
+- **Bot protection pages are reported** (Reddit, npm, GitLab, Stack Overflow, PyPI, leboncoin) instead of "the page may be server-rendered", with what to do (`interactive=true`, or a HAR from your own browser). `ui` flags CAPTCHA and challenge pages. Nothing is bypassed.
+- **Ended sessions are recognised.** A call redirected to the sign-in page is treated as a 401: the session is renewed when possible, otherwise the agent is told, and the sign-in page is never returned as data.
+- **Form CSRF tokens** (Rails `authenticity_token`, Django `csrfmiddlewaretoken`, Laravel `_token`) are filled with the session's current token when a call does not give one (found on OpenStreetMap).
+- A POST to a search path (`/search`, `/query`, `/_search`: Algolia, Elasticsearch, Flathub) counts as a read, so read-only policies allow it, and is described as a search.
+- Tools accept path and query values at the top level (`{"order": "1042"}`), a common agent habit that returned "Missing path parameter"; this also covers OpenAPI tools.
+- `pick` reads `[]` as `[*]` (`[].title`).
+- Field test (`bench/field.js` → `bench/FIELD.md`), agent benchmark (`bench/agent.js` → `bench/AGENT.md`), live Grafana test, and an example back office with server-rendered customer pages, a Django-style form and Rails-style CSRF notes.
+
+### Security
+
+- **Saved session cookies and local state are encrypted at rest.** Cookies saved next to browser profiles, and each recipe's local state (which holds the discovery inputs, sign-in steps and their typed passwords included), were written in clear text. They are now encrypted with the secrets' key (AES-256-GCM: DPAPI, passphrase or key file); files written by earlier versions are still read.
+- **Typed passwords never reach a recipe or a message.** When a sign-in step failed, its typed text could appear in the warnings saved in the shareable recipe, and a password sent in a body field with an ordinary name (`pw`) was not recognised. Typed text is no longer shown anywhere, and whatever is typed into a password field is scrubbed from the recipe. The interface tool masks password fields by their real type, not only by selector.
+- **A macro only chains its own recipe's tools.** A shared recipe's macro could call another recipe's tools with that recipe's credentials.
+- **The organization policy is enforced by the engine**, not only by the MCP server: the command line, presets and `goto` steps of discovery and of the interface tool now follow `allowedHosts` too, and the interface tool no longer returns a page it was led to on a host that is not allowed.
+- **A secret query parameter of one endpoint was added to every call to its host** (archive.org's `config.php?key=...` broke its search). Recipes record which endpoints were called with which secret parameters; only those get them. Free-form `__request` calls and recipes discovered before 0.4 keep the previous behaviour.
 - Short tokens right after a path segment that announces one (`/hooks/abc123`, `/invite/x7k2`) are treated as secrets.
-- Error reporting and event logging sent to a site's own hosts (self-hosted Sentry, Bugsnag, gRPC-web log services), Cloudflare `/cdn-cgi/` calls and Fastly beacons are no longer turned into tools.
-- Field test (`bench/field.js` → `bench/FIELD.md`) and agent benchmark (`bench/agent.js` → `bench/AGENT.md`).
+
+### Fixes
+
+- Cookie sessions that rotate (Grafana) were lost: re-authentication only looked for new auth headers. A reload that renews the cookies now counts, and the call is retried.
+- A site parameter named `query` or `path` (Grafana's search) given as a plain value was spread letter by letter into the URL.
+- `check_recipe` called tools without their query values, so search and lookup tools looked broken while they worked (MDN, Bluesky).
+- Error reporting and event logging (self-hosted Sentry, Bugsnag, gRPC-web log services), Cloudflare `/cdn-cgi/` calls and challenge forms, and Fastly beacons are no longer turned into tools.
+- Long tool names keep the verb and the end of the path, which tell tools apart (`github__get_modelcontextprotocol_param2_deferred_c2e490`).
+- Parameter names from plurals: "databases", "releases", "responses" gave `{databas}`, `{releas}`, `{respons}`.
+- `unwalled import <name> postgres://...` (or an https address) turned the address into a local path.
+- Macros read the JSON of page and SOAP tools (they read the raw response before).
+- The server's instructions to the agent ran two sentences together; they now mention page tools and sign-in steps.
 
 ## 0.3.0 — 2026-10-11
 

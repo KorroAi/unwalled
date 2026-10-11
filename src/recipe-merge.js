@@ -24,6 +24,7 @@ export function mergeByKey(older, newer, key) {
 }
 export const restKey = (e) => `${e.method} ${e.origin}${e.pathTemplate}`;
 export const streamKey = (s) => `${s.kind} ${s.url}`;
+export const pageKey = (p) => `${p.origin}${p.pathTemplate}`;
 export const rpcKey = (m) => `${m.url} ${m.method}`;
 
 /** JSON-RPC methods of the observations; plain endpoints that only carried JSON-RPC are dropped. */

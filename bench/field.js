@@ -41,7 +41,7 @@ export const SITES = [
   { id: "openstreetmap", kind: "map", url: "https://www.openstreetmap.org/search?query=Lyon", ask: { tool: /nominatim_query$/, args: { query: { query: "Marseille" } }, expect: "Marseille" } },
   { id: "dockerhub", kind: "server-rendered", url: "https://hub.docker.com/search?q=postgres", ask: { tool: /search/, args: { query: { q: "redis" } }, expect: "redis" } },
   { id: "pypi", kind: "server-rendered", url: "https://pypi.org/search/?q=requests", ask: { tool: /search/, args: { query: { q: "flask" } }, expect: "flask" } },
-  { id: "wikipedia", kind: "server-rendered", url: "https://en.wikipedia.org/wiki/Model_Context_Protocol", ask: { tool: /page|summary/, args: {}, expect: "Model Context Protocol" } },
+  { id: "wikipedia", kind: "server-rendered", url: "https://en.wikipedia.org/wiki/Model_Context_Protocol", ask: { tool: /page_wiki/, args: { path: { wiki: "SQLite" } }, expect: "Hipp" } },
   { id: "stackoverflow", kind: "server-rendered", url: "https://stackoverflow.com/questions/tagged/node.js", ask: { tool: /questions/, args: {}, expect: "node" } },
   { id: "npm", kind: "protected", url: "https://www.npmjs.com/search?q=playwright", ask: { tool: /search/, args: { query: { q: "vitest" } }, expect: "vitest" } },
   { id: "gitlab", kind: "protected", url: "https://gitlab.com/explore/projects/trending", ask: { tool: /projects/, args: {}, expect: "name" } },
@@ -108,7 +108,7 @@ async function main() {
   const date = new Date().toISOString();
   const environment = { date, node: process.version, os: `${platform()} ${release()}` };
   mkdirSync(OUT, { recursive: true });
-  writeFileSync(join(OUT, `field-${date.slice(0, 10)}.json`), JSON.stringify({ environment, results }, null, 2));
+  writeFileSync(join(OUT, `field-${date.slice(0, 10)}${values.only ? "-partial" : ""}.json`), JSON.stringify({ environment, results }, null, 2));
   if (!values.only) writeFileSync(fileURLToPath(new URL("./FIELD.md", import.meta.url)), report(environment, results));
   process.stderr.write(`\n${results.filter((r) => r.answered).length}/${results.length} sites answered a new question\n`);
 }

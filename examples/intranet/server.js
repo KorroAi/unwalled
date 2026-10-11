@@ -80,6 +80,28 @@ const ORDERS_PAGE = LAYOUT(
 document.getElementById("status").onchange = load; load();`,
 );
 
+// Customers are server-rendered, like a Django or Rails admin: the data is in the HTML, there is no API call.
+const escapeHtml = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const CUSTOMERS_PAGE = (customers, city) =>
+  LAYOUT(
+    "Customers",
+    `<h1>Customers</h1><form method="get" action="/customers"><label>City <input name="city" value="${escapeHtml(city ?? "")}"></label> <button>Filter</button></form>
+<table><thead><tr><th>#</th><th>Company</th><th>City</th><th>Customer since</th></tr></thead><tbody>
+${customers.map((c) => `<tr><td><a href="/customers/${c.id}">${c.id}</a></td><td>${escapeHtml(c.company)}</td><td>${escapeHtml(c.city)}</td><td>${c.since}</td></tr>`).join("\n")}
+</tbody></table><p>${customers.length} customer(s).</p>`,
+  );
+const CUSTOMER_PAGE = (customer, orders, contactNotes) =>
+  LAYOUT(
+    customer.company,
+    `<h1>${escapeHtml(customer.company)}</h1><dl><dt>Customer number</dt><dd>${customer.id}</dd><dt>City</dt><dd>${escapeHtml(customer.city)}</dd>
+<dt>Customer since</dt><dd>${customer.since}</dd><dt>Orders</dt><dd>${orders.length}</dd><dt>Total ordered</dt><dd>${orders.reduce((sum, o) => sum + o.total, 0)} EUR</dd></dl>
+<h2>Orders</h2><table><tr><th>Order</th><th>Date</th><th>Status</th><th>Total</th></tr>
+${orders.map((o) => `<tr><td><a href="/orders/${o.id}">${o.id}</a></td><td>${o.date}</td><td>${o.status}</td><td>${o.total}</td></tr>`).join("\n")}</table>
+<h2>Contact notes</h2><ul>${contactNotes.map((n) => `<li>${escapeHtml(n)}</li>`).join("")}</ul>
+<form method="post" action="/customers/${customer.id}/notes"><input type="hidden" name="csrfmiddlewaretoken" value="__CSRF__">
+<label>Note <input id="contact-note" name="note"></label> <button id="save-note">Save note</button></form>`,
+  );
+
 const LOGIN_PAGE = (error = "") => `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Sign in · Acme Back Office</title></head>
 <body style="font-family:system-ui;max-width:320px;margin:80px auto"><h1>Acme Back Office</h1>${error ? `<p role="alert">${error}</p>` : ""}
 <form method="post" action="/login"><p><label>User <input id="user" name="user" autocomplete="username"></label></p>
@@ -93,6 +115,7 @@ export async function startIntranet(port = 0) {
   const { customers, orders } = dataset();
   const sessions = new Set();
   /** @type {Map<number, string[]>} */ const notes = new Map();
+  /** @type {Map<number, string[]>} */ const contactNotes = new Map();
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname;
@@ -100,7 +123,7 @@ export async function startIntranet(port = 0) {
     const signedIn = !!session && sessions.has(session);
     const send = (status, type, body, headers = {}) => {
       res.writeHead(status, { "content-type": type, ...headers });
-      res.end(type === "text/html" ? body.replace("__CSRF__", session ? csrfFor(session) : "") : body);
+      res.end(type === "text/html" ? body.replaceAll("__CSRF__", session ? csrfFor(session) : "") : body);
     };
     const json = (status, value) => send(status, "application/json", JSON.stringify(value));
 
@@ -162,6 +185,26 @@ export async function startIntranet(port = 0) {
     const orderPage = /^\/orders\/(\d+)$/.exec(path);
     if (orderPage) return send(200, "text/html", ORDER_PAGE(orderPage[1]));
     if (path === "/" || path === "/orders") return send(200, "text/html", ORDERS_PAGE);
+    if (path === "/customers") {
+      const city = url.searchParams.get("city");
+      return send(200, "text/html", CUSTOMERS_PAGE(customers.filter((c) => !city || c.city.toLowerCase() === city.toLowerCase()), city));
+    }
+    const customerPage = /^\/customers\/(\d+)$/.exec(path);
+    if (customerPage) {
+      const found = customers.find((c) => c.id === Number(customerPage[1]));
+      if (found) return send(200, "text/html", CUSTOMER_PAGE(found, orders.filter((o) => o.customerId === found.id), contactNotes.get(found.id) ?? []));
+    }
+    // A classic form post, protected like a Django form (hidden csrfmiddlewaretoken field), answered by a redirection.
+    const notePost = /^\/customers\/(\d+)\/notes$/.exec(path);
+    if (notePost && req.method === "POST") {
+      let raw = "";
+      for await (const chunk of req) raw += chunk;
+      const form = new URLSearchParams(raw);
+      if (form.get("csrfmiddlewaretoken") !== csrfFor(String(session))) return send(403, "text/html", "<h1>CSRF verification failed</h1>");
+      const id = Number(notePost[1]);
+      contactNotes.set(id, [...(contactNotes.get(id) ?? []), String(form.get("note") ?? "")]);
+      return send(303, "text/plain", "", { location: `/customers/${id}` });
+    }
     return send(200, "text/html", LAYOUT("Not ready", "<h1>This page is not available in the demo.</h1>"));
   });
   await new Promise((resolve) => server.listen(port, "127.0.0.1", () => resolve(undefined)));

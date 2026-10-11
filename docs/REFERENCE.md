@@ -29,7 +29,8 @@ For companies, see also [For teams](FOR-TEAMS.md).
           published OpenAPI / Swagger? ──yes──► operations become tools
                                  │ no
    a real browser loads the page, runs your actions, optionally explores the site,
-   and records the JSON calls it makes (REST and GraphQL, same site + extra hosts)
+   and records the JSON calls it makes (REST and GraphQL, same site + extra hosts),
+   the HTML forms it posts and the server-rendered pages it loads
                                  │
    inference: path templates · typed query parameters · body and variable schemas
               GraphQL operations · response shapes · secrets moved to a local store
@@ -39,7 +40,7 @@ For companies, see also [For teams](FOR-TEAMS.md).
    tool call ──► policy · confirmation · rate limit · cache ──► request with host-scoped credentials
                  (browser profile, opt-in in-page fetch, re-authentication on 401, retries)
                                  │
-                 response ──► pick / readable HTML / truncation ──► agent
+                 response ──► pick / page as JSON / shortened view of large answers ──► agent
 ```
 
 The result is saved as a **recipe**. Discovery runs once (seconds); after that the tools are available in every session.
@@ -52,9 +53,18 @@ The result is saved as a **recipe**. Discovery runs once (seconds); after that t
 - Smart path templates: `/api/users/42` → `/api/users/{user}`; a page you visited (`/crates/serde`) turns `/api/v1/crates/serde` into `/api/v1/crates/{crate}`; sibling URLs returning the same kind of data are merged.
 - Autonomous exploration (`explore_pages`): follows same-site links and clicks harmless "load more" buttons and tabs. Logout, delete, payment, add-to-cart, vote or follow links are never followed.
 - Multipart uploads are recognised (file fields become a `files` argument).
+- **Server-rendered tools** (Django or Rails admin, PHP back offices, wikis): pages whose HTML carries the data become `<recipe>__page_*` tools that return
+  the page's tables as rows, its "label: value" fields, links and text as JSON; three or more pages of the same shape (`/wiki/A`, `/wiki/B`, `/wiki/C`) become one tool with a parameter.
+  HTML forms posted during discovery become tools too.
+- Sign-in steps survive guessed selectors: a `fill` or `click` aimed at a user, password or submit field that is not on the page uses the page's own field;
+  when a step still fails, the page's real fields are listed. Bot protection pages are reported as such, never bypassed.
 
 **Tools an agent can use well**
 - Plain-language descriptions ("Get one crate by crate", "Search", "Create or submit order") and the values seen for each query parameter.
+- The result of `discover` lists every tool with what it does and a call that works, so the agent can answer at once instead of searching the tools first.
+- Large JSON answers are shown shortened (lists cut to their first items, long texts clipped) with the field paths `pick` accepts:
+  crates.io's 445,000-character crate answer becomes about 6,400 characters. `max_chars` or `raw` returns the whole answer.
+- Path and query values passed at the top level (`{"order": "1042"}`) are accepted, as agents often write them.
 - `annotate_recipe`: the agent renames and documents tools itself, hides noise, and saves default arguments.
 - `define_macro`: one tool that chains several calls, passing values from one response to the next call.
 - `pick` and `max_chars` keep responses small; HTML pages come back as readable text; `save_to` writes downloads to a file.
@@ -63,7 +73,8 @@ The result is saved as a **recipe**. Discovery runs once (seconds); after that t
 **Calls that keep working**
 - Persistent browser profile per recipe (session cookies included) and a `login` tool that opens a visible window.
 - Re-authentication: on a 401 or an expired JWT, browser recipes reload the site to pick up fresh tokens; OAuth refresh tokens renew access tokens.
-- Stale CSRF tokens are refreshed from cookies or meta tags. In-page requests (from a real page of the site) are available as an opt-in per recipe, for sites you are allowed to automate.
+- Stale CSRF tokens are refreshed from cookies or meta tags, in headers and in form fields (Rails `authenticity_token`, Django `csrfmiddlewaretoken`, Laravel `_token`).
+  A call redirected to the sign-in page is treated as an ended session (renewed, or reported), never as data. In-page requests (from a real page of the site) are available as an opt-in per recipe, for sites you are allowed to automate.
 - Retries of temporary failures (429, 502, 503, 504, network errors) with `Retry-After` or exponential backoff; writes are retried only when the server did not process them.
 - Read cache (`cache_seconds`, or per recipe), per-call timeouts (`timeout_ms`), non-secret recipe headers (language, API version).
 - `check_recipe` probes every read-only tool and flags broken or changed endpoints; `repair=true` rediscovers the recipe and keeps annotations and macros.
@@ -74,7 +85,8 @@ The result is saved as a **recipe**. Discovery runs once (seconds); after that t
 - `dry_run` previews any call; DELETE calls (or all writes, if you choose) and risky interface clicks need `confirm=true`.
 - Per-recipe policies: read-only, allowed hosts, rate limit, transport, cache. Default rate limit: 5 requests per second per host.
 - Audit log of every request (method, redacted URL, status), never bodies or credentials.
-- Shared recipes cannot act on your behalf: stored defaults and macro steps cannot confirm calls, write or upload local files.
+- Shared recipes cannot act on your behalf: stored defaults and macro steps cannot confirm calls, write or upload local files, and a macro only chains its own recipe's tools.
+- Secrets, saved session cookies and local state (which holds the sign-in steps of discovery) are encrypted at rest; text typed into password fields never reaches a recipe or a message.
 
 **More sources and protocols**
 - Ready-made sources: `discover(name, "preset:<id>")` for GitHub, Stripe, Vercel, ElevenLabs, Discord, Binance (REST and live streams), CoinGecko, Open-Meteo,
@@ -138,7 +150,8 @@ Ask your agent in plain language:
 > Use unwalled to discover https://example.com, search for "lamp" and open the first product, then tell me its price.
 
 The agent calls `discover` (with actions such as filling the search box), then the generated `<recipe>__*` tools.
-For a site behind a login, ask it to call `login` first: a window opens, you sign in, and the cookies are kept.
+For a site behind a sign-in, give the agent the sign-in details: it passes them as `discover` actions (guessed selectors are matched to the page's own fields).
+Or ask it to call `login`: a window opens, you sign in yourself, and the cookies are kept.
 After a few calls, ask it to `annotate_recipe` the tools it used and to `define_macro` the sequences you repeat.
 
 ## Tools reference
@@ -170,7 +183,7 @@ After a few calls, ask it to `annotate_recipe` the tools it used and to `define_
 
 | Recipe type | Tools |
 | --- | --- |
-| Browser / HAR | one tool per REST endpoint (`<recipe>__get_api_items_item`), one per GraphQL operation (`<recipe>__gql_GetCart`), `<recipe>__graphql` when GraphQL is used, and `<recipe>__request` |
+| Browser / HAR | one tool per REST endpoint (`<recipe>__get_api_items_item`), one per GraphQL operation (`<recipe>__gql_GetCart`), `<recipe>__graphql` when GraphQL is used, one per server-rendered page template (`<recipe>__page_customers_customer`), and `<recipe>__request` |
 | OpenAPI | one tool per operation (up to 60 by default), `<recipe>__routes` to list every route, and `<recipe>__request` |
 | Any | one tool per macro: `<recipe>__m_<id>` |
 
@@ -180,9 +193,9 @@ REST tools also accept path and query values at the top level (`{"order": "1042"
 | Argument | Meaning |
 | --- | --- |
 | `pick` | Comma-separated paths into the JSON response: `data.items[*].name`, `items.*.id`, `meta.total, data.user`. |
-| `max_chars` | Maximum characters returned (default 40,000). |
+| `max_chars` | Maximum characters returned (default 40,000). Giving it also turns off the shortened view of large answers. |
 | `save_to` | Absolute path where the response body is written (downloads, binary files). |
-| `raw` | Return HTML as-is (by default HTML pages are turned into readable text). |
+| `raw` | Return HTML as-is (by default HTML pages are turned into readable text, and page tools into JSON). |
 | `dry_run` | Show the request that would be sent, credentials hidden, without sending it. |
 | `confirm` | Confirm a call held by the safety policy (DELETE by default). |
 | `cache_seconds` | Reads only: reuse a response fetched less than this many seconds ago. |
@@ -378,6 +391,7 @@ Without a command, `unwalled` runs the MCP server on stdio (what MCP clients lau
 | `UNWALLED_HOME` | `~/.unwalled` | Data directory |
 | `UNWALLED_BROWSER` | `chrome` | `chrome`, `msedge`, `chromium` (Playwright) or an absolute path to a Chromium-based browser. `chrome` falls back to Edge, then Playwright's Chromium. |
 | `UNWALLED_MAX_OUTPUT` | `40000` | Default maximum characters per tool result |
+| `UNWALLED_COMPACT_CHARS` | `6000` | Unpicked JSON answers longer than this are shown shortened, with their field paths (`0` = always in full) |
 | `UNWALLED_TIMEOUT_MS` | `30000` | Request timeout |
 | `UNWALLED_MAX_ENDPOINTS` | `40` | Endpoints kept per browser/HAR recipe (most frequent first) |
 | `UNWALLED_MAX_OPENAPI_TOOLS` | `60` | Operations turned into tools per OpenAPI recipe |
@@ -387,8 +401,8 @@ Without a command, `unwalled` runs the MCP server on stdio (what MCP clients lau
 | `UNWALLED_TOOL_MODE` | `auto` | `auto` (search mode above the threshold), `all` or `search` |
 | `UNWALLED_TOOL_THRESHOLD` | `60` | Generated tools listed before `auto` switches to search mode |
 | `UNWALLED_AUDIT` | on | `0` disables the audit log |
-| `UNWALLED_SECRET_KEY` | (unset) | Passphrase for the secrets encryption key. Unset: Windows DPAPI, or a key file next to the data elsewhere |
-| `UNWALLED_PLAINTEXT_SECRETS` | (unset) | `1` stores secrets unencrypted (not recommended) |
+| `UNWALLED_SECRET_KEY` | (unset) | Passphrase for the encryption key of secrets, saved cookies and local state. Unset: Windows DPAPI, or a key file next to the data elsewhere |
+| `UNWALLED_PLAINTEXT_SECRETS` | (unset) | `1` stores secrets, cookies and state unencrypted (not recommended) |
 | `UNWALLED_SCHEMA_CHARS` | `3000` | Budget of one tool's description + input schema |
 | `UNWALLED_FOLD_THRESHOLD` | `20` | Above this many operations a recipe uses compact mode (`0` = never) |
 | `UNWALLED_ORG_POLICY` | (unset) | Path of an organization policy that agents cannot loosen: see [For teams](FOR-TEAMS.md) |
@@ -404,12 +418,13 @@ data directory is still used, and the `universal-mcp` command remains as an alia
   recipes/<name>.json    shareable: endpoints, schemas, redacted examples, annotations, macros
   secrets/<name>.json    local only, encrypted: auth headers, API keys, cookies from HAR, secret query and path values, OAuth refresh settings
   secret.key.dpapi       Windows: the encryption key, protected for the current user (secret.key elsewhere)
-  profiles/<name>/       local only: browser profile and saved cookies
-  state/<name>.json      local only: policy, recipe headers, original discovery inputs (for re-authentication and repair), last health check
+  profiles/<name>/       local only: browser profile, and saved session cookies (encrypted)
+  state/<name>.json      local only, encrypted: policy, recipe headers, original discovery inputs with their sign-in steps (for re-authentication and repair), last health check
   audit.log              local only: one line per request, no bodies or credentials
 ```
 
-Before a recipe is written, credentials are detected by name and by value and moved to `secrets/`, and every stored secret value is scrubbed from the recipe.
+Before a recipe is written, credentials are detected by name and by value and moved to `secrets/`, and every stored secret value, as well as any text typed
+into a password field during discovery, is scrubbed from the recipe.
 A leak test covers 28 placements (headers, query, path, fragments, `user:password@`, JSON and form bodies, arrays, GraphQL documents and variables, free text).
 Treat `secrets/`, `profiles/` and `state/` like a password store: do not commit, sync or share them. See [SECURITY.md](../SECURITY.md).
 
@@ -420,7 +435,8 @@ What is covered, and how it was checked. "Live" means a real public service in `
 
 | Source | Checked against | Known limits |
 | --- | --- | --- |
-| Browser capture (REST, GraphQL) | live: crates.io, Hacker News search (Algolia), and a field test of 20 public sites ([bench/FIELD.md](../bench/FIELD.md)); real Grafana 12 in Docker behind a sign-in, with its session token rotating every minute (`test/live/grafana.test.js`); local: login, CSRF, token rotation | Server-rendered pages have no API to capture; bot protections are reported, not bypassed |
+| Browser capture (REST, GraphQL) | live: crates.io, Hacker News search (Algolia), and a field test of 20 public sites ([bench/FIELD.md](../bench/FIELD.md)); real Grafana 12 in Docker behind a sign-in, with its session token rotating every minute (`test/live/grafana.test.js`); local: login with guessed selectors, CSRF in headers and form fields, token rotation, ended sessions | Bot protections are reported, not bypassed |
+| Server-rendered pages and HTML forms | live: Docker Hub search (field test); local: a Django-style customer list, detail page and form with a CSRF field (`test/e2e/intranet.e2e.test.js`) | Tables, definition lists and "label: value" lines are extracted; layouts built only from styled `div`s come back as text |
 | OpenAPI 3 / Swagger 2 | live: Petstore, GitHub (about 1,200 operations), presets | |
 | Google Discovery (YouTube, Gmail, Drive...) | live: YouTube Data API description and call (API key needed for answers) | User data needs an OAuth client of your own |
 | OData v2 / v4 | live: Northwind demo service | No `$batch` |
@@ -454,6 +470,8 @@ What is covered, and how it was checked. "Live" means a real public service in `
 - **Approximate protocol coverage**: SOAP without WS-Security or external XSD imports, OData without `$batch`, MQTT 3.1.1 with QoS 0/1. Google APIs need an API key or an OAuth token that you provide.
 - **Bot protections and CAPTCHAs** are not bypassed by default: a challenge is reported, `login` lets a person solve it, and in-page requests are an opt-in per recipe for sites you are allowed to automate.
 - **Secret detection is heuristic**: credentials with an obvious name, a known format or a long random value are caught, and so are short tokens right after a path segment that announces one (`/hooks/abc123`, `/invite/x7k2`). A short token anywhere else in a path looks like any other segment. Review recipes before sharing them.
+- **One page is not a pattern**: a page tool generalises only what discovery saw vary (ids, query values, three or more sibling pages); discover a single
+  article and the tool reads that article. Visit a few more pages (actions or `explore_pages`) to get a parameter.
 - **Path inference is heuristic**: if a parameter was not detected, call the endpoint through `<recipe>__request` or capture more pages with `merge: true` or `explore_pages`.
 - **Health checks** only call read-only tools that have a recorded example; writes are never probed.
 - **One process per profile**: two servers sharing the same data directory cannot use the same recipe's browser at the same time.

@@ -4,12 +4,14 @@ import { createHash } from "node:crypto";
 import { buildDataTools } from "../data/tools.js";
 import { buildRpcTools } from "../discovery/jsonrpc.js";
 import { buildSoapTools } from "../discovery/soap.js";
+import { redactUrl } from "../discovery/secrets.js";
 import { buildStreamTools } from "../realtime/tools.js";
 import { formatResponse } from "./http.js";
 import { pick } from "./pick.js";
 import { compactTool } from "./compact.js";
 import { foldTools } from "./lazy.js";
 import { withPagination } from "./paginate.js";
+import { extractPage } from "./page.js";
 
 const TOOL_NAME_MAX = 64;
 const DESCRIPTION_MAX = 1200;
@@ -34,6 +36,7 @@ const DESCRIPTION_MAX = 1200;
  * @property {Record<string, any>} annotations
  * @property {(args: Record<string, any>) => Promise<ToolResult>} run
  * @property {{ args: Record<string, any>, keys: string[], graphql?: boolean }} [probe] safe example call for health checks (read-only tools)
+ * @property {Record<string, any>} [example] arguments of a call seen during discovery, shown to the agent
  * @property {boolean} [lazy] one tool per operation: folded into __operation / __call in compact mode
  */
 
@@ -41,6 +44,7 @@ const DESCRIPTION_MAX = 1200;
  * @typedef {object} Runtime
  * @property {(recipe: any, request: import("./http.js").OutgoingRequest, options?: { dryRun?: boolean, confirmed?: boolean, tool?: string, cacheSeconds?: number }) => Promise<import("./http.js").HttpResult | { preview: string, blocked?: boolean, request?: any }>} send
  * @property {number} maxOutputChars
+ * @property {number} [compactChars] unpicked JSON responses longer than this are shown shortened (0 = never)
  * @property {(recipe: any, host: string, key: string) => string | undefined} [secret] stored secret value (secret path parameters)
  * @property {(name: string) => GeneratedTool | undefined} [findTool] any generated tool, for macros
  * @property {number} [schemaBudget] maximum characters of a tool's description + input schema
@@ -148,7 +152,6 @@ function asObjectSchema(schema) {
   return { type: "object", additionalProperties: true };
 }
 
-/** @param {Record<string, unknown> | undefined} query @param {URL} url */
 // Technical query parameters (application id, client, agent, version, locale, format) seen with one constant value
 // are part of how the site calls its API, not of the question asked: they are sent by default.
 const CONSTANT_PARAM = /(^|[-_.])(app|application|client|agent|sdk|version|platform|locale|lang|language|format)([-_.]?(id|name|version))?$/i;
@@ -166,6 +169,7 @@ export function constantQueryDefaults(query, observed) {
   );
 }
 
+/** @param {URL} url @param {Record<string, unknown> | undefined} query */
 function applyQuery(url, query) {
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value === undefined || value === null) continue;
@@ -203,8 +207,13 @@ async function execute(runtime, recipe, request, args, tool, transform) {
   if (Number.isFinite(args.timeout_ms)) request = { ...request, timeoutMs: Math.max(1000, Math.min(Number(args.timeout_ms), 300_000)) };
   const result = await runtime.send(recipe, request, { dryRun: args.dry_run === true, confirmed: args.confirm === true, tool, cacheSeconds });
   if ("preview" in result) return { text: result.preview, isError: !!result.blocked, request: result.request };
-  const formatted = formatResponse(transform ? transform(result) : result, { pick: args.pick, maxChars: args.max_chars ?? runtime.maxOutputChars, saveTo: args.save_to, raw: args.raw === true });
-  return { ...formatted, data: parseJson(result) };
+  const final = transform ? transform(result) : result;
+  const formatted = formatResponse(final, {
+    pick: args.pick, maxChars: args.max_chars ?? runtime.maxOutputChars, saveTo: args.save_to, raw: args.raw === true,
+    // An explicit max_chars or raw asks for the response as it is.
+    compact: args.max_chars === undefined && args.raw !== true ? (runtime.compactChars ?? 0) : 0,
+  });
+  return { ...formatted, data: parseJson(final) };
 }
 
 // ---------------------------------------------------------------- semantic descriptions
@@ -213,8 +222,20 @@ async function execute(runtime, recipe, request, args, tool, transform) {
 function singular(word) {
   if (/ies$/i.test(word)) return `${word.slice(0, -3)}y`;
   if (/(ss|us|is)$/i.test(word)) return word;
+  // "boxes", "matches", "addresses", "statuses" lose "es"; "databases", "releases", "responses" only lose "s".
+  if (/(x|ch|sh|ss|us)es$/i.test(word)) return word.slice(0, -2);
   if (/s$/i.test(word)) return word.slice(0, -1);
   return word;
+}
+
+// Search APIs often take their query in a POST body (Algolia, Elasticsearch, Flathub...): such a POST only reads.
+const SEARCH_SEGMENT = /^(search(es)?|query|queries|find|lookup|autocomplete|suggest(ions)?|_search|_msearch|_count)$/i;
+
+/** A POST whose path ends with a search word ("/api/v2/search", "/1/indexes/x/query", "/products/_search"). @param {any} endpoint */
+export function isSearchEndpoint(endpoint) {
+  if (endpoint.method !== "POST" || endpoint.bodyKind === "multipart") return false;
+  const last = endpoint.pathTemplate.split("/").filter(Boolean).at(-1) ?? "";
+  return SEARCH_SEGMENT.test(last);
 }
 
 /** Plain-language summary of a REST endpoint, e.g. "Get one product by product" or "List reviews of a product". @param {any} endpoint */
@@ -232,6 +253,7 @@ export function summarizeEndpoint(endpoint) {
     case "GET":
       return isItem ? `Get one ${noun}${by}` : `${Object.keys(endpoint.query ?? {}).some((q) => /^(q|query|search|term|keyword)s?$/i.test(q)) ? "Search" : "List or get"} ${/^search(es)?$/i.test(noun) ? "" : noun}${of}`.replace(/\s+$/, "");
     case "POST":
+      if (isSearchEndpoint(endpoint)) return `Search${parts.length > 1 ? ` ${singular(literals.at(-2) ?? "").replace(/[-_]/g, " ")}` : ""}`.trimEnd();
       return isItem ? `Act on a ${noun}${by}` : `Create or submit ${singular(noun)}${of}`;
     case "PUT":
     case "PATCH":
@@ -257,8 +279,23 @@ export function probeArgs(endpoint) {
   return { ...(endpoint.pathParams.length ? { path: { ...endpoint.pathExamples } } : {}), ...(Object.keys(query).length ? { query } : {}) };
 }
 
+/**
+ * Arguments of a call seen during discovery, for the agent: the health-check call of reads, the observed body of writes.
+ * @param {any} endpoint @param {boolean} probeable
+ */
+function exampleOf(endpoint, probeable) {
+  if (probeable) return { example: probeArgs(endpoint) };
+  if (!endpoint.bodyExample || endpoint.bodyKind !== "json" || String(endpoint.bodyExample).includes("REDACTED")) return {};
+  try {
+    const body = JSON.parse(endpoint.bodyExample);
+    return { example: { ...(endpoint.pathParams.length ? { path: { ...endpoint.pathExamples } } : {}), body } };
+  } catch {
+    return {}; // shortened example
+  }
+}
+
 // Arguments that are not path or query values.
-const RESERVED_ARGUMENTS = new Set(["path", "query", "body", "files", "headers", "confirm", "dry_run", "cache_seconds", "timeout_ms", "paginate"]);
+const RESERVED_ARGUMENTS = new Set(["path", "query", "body", "files", "headers", "header", "confirm", "dry_run", "cache_seconds", "timeout_ms", "paginate"]);
 
 /**
  * Agents often pass path and query values at the top level ({ order: "1042" } instead of { path: { order: "1042" } }):
@@ -346,14 +383,16 @@ function restTools(recipe, runtime, name) {
     const label = `${endpoint.method} ${endpoint.origin}${endpoint.pathTemplate}`;
     const toolName = name(`${endpoint.method.toLowerCase()}_${endpoint.pathTemplate.replace(/[{}]/g, "")}`);
     const csrfField = Object.keys(endpoint.bodySchema?.properties ?? {}).find((key) => CSRF_FIELD.test(key));
+    const searching = isSearchEndpoint(endpoint);
     const probeable = endpoint.method === "GET" && endpoint.pathParams.every((p) => secretParams.includes(p) || endpoint.pathExamples?.[p] !== undefined);
     return {
       lazy: true,
       name: toolName,
       ...(probeable ? { probe: { args: probeArgs(endpoint), keys: endpoint.responseKeys ?? [] } } : {}),
+      ...exampleOf(endpoint, probeable),
       description: clip(`${summarizeEndpoint(endpoint)}. [${recipe.name}] ${label} — observed ${endpoint.observed}×. Example: ${endpoint.exampleUrl}. Response: ${endpoint.responseShape}`),
       inputSchema: { type: "object", properties, required },
-      annotations: annotationsFor(endpoint.method, label),
+      annotations: annotationsFor(endpoint.method, label, searching || undefined),
       run: async (given) => {
         const args = nestFlatArguments(given, endpoint);
         const host = new URL(endpoint.origin).host;
@@ -362,7 +401,7 @@ function restTools(recipe, runtime, name) {
         const url = new URL(endpoint.origin + fillPath(endpoint.pathTemplate, values, endpoint.pathParams));
         applyQuery(url, { ...queryDefaults, ...(args.query ?? {}) });
         const bodyKind = endpoint.bodyKind === "none" ? "json" : endpoint.bodyKind;
-        return execute(runtime, recipe, { method: endpoint.method, url: url.toString(), headers: endpoint.headers, body: args.body, bodyKind, files: args.files, ...(endpoint.secretQuery ? { queryNames: [...Object.keys(endpoint.query), ...endpoint.secretQuery] } : {}), ...(csrfField ? { csrfField } : {}) }, args, toolName);
+        return execute(runtime, recipe, { method: endpoint.method, url: url.toString(), headers: endpoint.headers, body: args.body, bodyKind, files: args.files, ...(searching ? { intent: /** @type {const} */ ("read") } : {}), ...(endpoint.secretQuery ? { queryNames: [...Object.keys(endpoint.query), ...endpoint.secretQuery] } : {}), ...(csrfField ? { csrfField } : {}) }, args, toolName);
       },
     };
   });
@@ -478,8 +517,9 @@ function openApiTools(recipe, runtime, name) {
       description: clip(`${op.summary ? `${op.summary}. ` : ""}[${recipe.name}] ${label}`),
       inputSchema: { type: "object", properties, required },
       annotations: annotationsFor(op.method, label),
-      run: async (args) => {
+      run: async (given) => {
         const pathNames = op.params.filter((p) => p.in === "path").map((p) => p.name);
+        const args = nestFlatArguments(given, { method: op.method, pathParams: pathNames, query: Object.fromEntries(op.params.filter((p) => p.in === "query").map((p) => [p.name, {}])) });
         const url = new URL(recipe.baseUrl.replace(/\/$/, "") + fillPath(op.path, args.path ?? {}, pathNames));
         applyQuery(url, args.query);
         const headers = Object.fromEntries(Object.entries(args.header ?? {}).map(([k, v]) => [k, String(v)]));
@@ -543,9 +583,11 @@ export function renderTemplate(template, scope) {
 function macroTools(recipe, runtime, name, siblings, unannotated = []) {
   return (recipe.macros ?? []).map((macro) => {
     const match = (t, toolName) => t.name === toolName || t.name === `${recipe.name}__${toolName}`;
-    // Hidden tools (annotate_recipe hidden=true) are not listed but remain usable as macro steps.
+    // Hidden tools (annotate_recipe hidden=true) are not listed but remain usable as macro steps. Only the recipe's own
+    // tools can be steps: a shared recipe must not drive another recipe's tools with that recipe's credentials.
+    const own = (/** @type {GeneratedTool | undefined} */ tool) => (tool?.name.startsWith(`${recipe.name}__`) ? tool : undefined);
     const find = (toolName) =>
-      siblings.find((t) => match(t, toolName)) ?? runtime.findTool?.(toolName) ?? runtime.findTool?.(`${recipe.name}__${toolName}`) ?? unannotated.find((t) => match(t, toolName));
+      siblings.find((t) => match(t, toolName)) ?? own(runtime.findTool?.(`${recipe.name}__${toolName}`)) ?? own(runtime.findTool?.(toolName)) ?? unannotated.find((t) => match(t, toolName));
     const readOnly = macro.steps.every((step) => find(step.tool)?.annotations?.readOnlyHint === true);
     const params = macro.params ?? {};
     return {
@@ -679,6 +721,63 @@ function applyAnnotations(tools, recipe) {
 }
 
 /**
+ * Server-rendered pages seen during discovery: one tool per page template, answering with the page's tables, fields,
+ * links and text as JSON (see page.js).
+ * @param {any} recipe @param {Runtime} runtime @param {(s: string) => string} name @returns {GeneratedTool[]}
+ */
+function pageTools(recipe, runtime, name) {
+  return (recipe.pages ?? []).map((page) => {
+    /** @type {Record<string, any>} */ const properties = { ...OUTPUT_PROPERTIES };
+    const required = [];
+    if (page.pathParams.length) {
+      properties.path = {
+        type: "object",
+        description: "Path parameters.",
+        properties: Object.fromEntries(page.pathParams.map((p) => [p, { type: "string", ...(page.pathExamples[p] ? { description: `Example: ${page.pathExamples[p]}` } : {}) }])),
+        required: page.pathParams,
+      };
+      required.push("path");
+    }
+    properties.query = {
+      type: "object",
+      description: "Query string parameters (all optional).",
+      properties: Object.fromEntries(Object.entries(page.query).map(([key, q]) => [key, { type: "string", description: `Observed: ${/** @type {any} */ (q).values.join(", ")}` }])),
+      additionalProperties: true,
+    };
+    const label = `${page.origin}${page.pathTemplate}`;
+    const toolName = name(`page_${page.pathTemplate.replace(/[{}]/g, "")}`);
+    const example = new URL(page.origin + page.pathTemplate.replace(/\{([^}]+)\}/g, (_, p) => encodeURIComponent(page.pathExamples[p] ?? `{${p}}`)));
+    for (const [key, q] of Object.entries(page.query)) example.searchParams.set(key, /** @type {any} */ (q).example);
+    const probeable = page.pathParams.every((p) => page.pathExamples[p] !== undefined);
+    const endpoint = { method: "GET", pathParams: page.pathParams, query: page.query };
+    return {
+      lazy: true,
+      name: toolName,
+      ...(probeable
+        ? { probe: { args: { ...(page.pathParams.length ? { path: { ...page.pathExamples } } : {}), query: Object.fromEntries(Object.entries(page.query).map(([k, q]) => [k, /** @type {any} */ (q).example])) }, keys: [] } }
+        : {}),
+      description: clip(
+        `Read a server-rendered page${page.title ? ` ("${page.title}")` : ""}: its tables as rows, its "label: value" fields, links and text, as JSON. [${recipe.name}] ${label}` +
+          `${page.tables ? ` — ${page.tables} table(s)` : ""}. Example: ${redactUrl(example.toString())}. Pick e.g. "tables[0].rows[*]" or "fields". ` +
+          "Data a page loads afterwards with JavaScript is not in it: prefer this recipe's API tools when one covers the question.",
+      ),
+      inputSchema: { type: "object", properties, required },
+      annotations: annotationsFor("GET", label),
+      run: async (given) => {
+        const args = nestFlatArguments(given, endpoint);
+        const url = new URL(page.origin + fillPath(page.pathTemplate, args.path ?? {}, page.pathParams));
+        applyQuery(url, args.query);
+        const toJson = (/** @type {any} */ result) =>
+          result.status < 400 && /html/i.test(result.contentType) && args.raw !== true
+            ? { ...result, contentType: "application/json", body: Buffer.from(JSON.stringify(extractPage(result.body.toString("utf8"), result.finalUrl))) }
+            : result;
+        return execute(runtime, recipe, { method: "GET", url: url.toString(), headers: { accept: "text/html,application/xhtml+xml" } }, args, toolName, toJson);
+      },
+    };
+  });
+}
+
+/**
  * @param {any} recipe
  * @param {Runtime} runtime
  * @returns {GeneratedTool[]}
@@ -693,7 +792,7 @@ export function buildTools(recipe, runtime) {
   const tools =
     recipe.kind === "openapi" ? openApiTools(recipe, runtime, name)
     : recipe.kind === "soap" ? buildSoapTools(recipe, name, exec, OUTPUT_PROPERTIES)
-    : [...graphqlTools(recipe, runtime, name), ...restTools(recipe, runtime, name)];
+    : [...graphqlTools(recipe, runtime, name), ...restTools(recipe, runtime, name), ...pageTools(recipe, runtime, name)];
   tools.push(...buildRpcTools(recipe, name, exec, OUTPUT_PROPERTIES));
   tools.push(...buildStreamTools(recipe, runtime, name));
   {

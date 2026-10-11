@@ -208,8 +208,8 @@ async function main() {
   const date = new Date().toISOString();
   const environment = { date, model: values.model, os: `${platform()} ${release()}`, node: process.version };
   mkdirSync(OUT, { recursive: true });
-  writeFileSync(join(OUT, `agent-${date.slice(0, 10)}.json`), JSON.stringify({ environment, results }, null, 2));
-  if (!values.only) writeFileSync(fileURLToPath(new URL("./AGENT.md", import.meta.url)), report(environment, results));
+  writeFileSync(join(OUT, `agent-${date.slice(0, 10)}${values.only || values.sides ? "-partial" : ""}.json`), JSON.stringify({ environment, results }, null, 2));
+  if (!values.only && !values.sides) writeFileSync(fileURLToPath(new URL("./AGENT.md", import.meta.url)), report(environment, results));
 }
 
 /** @param {any} environment @param {any[]} results */

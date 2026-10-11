@@ -153,7 +153,7 @@ async function main() {
           const tool = await call(q.tool, q.args);
           // Size of the whole response, for the record: agents trim it with pick once they know its shape.
           const { pick, ...unpicked } = q.args;
-          const full = round === 1 ? (await call(q.tool, unpicked)).text.length : undefined;
+          const full = round === 1 ? (await call(q.tool, { ...unpicked, max_chars: 10_000_000 })).text.length : undefined; // max_chars: the whole answer, not the shortened view
           const page = await timed(async () => {
             await ctx.page.goto(q.page, { waitUntil: "domcontentloaded" });
             // Best case for the browser: the page is read the moment the answer is on screen (an agent cannot know that).

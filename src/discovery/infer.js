@@ -26,6 +26,8 @@ const ERROR_REPORTING_URL = /[?&]sentry_(key|version)=|\/api\/\d+\/(envelope|sto
 const PROBE_PATHS = /\/(isalive|is_alive|healthz?|heartbeat|livez|readyz)(\/|$|\?)/i;
 // Infrastructure of the CDN itself (Cloudflare challenges, Fastly insights), never the site's API.
 const CDN_PATHS = /^\/cdn-cgi\/|\/fst-post-back(\/|$)/i;
+// Bot challenge pages post a form back to the page itself ("?__cf_chl_tk=..."): not an endpoint of the site.
+const CHALLENGE_QUERY = /[?&]__cf_chl_[a-z_]*=/i;
 
 const DROPPED_HEADER =
   /^(:.*|accept-encoding|accept-language|user-agent|referer|origin|sec-.*|connection|host|content-length|content-type|priority|cache-control|pragma|dnt|upgrade-insecure-requests|te|if-none-match|if-modified-since|range|x-forwarded-.*)$/i;
@@ -116,9 +118,10 @@ const snake = (text) =>
 
 /** @param {string} word */
 function singular(word) {
-  if (/ies$/i.test(word)) return word.slice(0, -3) + "y";
+  if (/ies$/i.test(word)) return `${word.slice(0, -3)}y`;
   if (/(ss|us|is)$/i.test(word)) return word;
-  if (/(x|ch|sh|ses)$/i.test(word) && /es$/i.test(word)) return word.slice(0, -2);
+  // "boxes", "matches", "addresses", "statuses" lose "es"; "databases", "releases", "responses" only lose "s".
+  if (/(x|ch|sh|ss|us)es$/i.test(word)) return word.slice(0, -2);
   if (/s$/i.test(word)) return word.slice(0, -1);
   return word;
 }
@@ -286,7 +289,7 @@ function buildTemplates(items, variables) {
 }
 
 /** @param {(string|null)[]} segments */
-function nameParameters(segments) {
+export function nameParameters(segments) {
   const names = [];
   const path = segments.map((segment, index) => {
     if (segment !== null) return segment;
@@ -312,7 +315,7 @@ export function inferEndpoints(observations, { variables = navigationVariables([
   const usable = observations.filter((obs) => {
     try {
       const url = new URL(obs.url);
-      return obs.status > 0 && obs.status < 400 && /^https?:$/.test(url.protocol) && !isTracker(url.hostname) && !PROBE_PATHS.test(url.pathname) && !CDN_PATHS.test(url.pathname) && !ERROR_REPORTING_URL.test(obs.url) && !(TRACKER_PATHS.test(url.pathname) && obs.responseJson === undefined);
+      return obs.status > 0 && obs.status < 400 && /^https?:$/.test(url.protocol) && !isTracker(url.hostname) && !PROBE_PATHS.test(url.pathname) && !CDN_PATHS.test(url.pathname) && !ERROR_REPORTING_URL.test(obs.url) && !CHALLENGE_QUERY.test(obs.url) && !(TRACKER_PATHS.test(url.pathname) && obs.responseJson === undefined);
     } catch {
       return false;
     }

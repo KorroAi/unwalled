@@ -1,10 +1,9 @@
 {
   "environment": {
-    "date": "2026-10-11T01:22:51.111Z",
+    "date": "2026-10-11T02:46:08.377Z",
     "model": "sonnet",
     "os": "win32 10.0.26300",
-    "node": "v24.15.0",
-    "rechecked": "2026-10-11T01:23:39.569Z"
+    "node": "v24.15.0"
   },
   "results": [
     {
@@ -13,10 +12,10 @@
       "side": "unwalled cold",
       "ok": true,
       "expected": "paid, 880",
-      "answer": "La commande 1042 est au statut « paid » (payée), pour un montant total de 880.",
-      "costUsd": 0.0449294,
+      "answer": "La commande 1042 a le statut « paid » (payée) et un total de 880 (204 + 2 × 338).",
+      "costUsd": 0.0461376,
       "turns": 5,
-      "ms": 28552,
+      "ms": 17596,
       "toolCalls": [
         "ToolSearch",
         "list_recipes",
@@ -26,7 +25,7 @@
       "trace": [
         {
           "tool": "ToolSearch",
-          "input": "{\"query\":\"select:mcp__unwalled__list_recipes,mcp__unwalled__discover,mcp__unwalled__login,mcp__unwalled__search_tools,mcp__unwalled__call_tool,mcp__unwalled__set_credentials\",\"max_results\":10}",
+          "input": "{\"query\":\"select:mcp__unwalled__list_recipes,mcp__unwalled__discover,mcp__unwalled__login,mcp__unwalled__set_credentials,mcp__unwalled__search_tools,mcp__unwalled__call_tool\",\"max_results\":10}",
           "result": "     "
         },
         {
@@ -36,13 +35,13 @@
         },
         {
           "tool": "mcp__unwalled__discover",
-          "input": "{\"name\":\"backoffice\",\"url\":\"http://127.0.0.1:55812/login\",\"actions\":[{\"fill\":\"input[name=username]\",\"text\":\"alice\"},{\"fill\":\"input[type=password]\",\"text\":\"demo\"},{\"press\":\"Enter\"},{\"wait\":1500}],\"explore_pages\":10}",
-          "result": "Discovered in 20.2s.\nRecipe \"backoffice\" (browser) — base http://127.0.0.1:55812 — updated 2026-10-11T01:19:29.318Z\nCaptured 4 requests, 4 usable.\n  GET http://127.0.0.1:55812/api/v2/orders?status&page&per_page (1×)\n  GET http://127.0.0.1:55812/api/v2/orders/{order} (1×)\n  GET http://127.0.0.1:55812/api/v2/orders/{order}/notes (1×)\n  GET http://127.0.0.1:55812/api/v2/customers/{customer} (1×)\nExpl"
+          "input": "{\"name\":\"backoffice\",\"url\":\"http://127.0.0.1:54066/login\",\"actions\":[{\"fill\":\"input[name=username]\",\"text\":\"alice\"},{\"fill\":\"input[type=password]\",\"text\":\"demo\"},{\"press\":\"Enter\"},{\"wait\":1500},{\"goto\":\"http://127.0.0.1:54066/orders/1042\"}]}",
+          "result": "Discovered in 8.8s.\nRecipe \"backoffice\" (browser) — base http://127.0.0.1:54066 — updated 2026-10-11T02:42:29.567Z\nCaptured 4 requests, 4 usable.\n  GET http://127.0.0.1:54066/api/v2/orders?status&page&per_page (1×)\n  GET http://127.0.0.1:54066/api/v2/orders/{order} (1×)\n  GET http://127.0.0.1:54066/api/v2/orders/{order}/notes (1×)\n  GET http://127.0.0.1:54066/api/v2/customers/{customer} (1×)\n  Pag"
         },
         {
           "tool": "mcp__unwalled__call_tool",
-          "input": "{\"name\":\"backoffice__get_api_v2_orders_order\",\"arguments\":{\"order\":\"1042\"}}",
-          "result": "HTTP 200 OK — http://127.0.0.1:55812/api/v2/orders/1042\n{\"id\":1042,\"customerId\":537,\"status\":\"paid\",\"date\":\"2026-02-07\",\"lines\":[{\"product\":\"Monitor arm\",\"qty\":1,\"unitPrice\":204},{\"product\":\"Office chair\",\"qty\":2,\"unitPrice\":338}],\"total\":880}"
+          "input": "{\"name\":\"backoffice__get_api_v2_orders_order\",\"arguments\":{\"path\":{\"order\":\"1042\"}}}",
+          "result": "HTTP 200 OK — http://127.0.0.1:54066/api/v2/orders/1042\n{\"id\":1042,\"customerId\":537,\"status\":\"paid\",\"date\":\"2026-02-07\",\"lines\":[{\"product\":\"Monitor arm\",\"qty\":1,\"unitPrice\":204},{\"product\":\"Office chair\",\"qty\":2,\"unitPrice\":338}],\"total\":880}"
         }
       ],
       "serverStatus": [
@@ -60,10 +59,10 @@
       "side": "unwalled warm",
       "ok": true,
       "expected": "paid, 880",
-      "answer": "Commande 1042 : statut « paid », total 880 (l'API ne précise pas la devise).",
-      "costUsd": 0.019997900000000002,
+      "answer": "Commande 1042 : statut « paid », total 880 (la devise n'est pas indiquée par l'API).",
+      "costUsd": 0.0219382,
       "turns": 3,
-      "ms": 5039,
+      "ms": 5173,
       "toolCalls": [
         "ToolSearch",
         "backoffice__get_api_v2_orders_order"
@@ -71,13 +70,13 @@
       "trace": [
         {
           "tool": "ToolSearch",
-          "input": "{\"query\":\"select:mcp__unwalled__backoffice__get_api_v2_orders_order,mcp__unwalled__login,mcp__unwalled__list_recipes\",\"max_results\":5}",
-          "result": "  "
+          "input": "{\"query\":\"select:mcp__unwalled__backoffice__get_api_v2_orders_order,mcp__unwalled__list_recipes,mcp__unwalled__login,mcp__unwalled__set_credentials\",\"max_results\":10}",
+          "result": "   "
         },
         {
           "tool": "mcp__unwalled__backoffice__get_api_v2_orders_order",
           "input": "{\"path\":{\"order\":\"1042\"},\"pick\":\"status,total\"}",
-          "result": "HTTP 200 OK — http://127.0.0.1:55812/api/v2/orders/1042\n{\n \"status\": \"paid\",\n \"total\": 880\n}"
+          "result": "HTTP 200 OK — http://127.0.0.1:54066/api/v2/orders/1042\n{\n \"status\": \"paid\",\n \"total\": 880\n}"
         }
       ],
       "serverStatus": [
@@ -95,10 +94,10 @@
       "side": "browser",
       "ok": true,
       "expected": "paid, 880",
-      "answer": "La commande 1042 est au statut « paid », pour un montant total de 880 EUR.",
-      "costUsd": 0.0540082,
+      "answer": "Commande 1042 : statut **paid**, montant total **880 EUR**.",
+      "costUsd": 0.0588258,
       "turns": 9,
-      "ms": 10477,
+      "ms": 14553,
       "toolCalls": [
         "ToolSearch",
         "browser_navigate",
@@ -112,18 +111,18 @@
       "trace": [
         {
           "tool": "ToolSearch",
-          "input": "{\"query\":\"select:mcp__playwright__browser_navigate,mcp__playwright__browser_snapshot,mcp__playwright__browser_fill_form,mcp__playwright__browser_click,mcp__playwright__browser_type\",\"max_results\":5}",
-          "result": "    "
+          "input": "{\"query\":\"select:mcp__playwright__browser_navigate,mcp__playwright__browser_snapshot,mcp__playwright__browser_fill_form,mcp__playwright__browser_click\",\"max_results\":4}",
+          "result": "   "
         },
         {
           "tool": "mcp__playwright__browser_navigate",
-          "input": "{\"url\":\"http://127.0.0.1:55812/login\"}",
-          "result": "### Ran Playwright code\n```js\nawait page.goto('http://127.0.0.1:55812/login');\n```\n### Page\n- Page URL: http://127.0.0.1:55812/login\n- Page Title: Sign in · Acme Back Office\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T01-19-46-569Z.yml)"
+          "input": "{\"url\":\"http://127.0.0.1:54066/login\"}",
+          "result": "### Ran Playwright code\n```js\nawait page.goto('http://127.0.0.1:54066/login');\n```\n### Page\n- Page URL: http://127.0.0.1:54066/login\n- Page Title: Sign in · Acme Back Office\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T02-42-47-074Z.yml)"
         },
         {
           "tool": "mcp__playwright__browser_snapshot",
           "input": "{}",
-          "result": "### Page\n- Page URL: http://127.0.0.1:55812/login\n- Page Title: Sign in · Acme Back Office\n### Snapshot\n```yaml\n- generic [active] [ref=e1]:\n  - heading \"Acme Back Office\" [level=1] [ref=e2]\n  - generic [ref=e3]:\n    - paragraph [ref=e4]:\n      - generic [ref=e5]:\n        - text: User\n        - textbox \"User\" [ref=e6]\n    - paragraph [ref=e7]:\n      - generic [ref=e8]:\n        - text: Password\n   "
+          "result": "### Page\n- Page URL: http://127.0.0.1:54066/login\n- Page Title: Sign in · Acme Back Office\n### Snapshot\n```yaml\n- generic [active] [ref=e1]:\n  - heading \"Acme Back Office\" [level=1] [ref=e2]\n  - generic [ref=e3]:\n    - paragraph [ref=e4]:\n      - generic [ref=e5]:\n        - text: User\n        - textbox \"User\" [ref=e6]\n    - paragraph [ref=e7]:\n      - generic [ref=e8]:\n        - text: Password\n   "
         },
         {
           "tool": "mcp__playwright__browser_fill_form",
@@ -133,22 +132,22 @@
         {
           "tool": "mcp__playwright__browser_click",
           "input": "{\"target\":\"e10\"}",
-          "result": "### Ran Playwright code\n```js\nawait page.getByRole('button', { name: 'Sign in' }).click();\n```\n### Page\n- Page URL: http://127.0.0.1:55812/orders\n- Page Title: Orders · Acme Back Office\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T01-19-49-194Z.yml)"
+          "result": "### Ran Playwright code\n```js\nawait page.getByRole('button', { name: 'Sign in' }).click();\n```\n### Page\n- Page URL: http://127.0.0.1:54066/orders\n- Page Title: Orders · Acme Back Office\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T02-42-51-024Z.yml)"
         },
         {
           "tool": "mcp__playwright__browser_snapshot",
           "input": "{}",
-          "result": "### Page\n- Page URL: http://127.0.0.1:55812/orders\n- Page Title: Orders · Acme Back Office\n### Snapshot\n```yaml\n- generic [active] [ref=f1e1]:\n  - banner [ref=f1e2]:\n    - strong [ref=f1e3]: Acme Back Office\n    - navigation [ref=f1e4]:\n      - link \"Orders\" [ref=f1e5] [cursor=pointer]:\n        - /url: /orders\n      - text: ·\n      - link \"Customers\" [ref=f1e6] [cursor=pointer]:\n        - /url: /c"
+          "result": "### Page\n- Page URL: http://127.0.0.1:54066/orders\n- Page Title: Orders · Acme Back Office\n### Snapshot\n```yaml\n- generic [active] [ref=f1e1]:\n  - banner [ref=f1e2]:\n    - strong [ref=f1e3]: Acme Back Office\n    - navigation [ref=f1e4]:\n      - link \"Orders\" [ref=f1e5] [cursor=pointer]:\n        - /url: /orders\n      - text: ·\n      - link \"Customers\" [ref=f1e6] [cursor=pointer]:\n        - /url: /c"
         },
         {
           "tool": "mcp__playwright__browser_navigate",
-          "input": "{\"url\":\"http://127.0.0.1:55812/orders/1042\"}",
-          "result": "### Ran Playwright code\n```js\nawait page.goto('http://127.0.0.1:55812/orders/1042');\n```\n### Page\n- Page URL: http://127.0.0.1:55812/orders/1042\n- Page Title: Order 1042 · Acme Back Office\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T01-19-51-259Z.yml)"
+          "input": "{\"url\":\"http://127.0.0.1:54066/orders/1042\"}",
+          "result": "### Ran Playwright code\n```js\nawait page.goto('http://127.0.0.1:54066/orders/1042');\n```\n### Page\n- Page URL: http://127.0.0.1:54066/orders/1042\n- Page Title: Order 1042 · Acme Back Office\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T02-42-54-479Z.yml)"
         },
         {
           "tool": "mcp__playwright__browser_snapshot",
           "input": "{}",
-          "result": "### Page\n- Page URL: http://127.0.0.1:55812/orders/1042\n- Page Title: Order 1042 · Acme Back Office\n### Snapshot\n```yaml\n- generic [active] [ref=f2e1]:\n  - banner [ref=f2e2]:\n    - strong [ref=f2e3]: Acme Back Office\n    - navigation [ref=f2e4]:\n      - link \"Orders\" [ref=f2e5] [cursor=pointer]:\n        - /url: /orders\n      - text: ·\n      - link \"Customers\" [ref=f2e6] [cursor=pointer]:\n        -"
+          "result": "### Page\n- Page URL: http://127.0.0.1:54066/orders/1042\n- Page Title: Order 1042 · Acme Back Office\n### Snapshot\n```yaml\n- generic [active] [ref=f2e1]:\n  - banner [ref=f2e2]:\n    - strong [ref=f2e3]: Acme Back Office\n    - navigation [ref=f2e4]:\n      - link \"Orders\" [ref=f2e5] [cursor=pointer]:\n        - /url: /orders\n      - text: ·\n      - link \"Customers\" [ref=f2e6] [cursor=pointer]:\n        -"
         }
       ],
       "serverStatus": [
@@ -166,10 +165,10 @@
       "side": "unwalled cold",
       "ok": true,
       "expected": "Revenue by region, Revenue forecast 2027",
-      "answer": "Quatre dashboards ont « Revenue » dans leur titre, mais il n'y a que deux titres distincts. Chaque titre existe deux fois, avec des identifiants (uid) différents :\n\n- **Revenue by region** (2 dashboards)\n- **Revenue forecast 2027** (2 dashboards)\n\nJ'ai utilisé la recherche Grafana avec le filtre « Revenue » sur les dashboards, via l'outil unwalled. Je n'ai pas vérifié si les doublons sont dans des dossiers différents.",
-      "costUsd": 0.0516696,
+      "answer": "Deux dashboards ont « Revenue » dans leur titre :\n\n1. **Revenue by region**\n2. **Revenue forecast 2027**\n\nJe les ai trouvés avec la recherche Grafana (`/api/search?query=Revenue&type=dash-db`). Cette recherche ne regarde que les titres.",
+      "costUsd": 0.051393,
       "turns": 5,
-      "ms": 29921,
+      "ms": 29962,
       "toolCalls": [
         "ToolSearch",
         "list_recipes",
@@ -179,7 +178,7 @@
       "trace": [
         {
           "tool": "ToolSearch",
-          "input": "{\"query\":\"select:mcp__unwalled__list_recipes,mcp__unwalled__discover,mcp__unwalled__login,mcp__unwalled__search_tools,mcp__unwalled__call_tool,mcp__unwalled__set_credentials\",\"max_results\":10}",
+          "input": "{\"query\":\"select:mcp__unwalled__list_recipes,mcp__unwalled__discover,mcp__unwalled__search_tools,mcp__unwalled__call_tool,mcp__unwalled__set_credentials,mcp__unwalled__login\",\"max_results\":10}",
           "result": "     "
         },
         {
@@ -189,13 +188,13 @@
         },
         {
           "tool": "mcp__unwalled__discover",
-          "input": "{\"name\":\"grafana\",\"url\":\"http://127.0.0.1:3300/login\",\"actions\":[{\"fill\":\"input[name='user']\",\"text\":\"admin\"},{\"fill\":\"input[name='password']\",\"text\":\"unwalled-test\"},{\"press\":\"Enter\"},{\"wait\":3000},{\"goto\":\"http://127.0.0.1:3300/dashboards\"},{\"wait\":3000}]}",
-          "result": "Discovered in 20.3s.\nRecipe \"grafana\" (browser) — base http://127.0.0.1:3300 — updated 2026-10-11T01:20:20.824Z\nCaptured 23 requests, 23 usable.\n  WebSocket ws://127.0.0.1:3300/api/live/ws (2×, 2 messages, 1 frame(s) sent on connect)\n  GET http://127.0.0.1:3300/api/plugins/{plugin}/settings (8×)\n  GET http://127.0.0.1:3300/api/search?limit&starred&page&type&folderUIDs (4×)\n  GET http://127.0.0.1:3"
+          "input": "{\"name\":\"grafana\",\"url\":\"http://127.0.0.1:3300/login\",\"actions\":[{\"fill\":\"input[name=\\\"user\\\"]\",\"text\":\"admin\"},{\"fill\":\"input[name=\\\"password\\\"]\",\"text\":\"unwalled-test\"},{\"press\":\"Enter\"},{\"wait\":3000},{\"goto\":\"http://127.0.0.1:3300/dashboards?query=Revenue\"},{\"wait\":3000}]}",
+          "result": "Discovered in 21.2s.\nRecipe \"grafana\" (browser) — base http://127.0.0.1:3300 — updated 2026-10-11T02:43:28.756Z\nCaptured 22 requests, 22 usable.\n  WebSocket ws://127.0.0.1:3300/api/live/ws (2×, 2 messages, 1 frame(s) sent on connect)\n  GET http://127.0.0.1:3300/api/plugins/{plugin}/settings (8×)\n  GET http://127.0.0.1:3300/api/search?limit&starred&deleted&query (4×)\n  GET http://127.0.0.1:3300/api"
         },
         {
           "tool": "mcp__unwalled__call_tool",
-          "input": "{\"name\":\"grafana__get_api_search\",\"arguments\":{\"query\":\"Revenue\",\"type\":\"dash-db\",\"limit\":100}}",
-          "result": "HTTP 200 OK — http://127.0.0.1:3300/api/search?query=Revenue&type=dash-db&limit=100\n[{\"id\":3,\"uid\":\"6aa0c111-194f-49d0-a08e-3fcedd63cf64\",\"orgId\":1,\"title\":\"Revenue by region\",\"uri\":\"db/revenue-by-region\",\"url\":\"/d/6aa0c111-194f-49d0-a08e-3fcedd63cf64/revenue-by-region\",\"slug\":\"\",\"type\":\"dash-db\",\"tags\":[],\"isStarred\":false,\"sortMeta\":0,\"isDeleted\":false},{\"id\":7,\"uid\":\"82d9b15a-1312-4eee-9cbe-2b3"
+          "input": "{\"name\":\"grafana__get_api_search\",\"arguments\":{\"query\":{\"query\":\"Revenue\",\"type\":\"dash-db\"}}}",
+          "result": "HTTP 200 OK — http://127.0.0.1:3300/api/search?query=Revenue&type=dash-db\n[{\"id\":2,\"uid\":\"unwalled-revenue-by-region\",\"orgId\":1,\"title\":\"Revenue by region\",\"uri\":\"db/revenue-by-region\",\"url\":\"/d/unwalled-revenue-by-region/revenue-by-region\",\"slug\":\"\",\"type\":\"dash-db\",\"tags\":[],\"isStarred\":false,\"sortMeta\":0,\"isDeleted\":false},{\"id\":3,\"uid\":\"unwalled-revenue-forecast-2027\",\"orgId\":1,\"title\":\"Revenu"
         }
       ],
       "serverStatus": [
@@ -213,24 +212,30 @@
       "side": "unwalled warm",
       "ok": true,
       "expected": "Revenue by region, Revenue forecast 2027",
-      "answer": "Deux dashboards ont « Revenue » dans leur titre :\n\n- **Revenue by region**\n- **Revenue forecast 2027**\n\nLa recherche renvoie chacun deux fois, sans doute dans deux dossiers différents. Je n'ai pas vérifié les dossiers. Les autres dashboards (Server latency, Support tickets, Unwalled sales…) n'ont pas « Revenue » dans leur titre.",
-      "costUsd": 0.0248112,
-      "turns": 3,
-      "ms": 5381,
+      "answer": "Deux dashboards ont « Revenue » dans leur titre :\n\n- Revenue by region\n- Revenue forecast 2027\n\nJe les ai trouvés avec la recherche Grafana (`query=Revenue`, type dashboard), après connexion avec le compte admin.",
+      "costUsd": 0.029952700000000006,
+      "turns": 4,
+      "ms": 6338,
       "toolCalls": [
         "ToolSearch",
+        "grafana__post_login",
         "grafana__get_api_search"
       ],
       "trace": [
         {
           "tool": "ToolSearch",
-          "input": "{\"query\":\"select:mcp__unwalled__grafana__get_api_search,mcp__unwalled__login,mcp__unwalled__set_credentials,mcp__unwalled__list_recipes\",\"max_results\":10}",
+          "input": "{\"query\":\"select:mcp__unwalled__grafana__get_api_search,mcp__unwalled__grafana__post_login,mcp__unwalled__set_credentials,mcp__unwalled__login\",\"max_results\":10}",
           "result": "   "
         },
         {
+          "tool": "mcp__unwalled__grafana__post_login",
+          "input": "{\"body\":{\"user\":\"admin\",\"password\":\"unwalled-test\"}}",
+          "result": "HTTP 200 OK — http://127.0.0.1:3300/login\n{\"message\":\"Logged in\",\"redirectUrl\":\"/\"}"
+        },
+        {
           "tool": "mcp__unwalled__grafana__get_api_search",
-          "input": "{\"query\":{\"type\":\"dash-db\",\"limit\":5000},\"pick\":\"[*].title\"}",
-          "result": "HTTP 200 OK — http://127.0.0.1:3300/api/search?type=dash-db&limit=5000\n[\n \"Revenue by region\",\n \"Revenue by region\",\n \"Revenue forecast 2027\",\n \"Revenue forecast 2027\",\n \"Server latency\",\n \"Server latency\",\n \"Support tickets\",\n \"Support tickets\",\n \"Unwalled sales 1791679720598\",\n \"Unwalled sales 1791679940556\"\n]"
+          "input": "{\"query\":{\"query\":\"Revenue\",\"type\":\"dash-db\"},\"pick\":\"[*].title\"}",
+          "result": "HTTP 200 OK — http://127.0.0.1:3300/api/search?query=Revenue&type=dash-db\n[\n \"Revenue by region\",\n \"Revenue forecast 2027\"\n]"
         }
       ],
       "serverStatus": [
@@ -248,29 +253,29 @@
       "side": "browser",
       "ok": true,
       "expected": "Revenue by region, Revenue forecast 2027",
-      "answer": "La recherche « Revenue » renvoie 4 dashboards, mais seulement 2 titres distincts :\n\n- **Revenue by region** (2 dashboards, avec des UID différents)\n- **Revenue forecast 2027** (2 dashboards, avec des UID différents)\n\nLes quatre sont dans le dossier racine « Dashboards ». La recherche Grafana n'est pas sensible à la casse, donc elle aurait aussi remonté un titre comme « revenue » en minuscules. Il n'y en avait pas d'autre.",
-      "costUsd": 0.05972240000000001,
+      "answer": "Deux dashboards ont « Revenue » dans leur titre :\n\n1. **Revenue by region**\n2. **Revenue forecast 2027**\n\nJe les ai trouvés avec la recherche Grafana sur « Revenue ». Elle ne renvoie que ces deux résultats, tous deux à la racine de « Dashboards ».",
+      "costUsd": 0.055201,
       "turns": 8,
-      "ms": 13317,
+      "ms": 11727,
       "toolCalls": [
         "ToolSearch",
         "browser_navigate",
         "browser_snapshot",
         "browser_fill_form",
-        "browser_click",
+        "browser_press_key",
         "browser_navigate",
         "browser_snapshot"
       ],
       "trace": [
         {
           "tool": "ToolSearch",
-          "input": "{\"query\":\"select:mcp__playwright__browser_navigate,mcp__playwright__browser_fill_form,mcp__playwright__browser_snapshot,mcp__playwright__browser_click,mcp__playwright__browser_type,mcp__playwright__browser_press_key\",\"max_results\":10}",
-          "result": "     "
+          "input": "{\"query\":\"select:mcp__playwright__browser_navigate,mcp__playwright__browser_fill_form,mcp__playwright__browser_snapshot,mcp__playwright__browser_click,mcp__playwright__browser_press_key\",\"max_results\":5}",
+          "result": "    "
         },
         {
           "tool": "mcp__playwright__browser_navigate",
           "input": "{\"url\":\"http://127.0.0.1:3300/login\"}",
-          "result": "### Ran Playwright code\n```js\nawait page.goto('http://127.0.0.1:3300/login');\n```\n### Page\n- Page URL: http://127.0.0.1:3300/login\n- Page Title: Grafana\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T01-20-39-492Z.yml)"
+          "result": "### Ran Playwright code\n```js\nawait page.goto('http://127.0.0.1:3300/login');\n```\n### Page\n- Page URL: http://127.0.0.1:3300/login\n- Page Title: Grafana\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T02-43-47-071Z.yml)"
         },
         {
           "tool": "mcp__playwright__browser_snapshot",
@@ -279,23 +284,23 @@
         },
         {
           "tool": "mcp__playwright__browser_fill_form",
-          "input": "{\"fields\":[{\"target\":\"e28\",\"name\":\"user\",\"type\":\"textbox\",\"value\":\"admin\"},{\"target\":\"e37\",\"name\":\"password\",\"type\":\"textbox\",\"value\":\"unwalled-test\"}]}",
+          "input": "{\"fields\":[{\"target\":\"e28\",\"name\":\"Email or username\",\"type\":\"textbox\",\"value\":\"admin\"},{\"target\":\"e37\",\"name\":\"Password\",\"type\":\"textbox\",\"value\":\"unwalled-test\"}]}",
           "result": "### Ran Playwright code\n```js\nawait page.getByTestId('data-testid Username input field').fill('admin');\nawait page.getByTestId('data-testid Password input field').fill('unwalled-test');\n```"
         },
         {
-          "tool": "mcp__playwright__browser_click",
-          "input": "{\"target\":\"e41\"}",
-          "result": "### Ran Playwright code\n```js\nawait page.getByTestId('data-testid Login button').click();\n```\n### Page\n- Page URL: http://127.0.0.1:3300/\n- Page Title: Grafana\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T01-20-43-065Z.yml)"
+          "tool": "mcp__playwright__browser_press_key",
+          "input": "{\"key\":\"Enter\"}",
+          "result": "### Ran Playwright code\n```js\n// Press Enter\nawait page.keyboard.press('Enter');\n```\n### Page\n- Page URL: http://127.0.0.1:3300/\n- Page Title: Grafana\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T02-43-49-991Z.yml)"
         },
         {
           "tool": "mcp__playwright__browser_navigate",
           "input": "{\"url\":\"http://127.0.0.1:3300/dashboards?query=Revenue\"}",
-          "result": "### Ran Playwright code\n```js\nawait page.goto('http://127.0.0.1:3300/dashboards?query=Revenue');\n```\n### Page\n- Page URL: http://127.0.0.1:3300/dashboards?query=Revenue\n- Page Title: Dashboards - Grafana\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T01-20-44-853Z.yml)"
+          "result": "### Ran Playwright code\n```js\nawait page.goto('http://127.0.0.1:3300/dashboards?query=Revenue');\n```\n### Page\n- Page URL: http://127.0.0.1:3300/dashboards?query=Revenue\n- Page Title: Dashboards - Grafana\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T02-43-51-699Z.yml)"
         },
         {
           "tool": "mcp__playwright__browser_snapshot",
           "input": "{}",
-          "result": "### Page\n- Page URL: http://127.0.0.1:3300/dashboards?query=Revenue\n- Page Title: Dashboards - Grafana\n### Snapshot\n```yaml\n- generic [ref=f6e4]:\n  - link \"Skip to main content\" [ref=f6e12] [cursor=pointer]:\n    - /url: \"#pageContent\"\n  - generic [ref=f6e14]:\n    - generic [ref=f6e15]:\n      - generic [ref=f6e16]:\n        - button \"Close menu\" [ref=f6e17] [cursor=pointer]:\n          - img \"Grafana"
+          "result": "### Page\n- Page URL: http://127.0.0.1:3300/dashboards?query=Revenue\n- Page Title: Dashboards - Grafana\n### Snapshot\n```yaml\n- generic [ref=f6e4]:\n  - link \"Skip to main content\" [ref=f6e5] [cursor=pointer]:\n    - /url: \"#pageContent\"\n  - generic [ref=f6e7]:\n    - generic [ref=f6e8]:\n      - generic [ref=f6e9]:\n        - button \"Close menu\" [ref=f6e10] [cursor=pointer]:\n          - img \"Grafana\" [r"
         }
       ],
       "serverStatus": [
@@ -313,10 +318,10 @@
       "side": "unwalled cold",
       "ok": true,
       "expected": "1.53.2",
-      "answer": "La dernière version stable de tokio sur crates.io est la **1.53.2**, publiée le 03/10/2026 (`max_stable_version` = 1.53.2 d'après l'API).",
-      "costUsd": 0.11733850000000001,
+      "answer": "La dernière version stable de tokio sur crates.io est **1.53.2**, publiée le 03/10/2026.",
+      "costUsd": 0.0525056,
       "turns": 5,
-      "ms": 13662,
+      "ms": 13445,
       "toolCalls": [
         "ToolSearch",
         "list_recipes",
@@ -326,7 +331,7 @@
       "trace": [
         {
           "tool": "ToolSearch",
-          "input": "{\"query\":\"select:mcp__unwalled__list_recipes,mcp__unwalled__search_tools,mcp__unwalled__discover,mcp__unwalled__call_tool\",\"max_results\":10}",
+          "input": "{\"query\":\"select:mcp__unwalled__list_recipes,mcp__unwalled__search_tools,mcp__unwalled__discover,mcp__unwalled__call_tool\",\"max_results\":5}",
           "result": "   "
         },
         {
@@ -337,12 +342,12 @@
         {
           "tool": "mcp__unwalled__discover",
           "input": "{\"name\":\"crates\",\"url\":\"https://crates.io/crates/tokio\"}",
-          "result": "Discovered in 6.5s.\nRecipe \"crates\" (browser) — base https://crates.io — updated 2026-10-11T01:21:02.108Z\nCaptured 4 requests, 4 usable.\n  GET https://crates.io/api/v1/site_metadata (1×)\n  GET https://crates.io/api/v1/crates/{crate}?include (1×)\n  GET https://crates.io/api/v1/crates/{crate}/owners (1×)\n  GET https://crates.io/api/v1/crates/{crate}/downloads?include (1×)\nTools: crates__get_api_v1_s"
+          "result": "Discovered in 6.2s.\nRecipe \"crates\" (browser) — base https://crates.io — updated 2026-10-11T02:44:07.623Z\nCaptured 4 requests, 4 usable.\n  GET https://crates.io/api/v1/site_metadata (1×)\n  GET https://crates.io/api/v1/crates/{crate}?include (1×)\n  GET https://crates.io/api/v1/crates/{crate}/owners (1×)\n  GET https://crates.io/api/v1/crates/{crate}/downloads?include (1×)\nTools (call them directly; "
         },
         {
           "tool": "mcp__unwalled__call_tool",
-          "input": "{\"name\":\"crates__get_api_v1_crates_crate\",\"arguments\":{\"crate\":\"tokio\",\"pick\":[\"crate.max_stable_version\",\"crate.max_version\",\"crate.newest_version\"]}}",
-          "result": "HTTP 200 OK — https://crates.io/api/v1/crates/tokio\n(pick \"crate.max_stable_version,crate.max_version,crate.newest_version\" matched nothing; full body follows)\n{\"crate\":{\"id\":\"tokio\",\"name\":\"tokio\",\"updated_at\":\"2026-10-03T11:18:32.487780Z\",\"versions\":[3391430,3391274,2829786,2805466,2799626,2798927,2367927,2367212,2362305,2347713,2347712,2266231,2257260,2227224,2205836,2201863,2081748,1918486,191"
+          "input": "{\"name\":\"crates__get_api_v1_crates_crate\",\"arguments\":{\"path\":{\"crate\":\"tokio\"},\"pick\":[\"crate.max_stable_version\",\"crate.max_version\",\"crate.newest_version\"]}}",
+          "result": "HTTP 200 OK — https://crates.io/api/v1/crates/tokio\n(pick \"crate.max_stable_version,crate.max_version,crate.newest_version\" matched nothing)\n(445597 characters: shortened view, lists cut to their first items and long texts clipped. Pass pick with the fields you need, or max_chars to get the whole response.)\nFields: crate.id, crate.name, crate.updated_at, crate.versions, crate.keywords, crate.categ"
         }
       ],
       "serverStatus": [
@@ -361,9 +366,9 @@
       "ok": true,
       "expected": "1.53.2",
       "answer": "La dernière version stable de tokio sur crates.io est la **1.53.2**.",
-      "costUsd": 0.0188223,
+      "costUsd": 0.019056700000000003,
       "turns": 3,
-      "ms": 4782,
+      "ms": 4837,
       "toolCalls": [
         "ToolSearch",
         "crates__get_api_v1_crates_crate"
@@ -376,8 +381,8 @@
         },
         {
           "tool": "mcp__unwalled__crates__get_api_v1_crates_crate",
-          "input": "{\"path\":{\"crate\":\"tokio\"},\"pick\":\"crate.max_stable_version,crate.default_version,crate.newest_version\"}",
-          "result": "HTTP 200 OK — https://crates.io/api/v1/crates/tokio\n{\n \"crate.max_stable_version\": \"1.53.2\",\n \"crate.default_version\": \"1.53.2\",\n \"crate.newest_version\": \"1.53.2\"\n}"
+          "input": "{\"path\":{\"crate\":\"tokio\"},\"pick\":\"crate.max_stable_version,crate.default_version,crate.max_version\"}",
+          "result": "HTTP 200 OK — https://crates.io/api/v1/crates/tokio\n{\n \"crate.max_stable_version\": \"1.53.2\",\n \"crate.default_version\": \"1.53.2\",\n \"crate.max_version\": \"1.53.2\"\n}"
         }
       ],
       "serverStatus": [
@@ -395,10 +400,10 @@
       "side": "browser",
       "ok": true,
       "expected": "1.53.2",
-      "answer": "La dernière version stable de tokio sur crates.io est la **1.53.2**. C'est le numéro affiché sur la page du crate.",
-      "costUsd": 0.0251012,
+      "answer": "La dernière version stable de tokio sur crates.io est la **1.53.2**.",
+      "costUsd": 0.024921199999999998,
       "turns": 4,
-      "ms": 5907,
+      "ms": 5344,
       "toolCalls": [
         "ToolSearch",
         "browser_navigate",
@@ -413,7 +418,7 @@
         {
           "tool": "mcp__playwright__browser_navigate",
           "input": "{\"url\":\"https://crates.io/crates/tokio\"}",
-          "result": "### Ran Playwright code\n```js\nawait page.goto('https://crates.io/crates/tokio');\n```\n### Page\n- Page URL: https://crates.io/crates/tokio\n- Page Title: crates.io: Rust Package Registry\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T01-21-18-529Z.yml)"
+          "result": "### Ran Playwright code\n```js\nawait page.goto('https://crates.io/crates/tokio');\n```\n### Page\n- Page URL: https://crates.io/crates/tokio\n- Page Title: crates.io: Rust Package Registry\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T02-44-23-763Z.yml)"
         },
         {
           "tool": "mcp__playwright__browser_snapshot",
@@ -437,20 +442,19 @@
       "ok": true,
       "expected": "org.gimp.GIMP",
       "answer": "L'ID d'application de GIMP sur Flathub est `org.gimp.GIMP`.",
-      "costUsd": 0.0455532,
-      "turns": 6,
-      "ms": 15102,
+      "costUsd": 0.0489266,
+      "turns": 5,
+      "ms": 19641,
       "toolCalls": [
         "ToolSearch",
         "list_recipes",
         "discover",
-        "search_tools",
         "call_tool"
       ],
       "trace": [
         {
           "tool": "ToolSearch",
-          "input": "{\"query\":\"select:mcp__unwalled__list_recipes,mcp__unwalled__search_tools,mcp__unwalled__discover,mcp__unwalled__call_tool\",\"max_results\":5}",
+          "input": "{\"query\":\"select:mcp__unwalled__list_recipes,mcp__unwalled__discover,mcp__unwalled__search_tools,mcp__unwalled__call_tool\",\"max_results\":10}",
           "result": "   "
         },
         {
@@ -460,18 +464,13 @@
         },
         {
           "tool": "mcp__unwalled__discover",
-          "input": "{\"name\":\"flathub\",\"url\":\"https://flathub.org\"}",
-          "result": "Discovered in 5.9s.\nRecipe \"flathub\" (browser) — base https://flathub.org — updated 2026-10-11T01:21:33.712Z\nCaptured 0 requests, 0 usable.\nWarning: No API call was observed. The page may be server-rendered, or the data appears only after interaction: pass actions, use interactive mode, or log in first.\nTools: flathub__request"
-        },
-        {
-          "tool": "mcp__unwalled__search_tools",
-          "input": "{\"query\":\"flathub request\"}",
-          "result": "## flathub__request\nFree-form HTTP request (absolute URL, or path relative to https://flathub.org). [flathub] Uses the recipe's stored credentials and browser cookies.\nInput schema: {\"type\":\"object\",\"properties\":{\"method\":{\"type\":\"string\",\"enum\":[\"GET\",\"POST\",\"PUT\",\"PATCH\",\"DELETE\",\"HEAD\"]},\"url\":{\"type\":\"string\"},\"query\":{\"type\":\"object\",\"additionalProperties\":true},\"body\":{\"description\":\"Request"
+          "input": "{\"name\":\"flathub\",\"url\":\"https://flathub.org/apps/search?q=gimp\"}",
+          "result": "Discovered in 9.8s.\nRecipe \"flathub\" (browser) — base https://flathub.org — updated 2026-10-11T02:44:43.028Z\nCaptured 1 requests, 1 usable.\n  POST https://flathub.org/api/v2/search?locale (1×)\n  Page https://flathub.org/en/apps/search?q (server-rendered)\nTools (call them directly; if your client has not loaded them yet, use call_tool with the same name and arguments):\n  flathub__post_api_v2_search"
         },
         {
           "tool": "mcp__unwalled__call_tool",
-          "input": "{\"name\":\"flathub__request\",\"arguments\":{\"method\":\"POST\",\"url\":\"https://flathub.org/api/v2/search\",\"body\":{\"query\":\"GIMP\"},\"pick\":\"hits[0:3].app_id,hits[0:3].name\"}}",
-          "result": "HTTP 200 OK — https://flathub.org/api/v2/search\n{\n \"hits[0:3].app_id\": [\n  \"org.gimp.GIMP\",\n  \"com.github._4lex4.ScanTailor-Advanced\",\n  \"me.ahola.aphototoollibre\"\n ],\n \"hits[0:3].name\": [\n  \"GNU Image Manipulation Program\",\n  \"ScanTailor Advanced\",\n  \"A Photo Tool (Libre)\"\n ]\n}"
+          "input": "{\"name\":\"flathub__post_api_v2_search\",\"arguments\":{\"body\":{\"query\":\"gimp\",\"filters\":[],\"hits_per_page\":3,\"page\":1},\"pick\":[\"hits.0.app_id\",\"hits.0.name\",\"hits.1.app_id\",\"hits.1.name\"]}}",
+          "result": "HTTP 200 OK — https://flathub.org/api/v2/search?locale=en\n(pick \"hits.0.app_id,hits.0.name,hits.1.app_id,hits.1.name\" matched nothing)\n{\"hits\":[{\"name\":\"GNU Image Manipulation Program\",\"keywords\":[\"GIMP\",\"Photoshop\"],\"localized_keywords\":[\"El GIMP\",\"GIMP\",\"GIMPo\",\"Photoshop\",\"design\",\"graphic\",\"جمب\",\"گیمپ\",\"গিম্প\",\"ਜੈਮਪ\",\"கிம்ப்\",\"圖形\",\"影像\",\"김프\"],\"summary\":\"High-end image creation and manipulation\""
         }
       ],
       "serverStatus": [
@@ -490,23 +489,23 @@
       "ok": true,
       "expected": "org.gimp.GIMP",
       "answer": "L'ID d'application de GIMP sur Flathub est `org.gimp.GIMP`.",
-      "costUsd": 0.019381199999999998,
+      "costUsd": 0.019994599999999998,
       "turns": 3,
-      "ms": 5596,
+      "ms": 6821,
       "toolCalls": [
         "ToolSearch",
-        "flathub__request"
+        "flathub__post_api_v2_search"
       ],
       "trace": [
         {
           "tool": "ToolSearch",
-          "input": "{\"query\":\"select:mcp__unwalled__flathub__request,mcp__unwalled__search_tools\",\"max_results\":5}",
-          "result": " "
+          "input": "{\"query\":\"select:mcp__unwalled__flathub__post_api_v2_search\",\"max_results\":1}",
+          "result": ""
         },
         {
-          "tool": "mcp__unwalled__flathub__request",
-          "input": "{\"method\":\"POST\",\"url\":\"https://flathub.org/api/v2/search\",\"body\":{\"query\":\"GIMP\"},\"pick\":\"hits[0:3].app_id,hits[0:3].name\"}",
-          "result": "HTTP 200 OK — https://flathub.org/api/v2/search\n{\n \"hits[0:3].app_id\": [\n  \"org.gimp.GIMP\",\n  \"com.github._4lex4.ScanTailor-Advanced\",\n  \"me.ahola.aphototoollibre\"\n ],\n \"hits[0:3].name\": [\n  \"GNU Image Manipulation Program\",\n  \"ScanTailor Advanced\",\n  \"A Photo Tool (Libre)\"\n ]\n}"
+          "tool": "mcp__unwalled__flathub__post_api_v2_search",
+          "input": "{\"body\":{\"query\":\"gimp\",\"filters\":[],\"hits_per_page\":5,\"page\":1},\"pick\":\"hits[*].name,hits[*].app_id\"}",
+          "result": "HTTP 200 OK — https://flathub.org/api/v2/search?locale=en\n{\n \"hits[*].name\": [\n  \"GNU Image Manipulation Program\",\n  \"ScanTailor Advanced\",\n  \"Conjure\",\n  \"Halftone\",\n  \"Switcheroo\"\n ],\n \"hits[*].app_id\": [\n  \"org.gimp.GIMP\",\n  \"com.github._4lex4.ScanTailor-Advanced\",\n  \"io.github.nate_xyz.Conjure\",\n  \"io.github.tfuxu.Halftone\",\n  \"io.gitlab.adhami3310.Converter\"\n ]\n}"
         }
       ],
       "serverStatus": [
@@ -524,13 +523,12 @@
       "side": "browser",
       "ok": true,
       "expected": "org.gimp.GIMP",
-      "answer": "GIMP's application ID on Flathub is `org.gimp.GIMP`. Its page at flathub.org/apps/org.gimp.GIMP loads with the title \"Install GNU Image Manipulation Program on Linux | Flathub\". I got there by guessing the URL, because the Flathub search page returned a 404.",
-      "costUsd": 0.0242531,
-      "turns": 4,
-      "ms": 6710,
+      "answer": "`org.gimp.GIMP` est l'ID d'application de GIMP sur Flathub. La page Flathub à cette adresse (flathub.org/apps/org.gimp.GIMP) s'est chargée avec le titre « Install GNU Image Manipulation Program on Linux ». Je n'ai pas lu le contenu de la page, donc je n'ai pas vu l'ID affiché dessus.",
+      "costUsd": 0.020603800000000002,
+      "turns": 3,
+      "ms": 5895,
       "toolCalls": [
         "ToolSearch",
-        "browser_navigate",
         "browser_navigate"
       ],
       "trace": [
@@ -541,13 +539,8 @@
         },
         {
           "tool": "mcp__playwright__browser_navigate",
-          "input": "{\"url\":\"https://flathub.org/en/search?q=GIMP\"}",
-          "result": "### Ran Playwright code\n```js\nawait page.goto('https://flathub.org/en/search?q=GIMP');\n```\n### Page\n- Page URL: https://flathub.org/en/search?q=GIMP\n- Page Title: 404 - Page Not Found\n- HTTP status: 404\n- Console: 1 errors, 0 warnings\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T01-21-52-693Z.yml)\n### Events\n- New console entries: .playwright-mcp\\console-2026-10-11T01-21-52-216Z.log#L"
-        },
-        {
-          "tool": "mcp__playwright__browser_navigate",
           "input": "{\"url\":\"https://flathub.org/apps/org.gimp.GIMP\"}",
-          "result": "### Ran Playwright code\n```js\nawait page.goto('https://flathub.org/apps/org.gimp.GIMP');\n```\n### Page\n- Page URL: https://flathub.org/en/apps/org.gimp.GIMP\n- Page Title: Install GNU Image Manipulation Program on Linux | Flathub\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T01-21-54-532Z.yml)\n### Events\n- New console entries: .playwright-mcp\\console-2026-10-11T01-21-53-787Z.log#L1-L6"
+          "result": "### Ran Playwright code\n```js\nawait page.goto('https://flathub.org/apps/org.gimp.GIMP');\n```\n### Page\n- Page URL: https://flathub.org/en/apps/org.gimp.GIMP\n- Page Title: Install GNU Image Manipulation Program on Linux | Flathub\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T02-45-03-936Z.yml)\n### Events\n- New console entries: .playwright-mcp\\console-2026-10-11T02-45-02-833Z.log#L1-L6"
         }
       ],
       "serverStatus": [
@@ -565,21 +558,23 @@
       "side": "unwalled cold",
       "ok": true,
       "expected": "about 43.30, 5.37",
-      "answer": "Marseille (OpenStreetMap, Nominatim): latitude 43.2964, longitude 5.3778 (43.2963986, 5.3777888).",
-      "costUsd": 0.0511389,
-      "turns": 6,
-      "ms": 34121,
+      "answer": "Marseille, France : latitude 43.2964° N, longitude 5.3778° E (43.2963986, 5.3777888 selon OpenStreetMap/Nominatim, relation 76469).",
+      "costUsd": 0.0601189,
+      "turns": 8,
+      "ms": 36957,
       "toolCalls": [
         "ToolSearch",
         "list_recipes",
         "discover",
-        "search_tools",
+        "call_tool",
+        "call_tool",
+        "call_tool",
         "call_tool"
       ],
       "trace": [
         {
           "tool": "ToolSearch",
-          "input": "{\"query\":\"select:mcp__unwalled__list_recipes,mcp__unwalled__discover,mcp__unwalled__search_tools,mcp__unwalled__call_tool\",\"max_results\":10}",
+          "input": "{\"query\":\"select:mcp__unwalled__list_recipes,mcp__unwalled__discover,mcp__unwalled__search_tools,mcp__unwalled__call_tool\",\"max_results\":5}",
           "result": "   "
         },
         {
@@ -589,18 +584,28 @@
         },
         {
           "tool": "mcp__unwalled__discover",
-          "input": "{\"name\":\"osm\",\"url\":\"https://www.openstreetmap.org/search?query=Marseille%2C%20France\"}",
-          "result": "Discovered in 23.2s.\nRecipe \"osm\" (browser) — base https://www.openstreetmap.org — updated 2026-10-11T01:22:26.534Z\nCaptured 1 requests, 1 usable.\n  POST https://www.openstreetmap.org/search/nominatim_query?query (1×)\nTools: osm__post_search_nominatim_query, osm__request"
-        },
-        {
-          "tool": "mcp__unwalled__search_tools",
-          "input": "{\"query\":\"osm nominatim\",\"recipe\":\"osm\"}",
-          "result": "## osm__post_search_nominatim_query\nCreate or submit nominatim query. [osm] POST https://www.openstreetmap.org/search/nominatim_query — observed 1×. Example: https://www.openstreetmap.org/search/nominatim_query?query=Marseille%2C+France. Response: no JSON body\nInput schema: {\"type\":\"object\",\"properties\":{\"pick\":{\"type\":\"string\",\"description\":\"Optional: keep only part of a JSON response, e.g. \\\"ite"
+          "input": "{\"name\":\"osm\",\"url\":\"https://www.openstreetmap.org/search?query=Marseille\"}",
+          "result": "Discovered in 22.3s.\nRecipe \"osm\" (browser) — base https://www.openstreetmap.org — updated 2026-10-11T02:45:34.549Z\nCaptured 1 requests, 1 usable.\n  POST https://www.openstreetmap.org/search/nominatim_query?query (1×)\n  Page https://www.openstreetmap.org/search?query (server-rendered, 1 table(s))\nTools (call them directly; if your client has not loaded them yet, use call_tool with the same name an"
         },
         {
           "tool": "mcp__unwalled__call_tool",
-          "input": "{\"name\":\"osm__request\",\"arguments\":{\"method\":\"GET\",\"url\":\"https://nominatim.openstreetmap.org/search\",\"query\":{\"q\":\"Marseille, France\",\"format\":\"json\",\"limit\":1}}}",
-          "result": "HTTP 200 OK — https://nominatim.openstreetmap.org/search?q=Marseille%2C+France&format=json&limit=1\n[{\"place_id\":83395174,\"licence\":\"Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright\",\"osm_type\":\"relation\",\"osm_id\":76469,\"lat\":\"43.2963986\",\"lon\":\"5.3777888\",\"class\":\"boundary\",\"type\":\"administrative\",\"place_rank\":16,\"importance\":0.7414985565519032,\"addresstype\":\"city\",\"name\":\"Mar"
+          "input": "{\"name\":\"osm__page_search\",\"arguments\":{\"query\":{\"query\":\"Marseille\"}}}",
+          "result": "HTTP 200 OK — https://www.openstreetmap.org/search?query=Marseille\n{\"title\":\"OpenStreetMap\",\"url\":\"https://www.openstreetmap.org/search?query=Marseille\",\"tables\":[{\"columns\":[\"column1\",\"column2\"],\"rows\":[{\"column1\":\"https://openstreetmap.org/copyright\",\"column2\":\"https://openstreetmap.org\"},{\"column1\":\"Copyright OpenStreetMap and contributors, under an open license\",\"column2\":\"\"}]}],\"links\":[{\"tex"
+        },
+        {
+          "tool": "mcp__unwalled__call_tool",
+          "input": "{\"name\":\"osm__post_search_nominatim_query\",\"arguments\":{\"query\":\"Marseille\"}}",
+          "result": "HTTP 200 OK — https://www.openstreetmap.org/search/nominatim_query?query=Marseille\n- City Marseille, Bouches-du-Rhône, Provence-Alpes-Côte d'Azur, France métropolitaine, France [/relation/76469]\n\n- Administrative Boundary (Level 7) Marseille, Bouches-du-Rhône, Provence-Alpes-Côte d'Azur, France métropolitaine, France [/relation/1686370]\n\nMore results [/search/nominatim_query?exclude=R76469%2CR1686"
+        },
+        {
+          "tool": "mcp__unwalled__call_tool",
+          "input": "{\"name\":\"osm__request\",\"arguments\":{\"url\":\"https://nominatim.openstreetmap.org/search?q=Marseille&format=jsonv2&limit=1\"}}",
+          "result": "HTTP 400 Bad Request — https://nominatim.openstreetmap.org/search?q=Marseille&format=jsonv2&limit=1\n{\"title\":\"Bad request\",\"description\":\"Invalid HTTP method\"}"
+        },
+        {
+          "tool": "mcp__unwalled__call_tool",
+          "input": "{\"name\":\"osm__request\",\"arguments\":{\"method\":\"GET\",\"url\":\"https://nominatim.openstreetmap.org/search?q=Marseille&format=jsonv2&limit=1\"}}",
+          "result": "HTTP 200 OK — https://nominatim.openstreetmap.org/search?q=Marseille&format=jsonv2&limit=1\n[{\"place_id\":82966111,\"licence\":\"Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright\",\"osm_type\":\"relation\",\"osm_id\":76469,\"lat\":\"43.2963986\",\"lon\":\"5.3777888\",\"category\":\"boundary\",\"type\":\"administrative\",\"place_rank\":16,\"importance\":0.7414985565519032,\"addresstype\":\"city\",\"name\":\"Marseill"
         }
       ],
       "serverStatus": [
@@ -618,13 +623,15 @@
       "side": "unwalled warm",
       "ok": true,
       "expected": "about 43.30, 5.37",
-      "answer": "Marseille : latitude 43.2964, longitude 5.3778 (43.2963986, 5.3777888).\n\nCes coordonnées viennent de Nominatim, le service de recherche d'OpenStreetMap. Je l'ai interrogé directement, car l'appel au site openstreetmap.org demandait un jeton d'authentification que je n'avais pas.",
-      "costUsd": 0.026641400000000003,
-      "turns": 4,
-      "ms": 6644,
+      "answer": "Marseille : latitude 43.2964, longitude 5.3778 (43.2963986, 5.3777888), d'après Nominatim, le moteur de recherche d'OpenStreetMap.\n\nLa page de recherche d'openstreetmap.org charge ses résultats par un appel séparé. J'ai donc interrogé directement le serveur Nominatim qu'elle utilise.",
+      "costUsd": 0.0511748,
+      "turns": 6,
+      "ms": 10224,
       "toolCalls": [
         "ToolSearch",
         "ToolSearch",
+        "osm__page_search",
+        "osm__page_search",
         "osm__request"
       ],
       "trace": [
@@ -635,13 +642,23 @@
         },
         {
           "tool": "ToolSearch",
-          "input": "{\"query\":\"select:mcp__unwalled__osm__request\",\"max_results\":1}",
-          "result": ""
+          "input": "{\"query\":\"select:mcp__unwalled__osm__request,mcp__unwalled__osm__page_search\",\"max_results\":2}",
+          "result": " "
+        },
+        {
+          "tool": "mcp__unwalled__osm__page_search",
+          "input": "{\"query\":{\"query\":\"Marseille\"},\"raw\":true,\"max_chars\":3000}",
+          "result": "HTTP 200 OK — https://www.openstreetmap.org/search?query=Marseille\n\n\n\n\n<!DOCTYPE html>\n<html lang=\"en\" dir=\"ltr\">\n  \n<head data-locale=\"en\" data-preferred-editor=\"id\" data-preferred-languages=\"[]\">\n  \n<meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<link rel=\"apple-touch-icon\" type=\"image/png\" href=\"/assets/apple-touch-icon"
+        },
+        {
+          "tool": "mcp__unwalled__osm__page_search",
+          "input": "{\"query\":{\"query\":\"Marseille\"},\"max_chars\":3000}",
+          "result": "HTTP 200 OK — https://www.openstreetmap.org/search?query=Marseille\n{\"title\":\"OpenStreetMap\",\"url\":\"https://www.openstreetmap.org/search?query=Marseille\",\"tables\":[{\"columns\":[\"column1\",\"column2\"],\"rows\":[{\"column1\":\"https://openstreetmap.org/copyright\",\"column2\":\"https://openstreetmap.org\"},{\"column1\":\"Copyright OpenStreetMap and contributors, under an open license\",\"column2\":\"\"}]}],\"links\":[{\"tex"
         },
         {
           "tool": "mcp__unwalled__osm__request",
-          "input": "{\"method\":\"GET\",\"url\":\"https://nominatim.openstreetmap.org/search\",\"query\":{\"q\":\"Marseille, France\",\"format\":\"json\",\"limit\":1},\"pick\":\"[0].lat,[0].lon,[0].display_name\"}",
-          "result": "HTTP 200 OK — https://nominatim.openstreetmap.org/search?q=Marseille%2C+France&format=json&limit=1\n{\n \"[0].lat\": \"43.2963986\",\n \"[0].lon\": \"5.3777888\",\n \"[0].display_name\": \"Marseille, Bouches-du-Rhône, Provence-Alpes-Côte d'Azur, France métropolitaine, France\"\n}"
+          "input": "{\"method\":\"GET\",\"url\":\"https://nominatim.openstreetmap.org/search?q=Marseille&format=json&limit=1\",\"pick\":\"[0].lat,[0].lon,[0].display_name\"}",
+          "result": "HTTP 200 OK — https://nominatim.openstreetmap.org/search?q=Marseille&format=json&limit=1\n{\n \"[0].lat\": \"43.2963986\",\n \"[0].lon\": \"5.3777888\",\n \"[0].display_name\": \"Marseille, Bouches-du-Rhône, Provence-Alpes-Côte d'Azur, France métropolitaine, France\"\n}"
         }
       ],
       "serverStatus": [
@@ -659,10 +676,10 @@
       "side": "browser",
       "ok": true,
       "expected": "about 43.30, 5.37",
-      "answer": "Marseille, France : latitude 43.2804, longitude 5.3806 (d'après l'URL OpenStreetMap, `#map=11/43.2804/5.3806`, après recherche « Marseille, France »).",
-      "costUsd": 0.0214243,
+      "answer": "Marseille, France : latitude 43.2804, longitude 5.3806 (43.2804° N, 5.3806° E). Ces valeurs viennent de l'URL de la carte OpenStreetMap après la recherche « Marseille, France ». Je n'ai pas ouvert la page de résultat du lieu, donc je n'ai pas vérifié ces coordonnées contre sa fiche.",
+      "costUsd": 0.0205486,
       "turns": 3,
-      "ms": 5382,
+      "ms": 6698,
       "toolCalls": [
         "ToolSearch",
         "browser_navigate"
@@ -670,13 +687,13 @@
       "trace": [
         {
           "tool": "ToolSearch",
-          "input": "{\"query\":\"select:mcp__playwright__browser_navigate,mcp__playwright__browser_snapshot,mcp__playwright__browser_evaluate\",\"max_results\":3}",
-          "result": "  "
+          "input": "{\"query\":\"select:mcp__playwright__browser_navigate,mcp__playwright__browser_snapshot\",\"max_results\":2}",
+          "result": " "
         },
         {
           "tool": "mcp__playwright__browser_navigate",
-          "input": "{\"url\":\"https://www.openstreetmap.org/search?query=Marseille%2C%20France\"}",
-          "result": "### Ran Playwright code\n```js\nawait page.goto('https://www.openstreetmap.org/search?query=Marseille%2C%20France');\n```\n### Page\n- Page URL: https://www.openstreetmap.org/search?query=Marseille%2C%20France#map=11/43.2804/5.3806\n- Page Title: Marseille, France | OpenStreetMap\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T01-22-48-317Z.yml)"
+          "input": "{\"url\":\"https://www.openstreetmap.org/search?query=Marseille, France\"}",
+          "result": "### Ran Playwright code\n```js\nawait page.goto('https://www.openstreetmap.org/search?query=Marseille, France');\n```\n### Page\n- Page URL: https://www.openstreetmap.org/search?query=Marseille,%20France#map=11/43.2804/5.3806\n- Page Title: Marseille, France | OpenStreetMap\n### Snapshot\n- [Snapshot](.playwright-mcp\\page-2026-10-11T02-46-04-848Z.yml)"
         }
       ],
       "serverStatus": [

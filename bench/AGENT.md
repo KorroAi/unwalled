@@ -11,31 +11,30 @@ every built-in tool that could reach the web or the disk is disabled.
 
 | Side | Right answers | Model turns | Cost | Time |
 | --- | --- | --- | --- | --- |
-| unwalled cold | 5/5 | 27 | $0.31 | 121 s |
-| unwalled warm | 5/5 | 16 | $0.11 | 27 s |
-| browser | 5/5 | 28 | $0.18 | 42 s |
+| unwalled cold | 5/5 | 28 | $0.26 | 118 s |
+| unwalled warm | 5/5 | 19 | $0.14 | 33 s |
+| browser | 5/5 | 27 | $0.18 | 44 s |
 
 | Question | Side | Answer | Turns | Cost | Time | Tools called |
 | --- | --- | --- | --- | --- | --- | --- |
-| intranet | unwalled cold | right | 5 | $0.045 | 29 s | ToolSearch, list_recipes, discover, call_tool |
-| intranet | unwalled warm | right | 3 | $0.020 | 5 s | ToolSearch, backoffice__get_api_v2_orders_order |
-| intranet | browser | right | 9 | $0.054 | 10 s | ToolSearch, browser_navigate, browser_snapshot, browser_fill_form, browser_click, browser_snapshot, browser_navigate, browser_snapshot |
-| grafana | unwalled cold | right | 5 | $0.052 | 30 s | ToolSearch, list_recipes, discover, call_tool |
-| grafana | unwalled warm | right | 3 | $0.025 | 5 s | ToolSearch, grafana__get_api_search |
-| grafana | browser | right | 8 | $0.060 | 13 s | ToolSearch, browser_navigate, browser_snapshot, browser_fill_form, browser_click, browser_navigate, browser_snapshot |
-| crates | unwalled cold | right | 5 | $0.117 | 14 s | ToolSearch, list_recipes, discover, call_tool |
+| intranet | unwalled cold | right | 5 | $0.046 | 18 s | ToolSearch, list_recipes, discover, call_tool |
+| intranet | unwalled warm | right | 3 | $0.022 | 5 s | ToolSearch, backoffice__get_api_v2_orders_order |
+| intranet | browser | right | 9 | $0.059 | 15 s | ToolSearch, browser_navigate, browser_snapshot, browser_fill_form, browser_click, browser_snapshot, browser_navigate, browser_snapshot |
+| grafana | unwalled cold | right | 5 | $0.051 | 30 s | ToolSearch, list_recipes, discover, call_tool |
+| grafana | unwalled warm | right | 4 | $0.030 | 6 s | ToolSearch, grafana__post_login, grafana__get_api_search |
+| grafana | browser | right | 8 | $0.055 | 12 s | ToolSearch, browser_navigate, browser_snapshot, browser_fill_form, browser_press_key, browser_navigate, browser_snapshot |
+| crates | unwalled cold | right | 5 | $0.053 | 13 s | ToolSearch, list_recipes, discover, call_tool |
 | crates | unwalled warm | right | 3 | $0.019 | 5 s | ToolSearch, crates__get_api_v1_crates_crate |
-| crates | browser | right | 4 | $0.025 | 6 s | ToolSearch, browser_navigate, browser_snapshot |
-| flathub | unwalled cold | right | 6 | $0.046 | 15 s | ToolSearch, list_recipes, discover, search_tools, call_tool |
-| flathub | unwalled warm | right | 3 | $0.019 | 6 s | ToolSearch, flathub__request |
-| flathub | browser | right | 4 | $0.024 | 7 s | ToolSearch, browser_navigate, browser_navigate |
-| osm | unwalled cold | right | 6 | $0.051 | 34 s | ToolSearch, list_recipes, discover, search_tools, call_tool |
-| osm | unwalled warm | right | 4 | $0.027 | 7 s | ToolSearch, ToolSearch, osm__request |
-| osm | browser | right | 3 | $0.021 | 5 s | ToolSearch, browser_navigate |
+| crates | browser | right | 4 | $0.025 | 5 s | ToolSearch, browser_navigate, browser_snapshot |
+| flathub | unwalled cold | right | 5 | $0.049 | 20 s | ToolSearch, list_recipes, discover, call_tool |
+| flathub | unwalled warm | right | 3 | $0.020 | 7 s | ToolSearch, flathub__post_api_v2_search |
+| flathub | browser | right | 3 | $0.021 | 6 s | ToolSearch, browser_navigate |
+| osm | unwalled cold | right | 8 | $0.060 | 37 s | ToolSearch, list_recipes, discover, call_tool, call_tool, call_tool, call_tool |
+| osm | unwalled warm | right | 6 | $0.051 | 10 s | ToolSearch, ToolSearch, osm__page_search, osm__page_search, osm__request |
+| osm | browser | right | 3 | $0.021 | 7 s | ToolSearch, browser_navigate |
 
 ## Limits
 
 - 5 questions, one run each: an indication, not a statistic. Model behaviour varies between runs; rerun to compare.
-- The answers were re-scored on 2026-10-11 with corrected checks (`--recheck`); no run was repeated. The raw answers are in the JSON file.
 - Cost is what Claude Code reports for the run (`total_cost_usd`), including its own system prompt.
 - Live sites change; the expected answers are fetched or known independently (see `bench/agent.js`).

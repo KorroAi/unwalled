@@ -1,7 +1,8 @@
 // Engine shared by the MCP server and the CLI: discovery, recipe management, request execution.
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import { closeProfile, launchProfile, saveCookies, savedCookieFingerprint } from "./browser.js";
+import { closeProfile, encryptCookiesWith, launchProfile, saveCookies, savedCookieFingerprint } from "./browser.js";
+import { secretKey } from "./crypto.js";
 import { captureTraffic, validateActions } from "./discovery/capture.js";
 import { observationsFromHar } from "./discovery/har.js";
 import { inferEndpoints, navigationVariables, responseKeys } from "./discovery/infer.js";
@@ -13,7 +14,8 @@ import { resolvePreset } from "./presets.js";
 import { authorizationCodeLogin, OAUTH_PROVIDERS } from "./oauth-login.js";
 import { cacheFile, fetchToCache } from "./data/remote.js";
 import { REMOTE_DATA_KEY } from "./imports.js";
-import { assertHttpUrl, graphqlKey, MAX_FILE_BYTES, mergeByKey, mergeSecrets, restKey, rpcKey, streamKey, withJsonRpc } from "./recipe-merge.js";
+import { assertHttpUrl, graphqlKey, MAX_FILE_BYTES, mergeByKey, mergeSecrets, pageKey, restKey, rpcKey, streamKey, withJsonRpc } from "./recipe-merge.js";
+import { inferPages, redirectedToSignIn } from "./discovery/pages.js";
 import { inferStreams, SECRET_FRAME_HOST, streamsFromHar } from "./realtime/infer.js";
 import { describeStreams } from "./realtime/tools.js";
 import { log } from "./log.js";
@@ -30,6 +32,8 @@ export class Engine {
   /** @param {import("./config.js").Config} config */
   constructor(config) {
     this.config = config;
+    // Saved session cookies are credentials: encrypted with the secrets' key (resolved on first use).
+    encryptCookiesWith(config.encryptSecrets ? () => secretKey(config.home).key : null);
     this.store = new Store(config);
     this.recipes = this.store.loadRecipes();
     /** @type {Map<string, { context: import("playwright-core").BrowserContext, headless: boolean, page?: import("playwright-core").Page, timer?: NodeJS.Timeout }>} */
@@ -77,6 +81,7 @@ export class Engine {
       guard: (recipe, url, intent, confirmed) => this.guardStream(recipe, url, intent, confirmed),
       dataPath: (recipe) => this.dataPath(recipe),
       maxOutputChars: this.config.maxOutputChars,
+      compactChars: this.config.compactChars,
       schemaBudget: this.config.schemaBudget,
       foldThreshold: this.config.foldThreshold,
     });
@@ -90,6 +95,20 @@ export class Engine {
       }
     }
     return runtime;
+  }
+
+  /**
+   * Refuses an address the organization policy does not allow, before anything is contacted. Enforced here (not only
+   * in the MCP server) so that the command line and presets follow the same rule.
+   * @param {...(string | undefined | null)} addresses
+   */
+  assertOrgAllows(...addresses) {
+    if (!this.config.orgPolicy?.allowedHosts?.length) return;
+    for (const address of addresses) {
+      if (typeof address !== "string" || !/^[a-z][a-z0-9+.-]*:\/\//i.test(address)) continue; // local paths are not addresses
+      const reason = orgHostBlock(this.config.orgPolicy, new URL(address));
+      if (reason) throw new Error(reason);
+    }
   }
 
   /** @param {string} name */
@@ -161,12 +180,14 @@ export class Engine {
     try {
       if (isExpired(outgoing.headers.authorization) && (recovered = await this.recoverAuth(recipe, url))) outgoing = build();
       let { result, retries } = await this.sendWithRetry(recipe, outgoing, policy, intent);
+      result = signInAsUnauthorized(result, outgoing.url);
       if (result.status === 401 || (result.status === 403 && !isChallenge(result))) {
         const how = await this.recoverAuth(recipe, url);
         if (how) {
           recovered = how;
           outgoing = build();
           ({ result, retries } = await this.sendWithRetry(recipe, outgoing, policy, intent));
+          result = signInAsUnauthorized(result, outgoing.url);
         }
       }
       this.audit.write({
@@ -437,13 +458,13 @@ export class Engine {
     return { headers, query, frames: secrets[SECRET_FRAME_HOST(url.host)] ?? {} };
   }
 
-  /** @param {any} recipe @param {Record<string, Record<string, string>>} secrets */
-  saveRecipe(recipe, secrets = {}) {
+  /** @param {any} recipe @param {Record<string, Record<string, any>>} [secrets] @param {string[]} [typedSecrets] text typed into password fields */
+  saveRecipe(recipe, secrets = {}, typedSecrets = []) {
     const existingSecrets = this.store.loadSecrets(recipe.name);
     const merged = { ...existingSecrets };
     for (const [host, headers] of Object.entries(secrets)) merged[host] = { ...(merged[host] ?? {}), ...headers };
-    // Last line of defence: no stored secret value, and nothing that looks like a credential, may remain in the shareable recipe.
-    recipe = scrubRecipe(recipe, secretValues(merged));
+    // Last line of defence: no stored secret value, no typed password, and nothing that looks like a credential may remain in the shareable recipe.
+    recipe = scrubRecipe(recipe, secretValues(merged), typedSecrets);
     this.store.saveRecipe(recipe);
     this.store.saveSecrets(recipe.name, merged);
     this.recipes.set(recipe.name, recipe);
@@ -465,6 +486,7 @@ export class Engine {
     if (!["auto", "openapi", "browser"].includes(mode)) throw new Error(`Unknown mode "${mode}"`);
     if (include) new RegExp(include); // validate early
     const actions = validateActions(options.actions);
+    this.assertOrgAllows(url, ...actions.map((a) => (a.goto ? new URL(a.goto, url).toString() : undefined)));
     const maxEndpoints = options.maxEndpoints ?? this.config.maxEndpoints;
 
     if (mode !== "browser") {
@@ -507,9 +529,13 @@ export class Engine {
       });
       const realtime = inferStreams(capture.streams, { secretCookies: false });
       const rpc = withJsonRpc(capture.observations, inferred.endpoints);
+      const pages = inferPages(capture.documents);
       const previous = this.recipes.get(name);
       const now = new Date().toISOString();
       const canMerge = merge && previous?.kind === "browser";
+      // A page that shows its data in the HTML is not "nothing found": it became a page tool.
+      const noApi = (/** @type {string} */ w) =>
+        (/^No API call was observed/.test(w) && (!!capture.blocked || pages.length > 0)) || (/^Traffic was captured but no reusable API call/.test(w) && pages.length > 0);
       const recipe = {
         schemaVersion: RECIPE_SCHEMA_VERSION, name, kind: "browser", source: { url: redactUrl(url) },
         baseUrl: new URL(url).origin, createdAt: previous?.createdAt ?? now, updatedAt: now,
@@ -517,12 +543,13 @@ export class Engine {
         graphql: canMerge ? mergeByKey(previous.graphql, inferred.graphql, graphqlKey) : inferred.graphql,
         streams: canMerge ? mergeByKey(previous.streams ?? [], realtime.streams, streamKey) : realtime.streams,
         jsonrpc: canMerge ? mergeByKey(previous.jsonrpc ?? [], rpc.methods, rpcKey) : rpc.methods,
-        warnings: [...(capture.blocked ? [`Blocked: ${capture.blocked}`] : []), ...capture.actionErrors, ...inferred.warnings.filter((w) => !(capture.blocked && /^No API call was observed/.test(w)))],
+        pages: canMerge ? mergeByKey(previous.pages ?? [], pages, pageKey) : pages,
+        warnings: [...(capture.blocked ? [`Blocked: ${capture.blocked}`] : []), ...capture.actionErrors, ...inferred.warnings.filter((w) => !noApi(w))],
         stats: inferred.stats,
         ...(capture.explored.length ? { explored: capture.explored.map((e) => ({ url: redactUrl(e.url), newCalls: e.newCalls })) } : {}),
         ...carryOver(previous),
       };
-      return this.saveRecipe(recipe, mergeSecrets(inferred.secrets, realtime.secrets));
+      return this.saveRecipe(recipe, mergeSecrets(inferred.secrets, realtime.secrets), capture.typedSecrets);
     });
   }
 
@@ -559,7 +586,8 @@ export class Engine {
   }
 
   /** Creates a recipe from a local file or folder (see imports.js). @param {Parameters<typeof importFile>[1]} options */
-  importFile(options) {
+  async importFile(options) {
+    this.assertOrgAllows(options.path, options.baseUrl);
     return importFile(this, options);
   }
 
@@ -582,6 +610,7 @@ export class Engine {
   async login({ name, url, durationSeconds = 180 }) {
     assertRecipeName(name);
     assertHttpUrl(url);
+    this.assertOrgAllows(url);
     return this.withLock(name, async () => {
       await this.closeBrowser(name);
       const profileDir = this.store.profileDir(name);
@@ -627,7 +656,6 @@ export class Engine {
     return [...this.tools.values()].filter((tool) => tool.name.startsWith(`${name}__`));
   }
 
-  /** @param {string} name @param {{ deleteProfile?: boolean }} [options] */
   /**
    * First OAuth sign-in for an API host: the provider's consent page opens in a visible window (the recipe's browser profile),
    * the access token is stored as the host's Authorization header and the refresh token as its "@oauth" settings.
@@ -643,6 +671,7 @@ export class Engine {
     const authorize = authorizeUrl ?? known?.authorize_url;
     const token = tokenUrl ?? known?.token_url;
     if (!authorize || !token) throw new Error("authorize_url and token_url are required when no provider is given.");
+    this.assertOrgAllows(authorize, token, `https://${host}`);
     return this.withLock(name, async () => {
       await this.closeBrowser(name);
       const profileDir = this.store.profileDir(name);
@@ -716,7 +745,7 @@ export class Engine {
     return file;
   }
 
-  /** @returns {Promise<{ restoredFromTeam: boolean }>} */
+  /** @param {string} name @param {{ deleteProfile?: boolean }} [options] @returns {Promise<{ restoredFromTeam: boolean }>} */
   async forget(name, { deleteProfile = false } = {}) {
     this.recipe(name);
     if (this.store.isTeamRecipe(name))
@@ -801,8 +830,9 @@ export class Engine {
     } else {
       const clean = validateMacro(macro);
       for (const step of clean.steps) {
-        const known = this.tools.has(step.tool) || this.tools.has(`${name}__${step.tool}`) || buildTools({ ...recipe, annotations: {} }, this.runtime).some((t) => t.name === step.tool || t.name === `${name}__${step.tool}`);
-        if (!known) throw new Error(`Macro step tool "${step.tool}" does not exist (use a tool name from list_recipes)`);
+        const own = (/** @type {string} */ tool) => tool.startsWith(`${name}__`) && (this.tools.has(tool) || buildTools({ ...recipe, annotations: {} }, this.runtime).some((t) => t.name === tool));
+        if (!own(step.tool) && !own(`${name}__${step.tool}`))
+          throw new Error(`Macro step tool "${step.tool}" is not a tool of "${name}": a macro chains the tools of its own recipe (see list_recipes)`);
       }
       macros = [...macros.filter((m) => m.id !== clean.id), clean];
     }
@@ -985,8 +1015,17 @@ export class Engine {
           const risky = await riskyTargets(page, validSteps);
           if (risky.length && stricterConfirm(policy.confirm ?? this.config.confirm, org?.confirm) !== "none" && !confirm)
             return { text: `These steps click controls that may delete, pay or send something: ${risky.join("; ")}.\nCheck with the user, then call again with confirm=true.` };
+          for (const step of validSteps) {
+            if (typeof step.goto !== "string") continue;
+            const target = new URL(step.goto, page.url());
+            const refused = /^https?:$/.test(target.protocol) ? orgHostBlock(org, target) : `Blocked: goto only accepts http(s) addresses, got ${target.protocol}`;
+            if (refused) return { text: refused, isError: true };
+          }
           const result = await act(page, validSteps, { timeoutMs: this.config.requestTimeoutMs * 2 });
           await saveCookies(page.context(), this.store.profileDir(name));
+          // A click may have led to a host the organization does not allow: its content is not returned.
+          const landed = page.url() === "about:blank" ? null : orgHostBlock(org, new URL(page.url()));
+          if (landed) return { text: `${result.log}\n\n${landed}`, isError: true };
           return { text: `${result.log}\n\n${await snapshot(page)}`, isError: !result.ok };
         }
       }
@@ -1008,6 +1047,16 @@ function carryOver(previous) {
 }
 
 /**
+ * A call redirected to the sign-in page got that page, not its answer: it is reported as 401 so that the session is
+ * renewed (or the agent is told to sign in again) instead of the sign-in page being taken for data.
+ * @param {import("./tools/http.js").HttpResult} result @param {string} requested
+ */
+function signInAsUnauthorized(result, requested) {
+  if (result.status >= 400 || !redirectedToSignIn(requested, result.finalUrl)) return result;
+  return { ...result, status: 401, statusText: "Redirected to the sign-in page" };
+}
+
+/**
  * Double-submit CSRF: when a captured header carries a CSRF token and the site also keeps it in a cookie
  * (XSRF-TOKEN, csrftoken...), the current cookie value replaces the stale captured one.
  * @param {import("playwright-core").BrowserContext} context @param {{ url: string, headers: Record<string, string> }} outgoing
@@ -1024,8 +1073,13 @@ async function refreshCsrfFromCookies(context, outgoing) {
   for (const name of names) outgoing.headers[name] = value;
 }
 
-/** One-paragraph summary of a recipe, for tool results and the CLI. @param {any} recipe @param {string[]} toolNames */
+/**
+ * Summary of a recipe, for tool results and the CLI. With tool objects (not just names), each tool is listed with what it
+ * does and an example call.
+ * @param {any} recipe @param {(string | { name: string, description?: string, example?: Record<string, any>, probe?: { args: Record<string, any> } })[]} toolNames
+ */
 export function describeRecipe(recipe, toolNames) {
+  const tools = toolNames.map((t) => (typeof t === "string" ? { name: t } : t));
   const lines = [`Recipe "${recipe.name}" (${recipe.kind}) — base ${recipe.baseUrl} — updated ${recipe.updatedAt}`];
   if (recipe.kind === "data") lines.push(`${recipe.source.db ? `${recipe.source.db === "mysql" ? "MySQL / MariaDB" : "PostgreSQL"}: ${recipe.source.origin}` : recipe.source.remote ? `Remote data: ${recipe.source.origin}/… (refreshed every ${recipe.source.refreshSeconds}s)` : `Local data: ${recipe.source.path}`} — ${(recipe.tables ?? []).map((t) => `${t.name} (${t.rows} rows: ${t.columns.map((c) => c.name).slice(0, 10).join(", ")})`).join("; ")}`);
   else if (recipe.kind === "soap") lines.push(`SOAP ${recipe.version}: ${recipe.endpoint} — ${recipe.title} — ${recipe.operations.length} operation(s): ${recipe.operations.map((o) => o.name).join(", ")}`);
@@ -1036,10 +1090,22 @@ export function describeRecipe(recipe, toolNames) {
     lines.push(...describeStreams(recipe));
     for (const m of recipe.jsonrpc ?? []) lines.push(`  JSON-RPC ${m.method} @ ${m.url} (${m.observed}×)`);
     for (const e of recipe.endpoints) lines.push(`  ${e.method} ${e.origin}${e.pathTemplate}${Object.keys(e.query).length ? `?${Object.keys(e.query).join("&")}` : ""} (${e.observed}×)`);
+    for (const p of recipe.pages ?? []) lines.push(`  Page ${p.origin}${p.pathTemplate}${Object.keys(p.query).length ? `?${Object.keys(p.query).join("&")}` : ""} (server-rendered${p.tables ? `, ${p.tables} table(s)` : ""})`);
   }
   for (const macro of recipe.macros ?? []) lines.push(`  Macro ${macro.id}: ${macro.description}`);
   if (recipe.explored?.length) lines.push(`Explored ${recipe.explored.length} pages: ${recipe.explored.map((e) => `${e.url} (+${e.newCalls})`).slice(0, 10).join(", ")}`);
   for (const warning of recipe.warnings ?? []) lines.push(`Warning: ${warning}`);
-  lines.push(`Tools: ${toolNames.join(", ")}`);
+  if (!tools.some((t) => t.description)) lines.push(`Tools: ${tools.map((t) => t.name).join(", ")}`);
+  else {
+    // What each tool does and a call that works: the agent can answer at once instead of searching the tools first.
+    lines.push("Tools (call them directly; if your client has not loaded them yet, use call_tool with the same name and arguments):");
+    for (const tool of tools.slice(0, 25)) {
+      const summary = String(tool.description ?? "").split(/\. \[|\. (?=[A-Z])/)[0].slice(0, 140);
+      const args = tool.example ?? tool.probe?.args;
+      const example = args && Object.keys(args).length ? ` — e.g. ${JSON.stringify(args).slice(0, 200)}` : "";
+      lines.push(`  ${tool.name}: ${summary}${example}`);
+    }
+    if (tools.length > 25) lines.push(`  … ${tools.length - 25} more: search_tools finds them.`);
+  }
   return lines.join("\n");
 }

@@ -15,9 +15,10 @@ Usage:
       --actions '<json array>'      --host <host> (repeatable)   --include <regex>   --merge
       --explore <pages>             also follow same-site links (never logout, delete, pay...)
   unwalled har <name> <file.har> [--host <host>] [--merge]
-  unwalled import <name> <file> [--base-url <url>] [--include <regex>]
-                                                OpenAPI, Swagger, Google Discovery, Postman, Insomnia, HAR,
-                                                exported recipe, or Bruno collection folder
+  unwalled import <name> <file|address> [--base-url <url>] [--include <regex>]
+                                                OpenAPI, Swagger, Google Discovery, Postman, Insomnia, Bruno, .http,
+                                                HAR, exported recipe, or data: CSV, Excel, JSON, SQLite, iCalendar,
+                                                RSS (file or https address), postgres:// or mysql:// database
   unwalled login <name> <url> [--duration <seconds>]
   unwalled check <name> [--repair]              Call read-only tools and report broken or changed ones
   unwalled curl <name> <file.txt> [--merge]     Create tools from cURL commands saved in a text file
@@ -32,6 +33,7 @@ Environment:
   UNWALLED_HOME          Data directory (default ~/.unwalled)
   UNWALLED_BROWSER       chrome (default) | msedge | chromium | /path/to/browser
   UNWALLED_MAX_OUTPUT    Max characters returned per tool call (default 40000)
+  UNWALLED_COMPACT_CHARS Unpicked JSON longer than this is shown shortened with its field paths (default 6000, 0 = never)
   UNWALLED_TIMEOUT_MS    Request timeout (default 30000)
   UNWALLED_MAX_ENDPOINTS, UNWALLED_MAX_OPENAPI_TOOLS  Tool count limits (default 40 / 60)
   UNWALLED_CONFIRM       Calls needing confirm=true: destructive (default) | writes | none
@@ -41,6 +43,7 @@ Environment:
   UNWALLED_AUDIT         0 disables the audit log (<home>/audit.log)
   UNWALLED_ORG_POLICY    Path of an organization policy (JSON) that agents cannot loosen; check it with "unwalled policy"
   UNWALLED_TEAM_RECIPES  Shared, read-only recipe folder of a team (network share, synced Git repository)
+  UNWALLED_SECRET_KEY    Passphrase encrypting secrets, cookies and local state (default: Windows DPAPI, or a key file)
   The former UNIVERSAL_MCP_* names are still read.
 `;
 
@@ -114,7 +117,9 @@ export async function main(argv) {
       case "import": {
         expect(rest, 2, "import <name> <file>");
         const { resolve } = await import("node:path");
-        const recipe = await engine.importFile({ name: rest[0], path: resolve(rest[1]), baseUrl: values["base-url"], include: values.include, hosts: values.host, merge: values.merge });
+        // Addresses (https://, postgres://, mysql://) are passed as they are; only local paths are resolved.
+        const path = /^[a-z][a-z0-9+.-]*:\/\//i.test(rest[1]) ? rest[1] : resolve(rest[1]);
+        const recipe = await engine.importFile({ name: rest[0], path, baseUrl: values["base-url"], include: values.include, hosts: values.host, merge: values.merge });
         console.log(describeRecipe(recipe, toolNames(recipe.name)));
         break;
       }

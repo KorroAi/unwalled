@@ -2,10 +2,26 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { chromium } from "playwright-core";
+import { decryptJson, encryptJson, isEncrypted } from "./crypto.js";
 
 const COOKIE_FILE = "unwalled-cookies.json";
 /** Name used before the rename to unwalled: still read when the new file does not exist yet. */
 const LEGACY_COOKIE_FILE = "universal-mcp-cookies.json";
+
+/** Key that encrypts the saved cookies (they are credentials), resolved when first needed; null keeps them in plain text. */
+/** @type {(() => Buffer) | null} */ let cookieKey = null;
+
+/** Encrypts saved cookies from now on with this key (the secrets' key). @param {(() => Buffer) | null} key */
+export function encryptCookiesWith(key) {
+  cookieKey = key;
+}
+
+/** Saved cookies of a profile: [] when there are none or they cannot be decrypted (the user signs in again). @param {string} file */
+function readCookieFile(file) {
+  const stored = JSON.parse(readFileSync(file, "utf8"));
+  if (!isEncrypted(stored)) return Array.isArray(stored) ? stored : [];
+  return cookieKey ? decryptJson(stored, cookieKey()) : [];
+}
 
 /**
  * Chrome drops session cookies (no expiry) when it closes, which would log the user out
@@ -21,7 +37,13 @@ export async function saveCookies(context, profileDir) {
   }
   const file = join(profileDir, COOKIE_FILE);
   const tmp = `${file}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(cookies), { mode: 0o600 });
+  let content;
+  try {
+    content = JSON.stringify(cookieKey ? encryptJson(cookies, cookieKey()) : cookies);
+  } catch {
+    return; // no key available: cookies are not written in clear text instead (persistent ones stay in the browser profile)
+  }
+  writeFileSync(tmp, content, { mode: 0o600 });
   renameSync(tmp, file);
   if (process.platform !== "win32") chmodSync(file, 0o600);
 }
@@ -35,7 +57,7 @@ export function savedCookieFingerprint(profileDir, hostname) {
     const file = join(profileDir, name);
     if (!existsSync(file)) continue;
     try {
-      const cookies = /** @type {{ name: string, value: string, domain: string }[]} */ (JSON.parse(readFileSync(file, "utf8")));
+      const cookies = /** @type {{ name: string, value: string, domain: string }[]} */ (readCookieFile(file));
       const matches = (/** @type {string} */ domain) => {
         const bare = domain.replace(/^\./, "");
         return hostname === bare || hostname.endsWith(`.${bare}`);
@@ -55,7 +77,7 @@ async function restoreCookies(context, profileDir) {
   if (!existsSync(file)) return;
   try {
     const now = Date.now() / 1000;
-    const cookies = JSON.parse(readFileSync(file, "utf8")).filter((c) => c.expires === -1 || c.expires > now);
+    const cookies = readCookieFile(file).filter((c) => c.expires === -1 || c.expires > now);
     if (cookies.length) await context.addCookies(cookies);
   } catch {
     // A corrupt cookie file only means the user has to log in again.

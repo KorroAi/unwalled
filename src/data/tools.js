@@ -3,13 +3,13 @@ import { statSync } from "node:fs";
 import { pick } from "../tools/pick.js";
 import { connectMysql, mysqlTables } from "./mysql.js";
 import { connectPostgres, postgresTables } from "./postgres.js";
+import { assertReadOnly, dataFiles, describeTable, openData } from "./source.js";
 
 /** Database engines: connection, table listing, and how the agent should write queries for them. */
 const ENGINES = {
   postgres: { connect: connectPostgres, tables: postgresTables, label: "PostgreSQL", placeholders: "$1, $2..." },
   mysql: { connect: connectMysql, tables: mysqlTables, label: "MySQL / MariaDB", placeholders: "?" },
 };
-import { assertReadOnly, dataFiles, describeTable, openData } from "./source.js";
 
 /** Open database connections by address, closed after a few idle minutes. @type {Map<string, { pg: Promise<any>, timer?: NodeJS.Timeout }>} */
 const databases = new Map();

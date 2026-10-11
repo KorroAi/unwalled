@@ -1,43 +1,40 @@
 # unwalled
 
-**Open any website, internal tool, API, file or database to your AI agent, as typed MCP tools. No API needed.**
+**Give your AI agent the internal tools your team uses every day, as typed MCP tools. No API, no integration code.**
 
-Most of the software people use every day has no public API: the back office, the supplier portal, the intranet,
-the SaaS dashboard. Yet every one of them talks to an internal API. unwalled watches a real browser use the app once,
-finds those calls, and gives them to your agent (Claude, Cursor, any MCP client) as documented tools that keep working:
-it stays signed in, retries, and detects and repairs tools when the app changes.
+The back office, the ERP screen, the intranet, the supplier portal, the reporting dashboard: most of the software people
+use at work has no public API and will never get an MCP server. unwalled watches a real browser use the app once, then
+gives your agent (Claude, Cursor, any MCP client) what the app itself uses:
+
+- **the internal API calls** of modern web apps (REST and GraphQL), as documented tools;
+- **the pages themselves** for server-rendered tools (Django or Rails admin, PHP back offices): tables, fields and links as JSON, and their forms as tools;
+- plus **API files, data files and databases**: OpenAPI, Postman, HAR, CSV, Excel, SQLite, PostgreSQL, MySQL...
+
+The tools keep working: unwalled stays signed in, renews sessions and CSRF tokens, retries, and detects and repairs tools when the app changes.
+Everything runs on your machine.
 
 ![An agent signs in to an internal back office once, then answers questions through generated tools](docs/demo.gif)
 
 <sub>Recorded with [`docs/demo/make-gif.js`](docs/demo/make-gif.js): real calls against the [example back office](examples/intranet/server.js).</sub>
 
-## Why not just let the agent use a browser?
+## Is it worth it? Measured, not claimed
 
-Browser agents look at the page and click, every time. unwalled looks once, then calls what the page calls.
-On the same questions, against a scripted browser set up as favourably as possible
-(already open, already signed in, page read the instant the answer appears; [method and raw data](bench/RESULTS.md)):
+Same questions to the same agent (Claude Code, Sonnet), once with unwalled and once with a browser agent (Playwright MCP),
+nothing scripted, every answer checked: 15 runs, 15 right answers ([method and every answer](bench/AGENT.md)).
 
-| Task | unwalled | Browser, best case | Difference |
-| --- | --- | --- | --- |
-| Internal back office behind a login (local) | 17 ms · 95 characters to read | 52 ms · 1,064 characters | 3× faster, 11× less to read |
-| crates.io, latest version of a crate (live) | 267 ms · 126 characters | 468 ms · 9,521 characters | 1.8× faster, 76× less to read |
-| Hacker News search, top story (live) | 80 ms · 469 characters | 454 ms · 30,394 characters | 5.7× faster, 65× less to read |
-
-Every answer on both sides was checked against an independent source: 60/60 correct for each.
-A real browser agent also spends model turns deciding what to do on each page; these numbers leave that out.
-The cost on the unwalled side is one discovery per site (about 5 to 8 seconds here).
-
-**With a real agent** (Claude Code, Sonnet, nothing scripted; [method and every answer](bench/AGENT.md)), on 5 questions, all answered correctly by each side:
-
-| | Behind a sign-in (back office, Grafana) | Public sites (crates.io, Flathub, OpenStreetMap) |
+| Cost per question | Apps behind a sign-in (back office, Grafana) | Public sites (crates.io, Flathub, OpenStreetMap) |
 | --- | --- | --- |
-| unwalled, site already discovered | 3 model turns, $0.020 to $0.025 per question | 3 to 4 turns, $0.019 to $0.027 |
-| Browser agent (Playwright MCP) | 8 to 9 turns, $0.054 to $0.060 | 3 to 4 turns, $0.021 to $0.025 |
-| unwalled, first time (discovery included) | 5 turns, $0.045 to $0.052 | 5 to 6 turns, $0.046 to $0.117 |
+| **unwalled, app already discovered** | **3 to 4 model turns, $0.022 to $0.030** | 3 to 6 turns, $0.019 to $0.051 |
+| Browser agent | 8 to 9 turns, $0.055 to $0.059 | 3 to 4 turns, $0.021 to $0.025 |
+| unwalled, first question (discovery included) | 5 turns, $0.046 to $0.051 | 5 to 8 turns, $0.049 to $0.060 |
 
-So: about 2.5× cheaper per question on apps behind a sign-in once the app is known; no gain on public pages a browser can
-open directly; and the first question on a new site costs more. On [20 real public sites](bench/FIELD.md), one discover
-with default options answered a new question on 12; the 8 others refused automated browsers (6, reported as such) or put their data in the HTML instead of an API call (2).
+- **Where it pays**: apps you sign in to and use repeatedly. 1.8 to 2.7 times cheaper per question once the app is
+  known, and the first question already costs no more than with a browser.
+- **Where it does not**: a public page a browser can open directly. There, use a browser.
+- On [20 real public websites](bench/FIELD.md), one discovery with default options answered a question about a term it had never seen
+  on 13 of them; 6 refused automated browsers (unwalled says so and does not bypass them) and 1 needed more than one page to generalise.
+- The calls themselves are fast and small: [21 ms and 95 characters](bench/RESULTS.md) to read an order in the example back office,
+  against 54 ms and 1,144 characters for a scripted browser reading the page in the most favourable setup.
 
 ## Install
 
@@ -58,31 +55,44 @@ On Windows, some clients need `"command": "cmd"` with `"args": ["/c", "npx", "-y
 
 Ask your agent in plain language:
 
-> Use unwalled to discover https://crates.io/search?q=serde, then tell me the latest version of tokio.
+> Our back office is at https://erp.example.internal (user alice, password in my vault: I'll type it). Show me the open orders of customer 530.
 
-> Discover our back office at https://erp.example.internal: I'll sign in, then show me the open orders.
+> Discover https://grafana.example.internal, then tell me which dashboards mention revenue.
 
 > Import this Postman collection / OpenAPI file / CSV / postgres://… and answer from it.
 
-The agent calls `discover` (or `login` first for sites behind a sign-in), then the generated `<name>__*` tools.
-Recipes are saved: the tools are there in every later session.
+The agent calls `discover` once (with the sign-in steps, or `login` to let you sign in in a visible window). The answer lists every
+generated tool with an example call, and the agent uses them right away. Recipes are saved: the tools are there in every later session.
 
 ## What it connects
 
 | Source | How |
 | --- | --- |
-| Websites and web apps, including behind a login | Browser capture of their REST and GraphQL calls; `ui` tool for screens with no usable API |
+| Web apps, including behind a sign-in | Browser capture of their REST and GraphQL calls; guessed sign-in selectors are matched to the page's own fields |
+| Server-rendered tools (Django, Rails, PHP, wikis) | `__page_*` tools return tables, fields and links as JSON; HTML forms become tools, CSRF fields filled; `ui` for anything else |
 | Mobile and desktop apps | HAR captures (mitmproxy, Charles, Proxyman, devtools) |
 | Documented APIs | OpenAPI / Swagger (found automatically), Postman, Insomnia, Bruno, `.http`, cURL, Google APIs, OData, SOAP, JSON-RPC, AsyncAPI |
 | Ready-made sources | `preset:github`, `stripe`, `vercel`, `elevenlabs`, `discord`, `binance`, `coingecko`, `open-meteo`, any Google API |
 | Data | CSV, Excel, iCalendar, RSS / Atom, JSON, SQLite, PostgreSQL, MySQL / MariaDB, queried with read-only SQL |
 | Live streams | WebSocket, Server-Sent Events, MQTT |
 
-How each source was checked (most against real services) and its known limits: [compatibility table](docs/REFERENCE.md#compatibility).
+How each source was checked (most against real services, including a real Grafana behind a sign-in) and its known limits:
+[compatibility table](docs/REFERENCE.md#compatibility).
+
+## Built for agents
+
+- **Answers sized for a model**: a large JSON answer comes back shortened (first items, every key, clipped texts) with the field paths
+  to `pick` from; crates.io's 445,000-character answer becomes about 6,400. `pick` keeps exactly what is needed.
+- **Forgiving**: arguments written at the top level instead of under `path` / `query` are accepted; a wrong sign-in selector falls back
+  to the page's real field, and failures list the fields that exist.
+- **Honest errors**: a bot protection page, an ended session (redirected to the sign-in page) or a changed API is reported as such,
+  never returned as data.
+- **Self-improving**: the agent can rename and document tools (`annotate_recipe`) and chain them (`define_macro`).
 
 ## Safe by default
 
-- Credentials are detected (by name and by value), encrypted at rest, sent only to the host they came from, and never written to recipes.
+- Credentials are detected (by name and by value), sent only to the host they came from, and never written to recipes.
+  Secrets, saved session cookies and local state are encrypted at rest; text typed into password fields never appears in a recipe or a message.
 - Deletions and risky clicks wait for confirmation; any call can be previewed with `dry_run`; at most 5 requests per second per host by default.
 - Per-recipe policies (read-only, allowed hosts) cover HTTP, interface actions and streams. Every request is logged, without bodies or secrets.
 - Tool results are treated as untrusted data: the agent is told never to follow instructions found in them.
@@ -99,7 +109,7 @@ to the tools, and adds what IT asks for ([guide](docs/FOR-TEAMS.md)):
 
 - **Prefer official integrations when they exist.** If a service has an API, an OpenAPI file or an MCP server, use it (unwalled can import the file).
   Internal APIs change without notice; `check_recipe` detects it and repairs the recipe.
-- **Not everything can be captured**: server-rendered pages without API calls, requests signed by the page's own code, and native windows.
+- **Not everything can be captured**: requests signed by the page's own code, data loaded by scripts in ways no call reveals, and native windows.
   Bot protections and CAPTCHAs are not bypassed: they are reported, and you can browse in a visible window instead.
 - **Use it only where you are allowed to.** Calling a service's internal API can break its terms even with your own account. You are responsible for how you use it.
 
@@ -107,7 +117,7 @@ to the tools, and adds what IT asks for ([guide](docs/FOR-TEAMS.md)):
 
 - [Full reference](docs/REFERENCE.md): how it works, every tool, guides, configuration, data and secrets, limits
 - [For teams](docs/FOR-TEAMS.md): organization policy, shared catalogue, what is logged
-- Benchmarks: [scripted browser](bench/RESULTS.md), [real agent](bench/AGENT.md), [20 real sites](bench/FIELD.md); method, raw data, how to rerun them
+- Benchmarks: [real agent](bench/AGENT.md), [20 real websites](bench/FIELD.md), [scripted browser](bench/RESULTS.md); method, raw data, how to rerun them
 - [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
 unwalled was called universal-mcp until version 0.2: the former variable names, data folder and command still work.

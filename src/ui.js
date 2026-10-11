@@ -114,6 +114,14 @@ export async function riskyTargets(page, steps) {
 export async function act(page, steps, { timeoutMs }) {
   const done = [];
   for (const [index, step] of steps.entries()) {
+    // Text typed into a password-like field never appears in the log, whether the step works or not.
+    let shown = step;
+    if (step.fill) {
+      const secretField =
+        /pass|pwd|secret|token|otp|pin|cvv/i.test(step.fill) ||
+        (await page.locator(locatorFor(step.fill)).first().evaluate((/** @type {any} */ el) => el.type === "password" || /pass|pwd|secret|token|otp|cvv|pin/i.test(`${el.name ?? ""} ${el.id ?? ""} ${el.autocomplete ?? ""}`), null, { timeout: 2000 }).catch(() => false));
+      if (secretField) shown = { ...step, text: "•••" };
+    }
     try {
       if (step.goto) await page.goto(new URL(step.goto, page.url()).toString(), { waitUntil: "domcontentloaded", timeout: timeoutMs });
       else if (step.click) await page.locator(locatorFor(step.click)).first().click({ timeout: 10_000 });
@@ -128,9 +136,9 @@ export async function act(page, steps, { timeoutMs }) {
       else if (step.scroll) await page.mouse.wheel(0, Number(step.scroll));
       await page.waitForLoadState("domcontentloaded", { timeout: 5000 }).catch(() => {});
       await page.waitForTimeout(300);
-      done.push(`${index + 1}. ok ${JSON.stringify(step.fill ? { ...step, text: /pass|pwd|secret|token|otp|pin|cvv/i.test(step.fill) ? "•••" : step.text } : step)}`);
+      done.push(`${index + 1}. ok ${JSON.stringify(shown)}`);
     } catch (error) {
-      done.push(`${index + 1}. FAILED ${JSON.stringify(step)}: ${String(error.message).split("\n")[0]}`);
+      done.push(`${index + 1}. FAILED ${JSON.stringify(shown)}: ${String(error.message).split("\n")[0]}`);
       return { ok: false, log: done.join("\n") };
     }
   }

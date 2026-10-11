@@ -1,6 +1,6 @@
 {
   "environment": {
-    "date": "2026-10-10T22:56:03.002Z",
+    "date": "2026-10-11T02:49:26.300Z",
     "node": "v24.15.0",
     "os": "win32 10.0.26300",
     "cpu": "13th Gen Intel(R) Core(TM) i7-13620H",
@@ -10,18 +10,18 @@
     {
       "task": "intranet",
       "label": "Internal back office (local): status and total of an order, behind a login",
-      "discoverMs": 6604,
+      "discoverMs": 7345,
       "questions": 8,
       "rounds": 3,
       "unwalled": {
-        "medianMs": 17,
+        "medianMs": 21,
         "medianChars": 95,
         "medianFullChars": 197,
         "success": "24/24"
       },
       "browser": {
-        "medianMs": 52,
-        "medianChars": 1064,
+        "medianMs": 54,
+        "medianChars": 1144,
         "success": "24/24"
       },
       "runs": [
@@ -30,14 +30,14 @@
           "ask": "Status and total of order 1003",
           "expected": "628",
           "unwalled": {
-            "ms": 273,
+            "ms": 339,
             "chars": 95,
             "fullChars": 196,
             "ok": true
           },
           "browser": {
-            "ms": 61,
-            "chars": 1063,
+            "ms": 68,
+            "chars": 1143,
             "ok": true
           }
         },
@@ -46,14 +46,14 @@
           "ask": "Status and total of order 1017",
           "expected": "2438",
           "unwalled": {
-            "ms": 17,
+            "ms": 21,
             "chars": 96,
             "fullChars": 296,
             "ok": true
           },
           "browser": {
-            "ms": 59,
-            "chars": 1267,
+            "ms": 60,
+            "chars": 1347,
             "ok": true
           }
         },
@@ -62,14 +62,14 @@
           "ask": "Status and total of order 1042",
           "expected": "880",
           "unwalled": {
-            "ms": 20,
+            "ms": 26,
             "chars": 92,
             "fullChars": 243,
             "ok": true
           },
           "browser": {
-            "ms": 54,
-            "chars": 1164,
+            "ms": 60,
+            "chars": 1244,
             "ok": true
           }
         },
@@ -78,14 +78,14 @@
           "ask": "Status and total of order 1088",
           "expected": "1516",
           "unwalled": {
-            "ms": 21,
+            "ms": 22,
             "chars": 93,
             "fullChars": 189,
             "ok": true
           },
           "browser": {
             "ms": 56,
-            "chars": 1050,
+            "chars": 1130,
             "ok": true
           }
         },
@@ -94,14 +94,14 @@
           "ask": "Status and total of order 1123",
           "expected": "1012",
           "unwalled": {
-            "ms": 16,
+            "ms": 20,
             "chars": 96,
             "fullChars": 198,
             "ok": true
           },
           "browser": {
-            "ms": 48,
-            "chars": 1064,
+            "ms": 53,
+            "chars": 1144,
             "ok": true
           }
         },
@@ -110,14 +110,14 @@
           "ask": "Status and total of order 1150",
           "expected": "1088",
           "unwalled": {
-            "ms": 16,
+            "ms": 19,
             "chars": 98,
             "fullChars": 194,
             "ok": true
           },
           "browser": {
             "ms": 50,
-            "chars": 1058,
+            "chars": 1138,
             "ok": true
           }
         },
@@ -126,14 +126,14 @@
           "ask": "Status and total of order 1177",
           "expected": "359",
           "unwalled": {
-            "ms": 16,
+            "ms": 24,
             "chars": 95,
             "fullChars": 193,
             "ok": true
           },
           "browser": {
-            "ms": 44,
-            "chars": 1059,
+            "ms": 54,
+            "chars": 1139,
             "ok": true
           }
         },
@@ -142,14 +142,14 @@
           "ask": "Status and total of order 1199",
           "expected": "920",
           "unwalled": {
-            "ms": 15,
+            "ms": 21,
             "chars": 95,
             "fullChars": 197,
             "ok": true
           },
           "browser": {
-            "ms": 51,
-            "chars": 1067,
+            "ms": 60,
+            "chars": 1147,
             "ok": true
           }
         },
@@ -158,13 +158,13 @@
           "ask": "Status and total of order 1003",
           "expected": "628",
           "unwalled": {
-            "ms": 31,
+            "ms": 26,
             "chars": 95,
             "ok": true
           },
           "browser": {
-            "ms": 53,
-            "chars": 1063,
+            "ms": 58,
+            "chars": 1143,
             "ok": true
           }
         },
@@ -173,13 +173,13 @@
           "ask": "Status and total of order 1017",
           "expected": "2438",
           "unwalled": {
-            "ms": 15,
+            "ms": 21,
             "chars": 96,
             "ok": true
           },
           "browser": {
-            "ms": 44,
-            "chars": 1267,
+            "ms": 52,
+            "chars": 1347,
             "ok": true
           }
         },
@@ -188,138 +188,18 @@
           "ask": "Status and total of order 1042",
           "expected": "880",
           "unwalled": {
-            "ms": 15,
-            "chars": 92,
-            "ok": true
-          },
-          "browser": {
-            "ms": 44,
-            "chars": 1164,
-            "ok": true
-          }
-        },
-        {
-          "round": 2,
-          "ask": "Status and total of order 1088",
-          "expected": "1516",
-          "unwalled": {
             "ms": 20,
-            "chars": 93,
-            "ok": true
-          },
-          "browser": {
-            "ms": 51,
-            "chars": 1050,
-            "ok": true
-          }
-        },
-        {
-          "round": 2,
-          "ask": "Status and total of order 1123",
-          "expected": "1012",
-          "unwalled": {
-            "ms": 21,
-            "chars": 96,
-            "ok": true
-          },
-          "browser": {
-            "ms": 53,
-            "chars": 1064,
-            "ok": true
-          }
-        },
-        {
-          "round": 2,
-          "ask": "Status and total of order 1150",
-          "expected": "1088",
-          "unwalled": {
-            "ms": 14,
-            "chars": 98,
-            "ok": true
-          },
-          "browser": {
-            "ms": 52,
-            "chars": 1058,
-            "ok": true
-          }
-        },
-        {
-          "round": 2,
-          "ask": "Status and total of order 1177",
-          "expected": "359",
-          "unwalled": {
-            "ms": 16,
-            "chars": 95,
-            "ok": true
-          },
-          "browser": {
-            "ms": 57,
-            "chars": 1059,
-            "ok": true
-          }
-        },
-        {
-          "round": 2,
-          "ask": "Status and total of order 1199",
-          "expected": "920",
-          "unwalled": {
-            "ms": 21,
-            "chars": 95,
-            "ok": true
-          },
-          "browser": {
-            "ms": 52,
-            "chars": 1067,
-            "ok": true
-          }
-        },
-        {
-          "round": 3,
-          "ask": "Status and total of order 1003",
-          "expected": "628",
-          "unwalled": {
-            "ms": 16,
-            "chars": 95,
+            "chars": 92,
             "ok": true
           },
           "browser": {
             "ms": 49,
-            "chars": 1063,
+            "chars": 1244,
             "ok": true
           }
         },
         {
-          "round": 3,
-          "ask": "Status and total of order 1017",
-          "expected": "2438",
-          "unwalled": {
-            "ms": 15,
-            "chars": 96,
-            "ok": true
-          },
-          "browser": {
-            "ms": 45,
-            "chars": 1267,
-            "ok": true
-          }
-        },
-        {
-          "round": 3,
-          "ask": "Status and total of order 1042",
-          "expected": "880",
-          "unwalled": {
-            "ms": 21,
-            "chars": 92,
-            "ok": true
-          },
-          "browser": {
-            "ms": 51,
-            "chars": 1164,
-            "ok": true
-          }
-        },
-        {
-          "round": 3,
+          "round": 2,
           "ask": "Status and total of order 1088",
           "expected": "1516",
           "unwalled": {
@@ -328,8 +208,128 @@
             "ok": true
           },
           "browser": {
-            "ms": 42,
-            "chars": 1050,
+            "ms": 57,
+            "chars": 1130,
+            "ok": true
+          }
+        },
+        {
+          "round": 2,
+          "ask": "Status and total of order 1123",
+          "expected": "1012",
+          "unwalled": {
+            "ms": 22,
+            "chars": 96,
+            "ok": true
+          },
+          "browser": {
+            "ms": 59,
+            "chars": 1144,
+            "ok": true
+          }
+        },
+        {
+          "round": 2,
+          "ask": "Status and total of order 1150",
+          "expected": "1088",
+          "unwalled": {
+            "ms": 20,
+            "chars": 98,
+            "ok": true
+          },
+          "browser": {
+            "ms": 50,
+            "chars": 1138,
+            "ok": true
+          }
+        },
+        {
+          "round": 2,
+          "ask": "Status and total of order 1177",
+          "expected": "359",
+          "unwalled": {
+            "ms": 23,
+            "chars": 95,
+            "ok": true
+          },
+          "browser": {
+            "ms": 52,
+            "chars": 1139,
+            "ok": true
+          }
+        },
+        {
+          "round": 2,
+          "ask": "Status and total of order 1199",
+          "expected": "920",
+          "unwalled": {
+            "ms": 21,
+            "chars": 95,
+            "ok": true
+          },
+          "browser": {
+            "ms": 49,
+            "chars": 1147,
+            "ok": true
+          }
+        },
+        {
+          "round": 3,
+          "ask": "Status and total of order 1003",
+          "expected": "628",
+          "unwalled": {
+            "ms": 18,
+            "chars": 95,
+            "ok": true
+          },
+          "browser": {
+            "ms": 51,
+            "chars": 1143,
+            "ok": true
+          }
+        },
+        {
+          "round": 3,
+          "ask": "Status and total of order 1017",
+          "expected": "2438",
+          "unwalled": {
+            "ms": 21,
+            "chars": 96,
+            "ok": true
+          },
+          "browser": {
+            "ms": 50,
+            "chars": 1347,
+            "ok": true
+          }
+        },
+        {
+          "round": 3,
+          "ask": "Status and total of order 1042",
+          "expected": "880",
+          "unwalled": {
+            "ms": 22,
+            "chars": 92,
+            "ok": true
+          },
+          "browser": {
+            "ms": 47,
+            "chars": 1244,
+            "ok": true
+          }
+        },
+        {
+          "round": 3,
+          "ask": "Status and total of order 1088",
+          "expected": "1516",
+          "unwalled": {
+            "ms": 27,
+            "chars": 93,
+            "ok": true
+          },
+          "browser": {
+            "ms": 56,
+            "chars": 1130,
             "ok": true
           }
         },
@@ -338,13 +338,13 @@
           "ask": "Status and total of order 1123",
           "expected": "1012",
           "unwalled": {
-            "ms": 17,
+            "ms": 18,
             "chars": 96,
             "ok": true
           },
           "browser": {
-            "ms": 41,
-            "chars": 1064,
+            "ms": 48,
+            "chars": 1144,
             "ok": true
           }
         },
@@ -353,13 +353,13 @@
           "ask": "Status and total of order 1150",
           "expected": "1088",
           "unwalled": {
-            "ms": 16,
+            "ms": 22,
             "chars": 98,
             "ok": true
           },
           "browser": {
-            "ms": 58,
-            "chars": 1058,
+            "ms": 51,
+            "chars": 1138,
             "ok": true
           }
         },
@@ -368,13 +368,13 @@
           "ask": "Status and total of order 1177",
           "expected": "359",
           "unwalled": {
-            "ms": 18,
+            "ms": 22,
             "chars": 95,
             "ok": true
           },
           "browser": {
-            "ms": 54,
-            "chars": 1059,
+            "ms": 55,
+            "chars": 1139,
             "ok": true
           }
         },
@@ -383,13 +383,13 @@
           "ask": "Status and total of order 1199",
           "expected": "920",
           "unwalled": {
-            "ms": 14,
+            "ms": 21,
             "chars": 95,
             "ok": true
           },
           "browser": {
-            "ms": 54,
-            "chars": 1067,
+            "ms": 55,
+            "chars": 1147,
             "ok": true
           }
         }
@@ -398,18 +398,18 @@
     {
       "task": "crates",
       "label": "crates.io (live): latest version of a Rust crate",
-      "discoverMs": 7619,
+      "discoverMs": 6316,
       "questions": 6,
       "rounds": 3,
       "unwalled": {
-        "medianMs": 267,
+        "medianMs": 308,
         "medianChars": 126,
-        "medianFullChars": 40127,
+        "medianFullChars": 366229,
         "success": "18/18"
       },
       "browser": {
-        "medianMs": 468,
-        "medianChars": 9521,
+        "medianMs": 456,
+        "medianChars": 11031,
         "success": "18/18"
       },
       "runs": [
@@ -418,14 +418,14 @@
           "ask": "Latest version of tokio",
           "expected": "1.53.2",
           "unwalled": {
-            "ms": 586,
+            "ms": 549,
             "chars": 125,
-            "fullChars": 40127,
+            "fullChars": 445649,
             "ok": true
           },
           "browser": {
-            "ms": 1176,
-            "chars": 4895,
+            "ms": 1171,
+            "chars": 19509,
             "ok": true
           }
         },
@@ -434,14 +434,14 @@
           "ask": "Latest version of serde",
           "expected": "1.0.229",
           "unwalled": {
-            "ms": 586,
+            "ms": 558,
             "chars": 127,
-            "fullChars": 40127,
+            "fullChars": 441044,
             "ok": true
           },
           "browser": {
-            "ms": 649,
-            "chars": 5006,
+            "ms": 513,
+            "chars": 8605,
             "ok": true
           }
         },
@@ -450,14 +450,14 @@
           "ask": "Latest version of rand",
           "expected": "0.10.3",
           "unwalled": {
-            "ms": 501,
+            "ms": 220,
             "chars": 124,
-            "fullChars": 40126,
+            "fullChars": 138792,
             "ok": true
           },
           "browser": {
-            "ms": 1027,
-            "chars": 4859,
+            "ms": 663,
+            "chars": 15993,
             "ok": true
           }
         },
@@ -466,14 +466,14 @@
           "ask": "Latest version of clap",
           "expected": "4.6.7",
           "unwalled": {
-            "ms": 568,
+            "ms": 584,
             "chars": 122,
-            "fullChars": 40126,
+            "fullChars": 865169,
             "ok": true
           },
           "browser": {
-            "ms": 921,
-            "chars": 5038,
+            "ms": 700,
+            "chars": 8015,
             "ok": true
           }
         },
@@ -482,13 +482,13 @@
           "ask": "Latest version of reqwest",
           "expected": "0.13.5",
           "unwalled": {
-            "ms": 472,
+            "ms": 475,
             "chars": 127,
-            "fullChars": 40129,
+            "fullChars": 291414,
             "ok": true
           },
           "browser": {
-            "ms": 1002,
+            "ms": 455,
             "chars": 9565,
             "ok": true
           }
@@ -498,14 +498,14 @@
           "ask": "Latest version of anyhow",
           "expected": "1.0.104",
           "unwalled": {
-            "ms": 203,
+            "ms": 227,
             "chars": 128,
-            "fullChars": 40128,
+            "fullChars": 162904,
             "ok": true
           },
           "browser": {
-            "ms": 1046,
-            "chars": 12580,
+            "ms": 457,
+            "chars": 12497,
             "ok": true
           }
         },
@@ -514,12 +514,12 @@
           "ask": "Latest version of tokio",
           "expected": "1.53.2",
           "unwalled": {
-            "ms": 231,
+            "ms": 306,
             "chars": 125,
             "ok": true
           },
           "browser": {
-            "ms": 955,
+            "ms": 742,
             "chars": 19391,
             "ok": true
           }
@@ -529,13 +529,13 @@
           "ask": "Latest version of serde",
           "expected": "1.0.229",
           "unwalled": {
-            "ms": 303,
+            "ms": 309,
             "chars": 127,
             "ok": true
           },
           "browser": {
-            "ms": 401,
-            "chars": 8420,
+            "ms": 689,
+            "chars": 8605,
             "ok": true
           }
         },
@@ -544,12 +544,12 @@
           "ask": "Latest version of rand",
           "expected": "0.10.3",
           "unwalled": {
-            "ms": 203,
+            "ms": 218,
             "chars": 124,
             "ok": true
           },
           "browser": {
-            "ms": 472,
+            "ms": 417,
             "chars": 16192,
             "ok": true
           }
@@ -559,12 +559,12 @@
           "ask": "Latest version of clap",
           "expected": "4.6.7",
           "unwalled": {
-            "ms": 321,
+            "ms": 329,
             "chars": 122,
             "ok": true
           },
           "browser": {
-            "ms": 472,
+            "ms": 384,
             "chars": 8302,
             "ok": true
           }
@@ -579,8 +579,8 @@
             "ok": true
           },
           "browser": {
-            "ms": 436,
-            "chars": 9477,
+            "ms": 462,
+            "chars": 9565,
             "ok": true
           }
         },
@@ -589,12 +589,12 @@
           "ask": "Latest version of anyhow",
           "expected": "1.0.104",
           "unwalled": {
-            "ms": 211,
+            "ms": 221,
             "chars": 128,
             "ok": true
           },
           "browser": {
-            "ms": 463,
+            "ms": 410,
             "chars": 12580,
             "ok": true
           }
@@ -604,12 +604,12 @@
           "ask": "Latest version of tokio",
           "expected": "1.53.2",
           "unwalled": {
-            "ms": 222,
+            "ms": 316,
             "chars": 125,
             "ok": true
           },
           "browser": {
-            "ms": 391,
+            "ms": 367,
             "chars": 19391,
             "ok": true
           }
@@ -619,12 +619,12 @@
           "ask": "Latest version of serde",
           "expected": "1.0.229",
           "unwalled": {
-            "ms": 314,
+            "ms": 567,
             "chars": 127,
             "ok": true
           },
           "browser": {
-            "ms": 432,
+            "ms": 445,
             "chars": 8605,
             "ok": true
           }
@@ -634,12 +634,12 @@
           "ask": "Latest version of rand",
           "expected": "0.10.3",
           "unwalled": {
-            "ms": 127,
+            "ms": 220,
             "chars": 124,
             "ok": true
           },
           "browser": {
-            "ms": 418,
+            "ms": 441,
             "chars": 16192,
             "ok": true
           }
@@ -649,12 +649,12 @@
           "ask": "Latest version of clap",
           "expected": "4.6.7",
           "unwalled": {
-            "ms": 312,
+            "ms": 335,
             "chars": 122,
             "ok": true
           },
           "browser": {
-            "ms": 457,
+            "ms": 447,
             "chars": 8302,
             "ok": true
           }
@@ -664,12 +664,12 @@
           "ask": "Latest version of reqwest",
           "expected": "0.13.5",
           "unwalled": {
-            "ms": 210,
+            "ms": 222,
             "chars": 127,
             "ok": true
           },
           "browser": {
-            "ms": 432,
+            "ms": 447,
             "chars": 9565,
             "ok": true
           }
@@ -679,12 +679,12 @@
           "ask": "Latest version of anyhow",
           "expected": "1.0.104",
           "unwalled": {
-            "ms": 129,
+            "ms": 221,
             "chars": 128,
             "ok": true
           },
           "browser": {
-            "ms": 461,
+            "ms": 472,
             "chars": 12580,
             "ok": true
           }
@@ -694,17 +694,17 @@
     {
       "task": "hn",
       "label": "Hacker News search (live): top story title for a query",
-      "discoverMs": 4766,
+      "discoverMs": 4803,
       "questions": 6,
       "rounds": 3,
       "unwalled": {
-        "medianMs": 80,
+        "medianMs": 82,
         "medianChars": 469,
         "medianFullChars": 7213,
         "success": "18/18"
       },
       "browser": {
-        "medianMs": 454,
+        "medianMs": 490,
         "medianChars": 30394,
         "success": "18/18"
       },
@@ -714,13 +714,13 @@
           "ask": "Top story for \"rust\"",
           "expected": "Why Discord is",
           "unwalled": {
-            "ms": 423,
+            "ms": 433,
             "chars": 435,
             "fullChars": 7445,
             "ok": true
           },
           "browser": {
-            "ms": 869,
+            "ms": 796,
             "chars": 30064,
             "ok": true
           }
@@ -730,9 +730,193 @@
           "ask": "Top story for \"postgres\"",
           "expected": "Bye Bye Mongo,",
           "unwalled": {
-            "ms": 87,
+            "ms": 72,
             "chars": 397,
-            "fullChars": 6574,
+            "fullChars": 6577,
+            "ok": true
+          },
+          "browser": {
+            "ms": 519,
+            "chars": 30724,
+            "ok": true
+          }
+        },
+        {
+          "round": 1,
+          "ask": "Top story for \"webassembly\"",
+          "expected": "Calls between JavaScript",
+          "unwalled": {
+            "ms": 83,
+            "chars": 502,
+            "fullChars": 6384,
+            "ok": true
+          },
+          "browser": {
+            "ms": 557,
+            "chars": 28375,
+            "ok": true
+          }
+        },
+        {
+          "round": 1,
+          "ask": "Top story for \"sqlite\"",
+          "expected": "Hosting SQLite databases",
+          "unwalled": {
+            "ms": 79,
+            "chars": 508,
+            "fullChars": 6980,
+            "ok": true
+          },
+          "browser": {
+            "ms": 458,
+            "chars": 32256,
+            "ok": true
+          }
+        },
+        {
+          "round": 1,
+          "ask": "Top story for \"kubernetes\"",
+          "expected": "Google Kubernetes Engine's",
+          "unwalled": {
+            "ms": 80,
+            "chars": 569,
+            "fullChars": 10293,
+            "ok": true
+          },
+          "browser": {
+            "ms": 491,
+            "chars": 32338,
+            "ok": true
+          }
+        },
+        {
+          "round": 1,
+          "ask": "Top story for \"llm\"",
+          "expected": "LLM Inevitabilism",
+          "unwalled": {
+            "ms": 82,
+            "chars": 407,
+            "fullChars": 9545,
+            "ok": true
+          },
+          "browser": {
+            "ms": 781,
+            "chars": 26269,
+            "ok": true
+          }
+        },
+        {
+          "round": 2,
+          "ask": "Top story for \"rust\"",
+          "expected": "Why Discord is",
+          "unwalled": {
+            "ms": 76,
+            "chars": 435,
+            "ok": true
+          },
+          "browser": {
+            "ms": 470,
+            "chars": 30064,
+            "ok": true
+          }
+        },
+        {
+          "round": 2,
+          "ask": "Top story for \"postgres\"",
+          "expected": "Bye Bye Mongo,",
+          "unwalled": {
+            "ms": 83,
+            "chars": 397,
+            "ok": true
+          },
+          "browser": {
+            "ms": 591,
+            "chars": 30724,
+            "ok": true
+          }
+        },
+        {
+          "round": 2,
+          "ask": "Top story for \"webassembly\"",
+          "expected": "Calls between JavaScript",
+          "unwalled": {
+            "ms": 75,
+            "chars": 502,
+            "ok": true
+          },
+          "browser": {
+            "ms": 452,
+            "chars": 28375,
+            "ok": true
+          }
+        },
+        {
+          "round": 2,
+          "ask": "Top story for \"sqlite\"",
+          "expected": "Hosting SQLite databases",
+          "unwalled": {
+            "ms": 86,
+            "chars": 508,
+            "ok": true
+          },
+          "browser": {
+            "ms": 473,
+            "chars": 32256,
+            "ok": true
+          }
+        },
+        {
+          "round": 2,
+          "ask": "Top story for \"kubernetes\"",
+          "expected": "Google Kubernetes Engine's",
+          "unwalled": {
+            "ms": 84,
+            "chars": 569,
+            "ok": true
+          },
+          "browser": {
+            "ms": 489,
+            "chars": 32338,
+            "ok": true
+          }
+        },
+        {
+          "round": 2,
+          "ask": "Top story for \"llm\"",
+          "expected": "LLM Inevitabilism",
+          "unwalled": {
+            "ms": 77,
+            "chars": 407,
+            "ok": true
+          },
+          "browser": {
+            "ms": 450,
+            "chars": 26269,
+            "ok": true
+          }
+        },
+        {
+          "round": 3,
+          "ask": "Top story for \"rust\"",
+          "expected": "Why Discord is",
+          "unwalled": {
+            "ms": 85,
+            "chars": 435,
+            "ok": true
+          },
+          "browser": {
+            "ms": 558,
+            "chars": 30064,
+            "ok": true
+          }
+        },
+        {
+          "round": 3,
+          "ask": "Top story for \"postgres\"",
+          "expected": "Bye Bye Mongo,",
+          "unwalled": {
+            "ms": 82,
+            "chars": 397,
             "ok": true
           },
           "browser": {
@@ -742,200 +926,16 @@
           }
         },
         {
-          "round": 1,
+          "round": 3,
           "ask": "Top story for \"webassembly\"",
           "expected": "Calls between JavaScript",
-          "unwalled": {
-            "ms": 84,
-            "chars": 502,
-            "fullChars": 6384,
-            "ok": true
-          },
-          "browser": {
-            "ms": 444,
-            "chars": 28375,
-            "ok": true
-          }
-        },
-        {
-          "round": 1,
-          "ask": "Top story for \"sqlite\"",
-          "expected": "Hosting SQLite databases",
           "unwalled": {
             "ms": 77,
-            "chars": 508,
-            "fullChars": 6980,
-            "ok": true
-          },
-          "browser": {
-            "ms": 457,
-            "chars": 32256,
-            "ok": true
-          }
-        },
-        {
-          "round": 1,
-          "ask": "Top story for \"kubernetes\"",
-          "expected": "Google Kubernetes Engine's",
-          "unwalled": {
-            "ms": 89,
-            "chars": 569,
-            "fullChars": 10287,
-            "ok": true
-          },
-          "browser": {
-            "ms": 513,
-            "chars": 32338,
-            "ok": true
-          }
-        },
-        {
-          "round": 1,
-          "ask": "Top story for \"llm\"",
-          "expected": "LLM Inevitabilism",
-          "unwalled": {
-            "ms": 107,
-            "chars": 407,
-            "fullChars": 9546,
-            "ok": true
-          },
-          "browser": {
-            "ms": 477,
-            "chars": 26269,
-            "ok": true
-          }
-        },
-        {
-          "round": 2,
-          "ask": "Top story for \"rust\"",
-          "expected": "Why Discord is",
-          "unwalled": {
-            "ms": 79,
-            "chars": 435,
-            "ok": true
-          },
-          "browser": {
-            "ms": 452,
-            "chars": 30064,
-            "ok": true
-          }
-        },
-        {
-          "round": 2,
-          "ask": "Top story for \"postgres\"",
-          "expected": "Bye Bye Mongo,",
-          "unwalled": {
-            "ms": 71,
-            "chars": 397,
-            "ok": true
-          },
-          "browser": {
-            "ms": 445,
-            "chars": 30724,
-            "ok": true
-          }
-        },
-        {
-          "round": 2,
-          "ask": "Top story for \"webassembly\"",
-          "expected": "Calls between JavaScript",
-          "unwalled": {
-            "ms": 78,
             "chars": 502,
             "ok": true
           },
           "browser": {
-            "ms": 472,
-            "chars": 28375,
-            "ok": true
-          }
-        },
-        {
-          "round": 2,
-          "ask": "Top story for \"sqlite\"",
-          "expected": "Hosting SQLite databases",
-          "unwalled": {
-            "ms": 83,
-            "chars": 508,
-            "ok": true
-          },
-          "browser": {
-            "ms": 485,
-            "chars": 32256,
-            "ok": true
-          }
-        },
-        {
-          "round": 2,
-          "ask": "Top story for \"kubernetes\"",
-          "expected": "Google Kubernetes Engine's",
-          "unwalled": {
-            "ms": 83,
-            "chars": 569,
-            "ok": true
-          },
-          "browser": {
-            "ms": 456,
-            "chars": 32338,
-            "ok": true
-          }
-        },
-        {
-          "round": 2,
-          "ask": "Top story for \"llm\"",
-          "expected": "LLM Inevitabilism",
-          "unwalled": {
-            "ms": 78,
-            "chars": 407,
-            "ok": true
-          },
-          "browser": {
-            "ms": 432,
-            "chars": 26269,
-            "ok": true
-          }
-        },
-        {
-          "round": 3,
-          "ask": "Top story for \"rust\"",
-          "expected": "Why Discord is",
-          "unwalled": {
-            "ms": 76,
-            "chars": 435,
-            "ok": true
-          },
-          "browser": {
-            "ms": 437,
-            "chars": 30064,
-            "ok": true
-          }
-        },
-        {
-          "round": 3,
-          "ask": "Top story for \"postgres\"",
-          "expected": "Bye Bye Mongo,",
-          "unwalled": {
-            "ms": 81,
-            "chars": 397,
-            "ok": true
-          },
-          "browser": {
-            "ms": 439,
-            "chars": 30724,
-            "ok": true
-          }
-        },
-        {
-          "round": 3,
-          "ask": "Top story for \"webassembly\"",
-          "expected": "Calls between JavaScript",
-          "unwalled": {
-            "ms": 78,
-            "chars": 502,
-            "ok": true
-          },
-          "browser": {
-            "ms": 447,
+            "ms": 479,
             "chars": 28375,
             "ok": true
           }
@@ -950,7 +950,7 @@
             "ok": true
           },
           "browser": {
-            "ms": 500,
+            "ms": 453,
             "chars": 32256,
             "ok": true
           }
@@ -960,12 +960,12 @@
           "ask": "Top story for \"kubernetes\"",
           "expected": "Google Kubernetes Engine's",
           "unwalled": {
-            "ms": 83,
+            "ms": 84,
             "chars": 569,
             "ok": true
           },
           "browser": {
-            "ms": 448,
+            "ms": 498,
             "chars": 32338,
             "ok": true
           }
@@ -975,12 +975,12 @@
           "ask": "Top story for \"llm\"",
           "expected": "LLM Inevitabilism",
           "unwalled": {
-            "ms": 76,
+            "ms": 86,
             "chars": 407,
             "ok": true
           },
           "browser": {
-            "ms": 449,
+            "ms": 494,
             "chars": 26269,
             "ok": true
           }

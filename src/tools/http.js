@@ -6,6 +6,7 @@ import { basename, isAbsolute } from "node:path";
 import { pick } from "./pick.js";
 import { convertToJson, parseJsonLoose } from "./formats.js";
 import { describeProtobuf } from "./protobuf.js";
+import { fieldPaths, shortenJson } from "./shorten.js";
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
 
@@ -214,11 +215,12 @@ function hasImageSignature(body) {
 
 /**
  * @param {HttpResult} result
- * @param {{ pick?: string, maxChars: number, saveTo?: string, raw?: boolean }} options
+ * @param {{ pick?: string, maxChars: number, saveTo?: string, raw?: boolean, compact?: number }} options compact: above this many characters,
+ *   an unpicked JSON response is shown shortened, with its field paths (0 = never)
  * @returns {{ text: string, isError: boolean, status: number, json?: unknown, image?: string, imageType?: string }} status and the full parsed JSON
  *   (before pick) for callers such as pagination; image: base64 of an image response, shown to the agent as an image
  */
-export function formatResponse(result, { pick: pickExpression, maxChars, saveTo, raw = false }) {
+export function formatResponse(result, { pick: pickExpression, maxChars, saveTo, raw = false, compact = 0 }) {
   const isError = result.status >= 400;
   const header = `HTTP ${result.status}${result.statusText ? ` ${result.statusText}` : ""} — ${result.finalUrl}${result.cachedAgeMs !== undefined ? ` (cached, ${Math.round(result.cachedAgeMs / 1000)}s old)` : ""}`;
   if (saveTo && !isError) {
@@ -245,10 +247,18 @@ export function formatResponse(result, { pick: pickExpression, maxChars, saveTo,
     const json = parseJsonLoose(bodyText);
     if (json !== undefined) {
       parsed = json;
-      if (pickExpression && !isError) {
-        const selected = pick(json, pickExpression);
-        bodyText = selected === undefined ? `(pick "${pickExpression}" matched nothing; full body follows)\n${JSON.stringify(json)}` : JSON.stringify(selected, null, 1);
-      } else bodyText = JSON.stringify(json);
+      const selected = pickExpression && !isError ? pick(json, pickExpression) : undefined;
+      if (selected !== undefined) bodyText = JSON.stringify(selected, null, 1);
+      else {
+        bodyText = JSON.stringify(json);
+        const unmatched = pickExpression && !isError ? `(pick "${pickExpression}" matched nothing)\n` : "";
+        // Large answers are shown shortened with the paths pick accepts: the agent rarely needs every item and field.
+        if (!isError && compact > 0 && bodyText.length > compact) {
+          bodyText =
+            `${unmatched}(${bodyText.length} characters: shortened view, lists cut to their first items and long texts clipped. ` +
+            `Pass pick with the fields you need, or max_chars to get the whole response.)\nFields: ${fieldPaths(json).join(", ")}\n${shortenJson(json, compact)}`;
+        } else if (unmatched) bodyText = `${unmatched}${bodyText}`;
+      }
     } else if (/html/i.test(result.contentType) && !raw) bodyText = htmlToText(bodyText);
   }
   if (bodyText.length > maxChars) bodyText = `${bodyText.slice(0, maxChars)}\n… [truncated: ${bodyText.length} characters in total; use "pick" or raise "max_chars"]`;

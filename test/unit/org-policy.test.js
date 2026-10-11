@@ -96,6 +96,21 @@ describe("organization policy enforcement", () => {
     assert.match(orgAddressBlock(org, { host: "github.com" }) ?? "", /github\.com/);
     assert.match(orgAddressBlock(org, { token_url: "https://login.other.example/token" }) ?? "", /login\.other\.example/);
   });
+
+  it("is enforced by the engine itself, so the command line and presets follow it too", async () => {
+    process.env.UNWALLED_HOME = join(dir, "engine-home");
+    const { Engine } = await import("../../src/core.js");
+    const engine = new Engine({ ...loadConfig(), orgPolicy: org });
+    try {
+      await assert.rejects(engine.discover({ name: "x", url: "https://other.example/app" }), /other\.example is not an allowed host/);
+      await assert.rejects(engine.discover({ name: "x", url: "https://erp.corp/app", actions: [{ goto: "https://other.example/" }] }), /other\.example/);
+      await assert.rejects(engine.discover({ name: "gh", url: "preset:github" }), /not an allowed host/);
+      await assert.rejects(engine.importFile({ name: "db", path: "postgres://u:p@db.other.example:5432/x" }), /db\.other\.example/);
+      await assert.rejects(engine.login({ name: "x", url: "https://other.example/login" }), /not an allowed host/);
+    } finally {
+      await engine.close();
+    }
+  });
 });
 
 describe("stream tools and the safety policy", () => {

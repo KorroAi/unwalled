@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { inferEndpoints, isTracker } from "../../src/discovery/infer.js";
-import { constantQueryDefaults, nestFlatArguments, probeArgs, toolNamer } from "../../src/tools/generate.js";
+import { constantQueryDefaults, isSearchEndpoint, nestFlatArguments, probeArgs, toolNamer } from "../../src/tools/generate.js";
 
 const obs = (method, url, body, responseJson) => ({ method, url, status: 200, requestHeaders: { "content-type": "application/json" }, requestBody: body, responseJson });
 
@@ -67,6 +67,7 @@ describe("inference on real-world traffic", () => {
       obs("POST", "https://sessions-bugsnag.docker.com/", "{}", { ok: true }),
       obs("POST", "https://marlin-2.docker.com/docker.marlin.v1.LogService/LogEvents", "x", { ok: true }),
       obs("POST", "https://www.example.org/cdn-cgi/challenge-platform/h/g/fo/1/2", "x", { ok: true }),
+      obs("POST", "https://stackoverflow.com/questions/tagged/node.js?__cf_chl_tk=abc", "md=x", undefined),
       obs("GET", "https://archive.org/services/search/beta/page_production/?user_query=apollo", null, { response: { body: { hits: [] } } }),
     ]);
     assert.deepEqual(endpoints.map((e) => e.origin + e.pathTemplate), ["https://archive.org/services/search/beta/page_production/"]);
@@ -117,5 +118,11 @@ describe("inference on real-world traffic", () => {
     assert.deepEqual(byPath["/config.php"], ["key"]);
     assert.deepEqual(byPath["/search"], []);
     assert.equal(secrets["abc-dsn.algolia.net"]["?x-algolia-api-key"], "fake0key0for0tests0aaaaaaaaaaaa1");
+  });
+
+  it("treats a POST to a search path as a read (Algolia, Elasticsearch, Flathub), so read-only policies allow it", () => {
+    for (const path of ["/1/indexes/Item_dev/query", "/api/v2/search", "/products/_search"]) assert.equal(isSearchEndpoint({ method: "POST", pathTemplate: path, bodyKind: "json" }), true, path);
+    for (const path of ["/api/orders", "/api/search/{id}/delete"]) assert.equal(isSearchEndpoint({ method: "POST", pathTemplate: path, bodyKind: "json" }), false, path);
+    assert.equal(isSearchEndpoint({ method: "DELETE", pathTemplate: "/search", bodyKind: "none" }), false);
   });
 });

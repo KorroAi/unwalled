@@ -259,7 +259,7 @@ describe("unwalled end to end", () => {
     const run = await call("shop__m_first_result_price", { q: "lamp" });
     assert.equal(run.isError, false, run.text);
     assert.match(run.text, /1\. shop__search_products: HTTP 200[\s\S]*2\. shop__get_api_products_product: HTTP 200[\s\S]*\n42$/);
-    assert.match((await call("define_macro", { name: "shop", macro: { id: "bad", description: "x", steps: [{ tool: "nope" }] } })).text, /does not exist/);
+    assert.match((await call("define_macro", { name: "shop", macro: { id: "bad", description: "x", steps: [{ tool: "nope" }] } })).text, /is not a tool of "shop"/);
   });
 
   it("lists only search tools in search mode, and finds and runs any tool", TIMEOUT, async () => {

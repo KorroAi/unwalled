@@ -46,6 +46,8 @@ export function loadConfig() {
     /** "chrome" | "msedge" | "chromium" | absolute path to a Chromium-based executable */
     browser: env("BROWSER") || "chrome",
     maxOutputChars: intFromEnv("MAX_OUTPUT", 40_000),
+    /** Unpicked JSON responses longer than this are shown shortened with their field paths (0 = always in full). */
+    compactChars: env("COMPACT_CHARS") === "0" ? 0 : intFromEnv("COMPACT_CHARS", 6000),
     requestTimeoutMs: intFromEnv("TIMEOUT_MS", 30_000),
     maxEndpoints: intFromEnv("MAX_ENDPOINTS", 40),
     maxOpenApiTools: intFromEnv("MAX_OPENAPI_TOOLS", 60),

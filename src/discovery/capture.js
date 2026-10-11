@@ -3,8 +3,9 @@
 import { closeProfile, launchProfile, saveCookies } from "../browser.js";
 import { attachRealtimeCapture } from "../realtime/capture.js";
 import { parseJsonLoose } from "../tools/formats.js";
+import { htmlToText } from "../tools/http.js";
 import { isTracker, registrableDomain } from "./infer.js";
-import { looksSensitive } from "./secrets.js";
+import { isSignInPath } from "./pages.js";
 
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 const ACTION_KEYS = ["goto", "click", "fill", "press", "wait", "scroll", "waitFor"];
@@ -28,11 +29,14 @@ export function validateActions(actions) {
   });
 }
 
-/** Action as shown in progress messages and warnings: text typed into a sensitive field is hidden. @param {Action} action */
+/**
+ * Action as shown in progress messages and warnings (warnings are saved in the shareable recipe): typed text is never
+ * shown, since a selector does not tell whether the field holds a password.
+ * @param {Action} action
+ */
 export function describeAction(action) {
   if (action.fill === undefined) return JSON.stringify(action);
-  const hidden = /pass|pwd|secret|token|otp|pin|code|card|cvv|cvc|key/i.test(action.fill) || looksSensitive(action.text);
-  return JSON.stringify({ ...action, text: hidden ? "•••" : action.text });
+  return JSON.stringify({ ...action, text: `••• (${String(action.text ?? "").length} characters)` });
 }
 
 // Exploration never follows links or clicks buttons that could end the session, delete, buy or send something.
@@ -134,10 +138,13 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
   /** @type {Promise<void>[]} */ const pending = [];
   const pageUrls = [url];
   const typedTexts = [];
+  /** Text typed into password fields: removed from the recipe wherever it appears (a body field named "pw" is not recognised otherwise). */
+  const typedSecrets = [];
   const actionErrors = [];
   /** @type {{ url: string, newCalls: number }[]} */ let explored = [];
   /** @type {string | null} */ let blocked = null;
   /** @type {string[]} */ const actionNotes = [];
+  /** @type {import("./pages.js").PageDocument[]} */ const documents = [];
   let fieldsListed = false;
 
   // Responses keep arriving while earlier ones are read: wait until no new one was added.
@@ -155,6 +162,45 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
   context.on("close", () => (closedByUser = true));
   context.on("response", (response) => {
     const request = response.request();
+    if (request.resourceType() === "document") {
+      // A classic HTML form posted by the page (server-rendered tools): an endpoint like any API call, answered by a page.
+      if (request.method() === "POST" && response.status() < 400) {
+        let target;
+        try {
+          target = new URL(request.url());
+        } catch {
+          return;
+        }
+        // The sign-in form is not a tool: the browser profile keeps the session, and its password is never replayed.
+        if (!allowed(target.hostname) || isSignInPath(target.pathname)) return;
+        pending.push(
+          (async () => {
+            observations.push({
+              method: "POST", url: request.url(), status: response.status(),
+              requestHeaders: await request.allHeaders().catch(() => request.headers()), requestBody: request.postData(), responseJson: undefined,
+            });
+          })().catch(() => {}),
+        );
+        return;
+      }
+      // Pages whose HTML carries the data (server-rendered tools) become page tools.
+      if (request.method() !== "GET" || response.status() !== 200 || request.frame().parentFrame() || documents.length >= 60) return;
+      if (!/html/i.test(response.headers()["content-type"] ?? "")) return;
+      let host;
+      try {
+        host = new URL(response.url()).hostname;
+      } catch {
+        return;
+      }
+      if (!allowed(host)) return;
+      pending.push(
+        (async () => {
+          const html = (await response.body()).subarray(0, MAX_BODY_BYTES).toString("utf8");
+          documents.push({ url: response.url(), textLength: htmlToText(html).length, tables: (html.match(/<table\b/gi) ?? []).length });
+        })().catch(() => {}),
+      );
+      return;
+    }
     if (!["xhr", "fetch"].includes(request.resourceType())) return;
     let hostname;
     try {
@@ -219,8 +265,15 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
         if (action.goto) await page.goto(new URL(action.goto, page.url()).toString(), { waitUntil: "domcontentloaded", timeout: config.requestTimeoutMs * 2 });
         else if (action.click) await page.click(await resolveTarget(page, action.click, "click", index, actionNotes), { timeout: 10_000 });
         else if (action.fill) {
-          await page.fill(await resolveTarget(page, action.fill, "fill", index, actionNotes), action.text ?? "", { timeout: 10_000 });
-          typedTexts.push(action.text ?? "");
+          const target = await resolveTarget(page, action.fill, "fill", index, actionNotes);
+          const secretField = await page
+            .locator(target)
+            .first()
+            .evaluate((/** @type {any} */ el) => el.type === "password" || /pass|pwd|secret|token|otp|cvv|cvc/i.test(`${el.name ?? ""} ${el.id ?? ""} ${el.autocomplete ?? ""}`), null, { timeout: 2000 })
+            .catch(() => false);
+          if ((secretField || /pass|pwd|secret|token|otp|cvv|cvc/i.test(action.fill)) && action.text) typedSecrets.push(action.text);
+          await page.fill(target, action.text ?? "", { timeout: 10_000 });
+          if (!typedSecrets.includes(action.text ?? "")) typedTexts.push(action.text ?? "");
         } else if (action.press) await page.keyboard.press(action.press);
         else if (action.wait) await page.waitForTimeout(Math.min(action.wait, 60_000));
         else if (action.scroll) await page.mouse.wheel(0, action.scroll);
@@ -241,7 +294,7 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
     if (explorePages > 0) {
       onProgress(`Exploring up to ${explorePages} pages of the site`);
       const pageDelayMs = config.rateLimit > 0 ? Math.min(Math.round(5000 / config.rateLimit), 10_000) : 0;
-      explored = await explore(page, { maxPages: Math.min(explorePages, 100), allowed, count: () => pending.length, timeoutMs: config.requestTimeoutMs, pageDelayMs, onProgress });
+      explored = await explore(page, { maxPages: Math.min(explorePages, 100), allowed, count: () => observations.length, timeoutMs: config.requestTimeoutMs, pageDelayMs, onProgress });
     }
 
     if (interactive) {
@@ -257,7 +310,7 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
     if (!closedByUser) await closeProfile(context, profileDir);
   }
   await drain();
-  return { observations, streams: realtime.streams, pageUrls, typedTexts, actionErrors, explored, blocked };
+  return { observations, streams: realtime.streams, pageUrls, typedTexts, typedSecrets, actionErrors, explored, blocked, documents };
 }
 
 // Pages that bot protections show instead of the site (Cloudflare, DataDome, Akamai, PerimeterX, Reddit...).

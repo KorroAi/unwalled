@@ -151,16 +151,21 @@ export class Store {
     const file = join(this.config.stateDir, `${name}.json`);
     if (!existsSync(file)) return {};
     try {
-      return JSON.parse(readFileSync(file, "utf8"));
-    } catch {
+      const stored = JSON.parse(readFileSync(file, "utf8"));
+      return isEncrypted(stored) ? decryptJson(stored, secretKey(this.config.home).key) : stored;
+    } catch (error) {
+      log(`Cannot read the local state of "${name}" (${/** @type {Error} */ (error).message}): starting from an empty state.`);
       return {};
     }
   }
 
-  /** @param {string} name @param {(state: any) => any} update */
+  /**
+   * The state holds the discovery inputs, sign-in steps and their typed passwords included: encrypted like the secrets.
+   * @param {string} name @param {(state: any) => any} update
+   */
   updateState(name, update) {
     const next = update(this.loadState(name));
-    writeJson(join(this.config.stateDir, `${name}.json`), next, true);
+    writeJson(join(this.config.stateDir, `${name}.json`), this.config.encryptSecrets ? encryptJson(next, secretKey(this.config.home).key) : next, true);
     return next;
   }
 }
