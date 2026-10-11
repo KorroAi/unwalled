@@ -9,7 +9,7 @@ import { checkPolicy, describeOrgPolicy, intentOf, loadOrgPolicy } from "../../s
 import { orgAddressBlock } from "../../src/server.js";
 
 const dir = mkdtempSync(join(tmpdir(), "unwalled-org-"));
-after(() => rmSync(dir, { recursive: true, force: true }));
+after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }));
 const saved = { ...process.env };
 afterEach(() => {
   for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];

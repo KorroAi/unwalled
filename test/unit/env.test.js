@@ -48,7 +48,7 @@ describe("environment variables after the rename", () => {
       mkdirSync(join(fake, ".unwalled"));
       assert.equal(defaultHome(), join(fake, ".unwalled"));
     } finally {
-      rmSync(fake, { recursive: true, force: true });
+      rmSync(fake, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
     }
   });
 });

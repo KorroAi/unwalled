@@ -70,7 +70,7 @@ after(async () => {
   // Chrome may hold profile files for a moment after exit (Windows).
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
-      rmSync(home, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
       break;
     } catch {
       await new Promise((r) => setTimeout(r, 500));

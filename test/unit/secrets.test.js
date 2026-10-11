@@ -59,7 +59,7 @@ trap("CANARI27", "random API key in a neutral query parameter", "GET", `${H}/v1/
 trap("CANARI28", "secret in the source page URL", "GET", `${H}/v1/o?q=x&session=CANARI28`);
 
 const homes = [];
-after(() => homes.forEach((home) => rmSync(home, { recursive: true, force: true })));
+after(() => homes.forEach((home) => rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })));
 
 /** @param {object[]} entries */
 async function importHar(entries) {

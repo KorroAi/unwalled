@@ -22,7 +22,7 @@ describe("MySQL / MariaDB data source", { skip: !url && "set UNWALLED_MYSQL_URL 
   });
   after(async () => {
     await engine?.close();
-    rmSync(home, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   it("connects, converts types, binds parameters and only reads", async () => {

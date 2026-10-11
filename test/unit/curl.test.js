@@ -43,7 +43,7 @@ describe("import_curl through the engine", () => {
   after(async () => {
     await engine?.close();
     await fixtures?.close();
-    rmSync(home, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   it("imports a .http file (variables, headers, JSON body, several requests)", async () => {

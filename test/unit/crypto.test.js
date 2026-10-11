@@ -18,7 +18,7 @@ const makeConfig = (overrides = {}) => {
 describe("secrets encryption", () => {
   after(() => {
     delete process.env.UNWALLED_SECRET_KEY;
-    for (const home of homes) rmSync(home, { recursive: true, force: true });
+    for (const home of homes) rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   it("round-trips with AES-256-GCM and detects tampering", () => {

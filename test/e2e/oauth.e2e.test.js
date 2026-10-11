@@ -61,7 +61,7 @@ describe("oauth_login", TIMEOUT, () => {
   after(async () => {
     await engine?.close();
     await new Promise((resolve) => server.close(() => resolve(undefined)));
-    rmSync(home, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   it("signs in, calls the API with the token and refreshes it when it is rejected", TIMEOUT, async () => {

@@ -18,7 +18,7 @@ describe("stored secret query parameters", () => {
   });
   after(async () => {
     await engine?.close();
-    rmSync(home, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   const recipe = { name: "site", kind: "browser", baseUrl: "https://archive.test" };

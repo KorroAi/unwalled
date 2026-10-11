@@ -41,7 +41,7 @@ describe("remote data", () => {
   after(async () => {
     await engine?.close();
     await new Promise((resolve) => server.close(() => resolve(undefined)));
-    rmSync(home, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   const query = async (name, sql) => JSON.parse((await /** @type {any} */ (engine.tools.get(`${name}__sql`)).run({ sql })).text.split("\n")[0]).rows;

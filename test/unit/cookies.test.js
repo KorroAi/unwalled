@@ -10,7 +10,7 @@ import { isEncrypted } from "../../src/crypto.js";
 const dir = mkdtempSync(join(tmpdir(), "unwalled-cookies-"));
 after(() => {
   encryptCookiesWith(null);
-  rmSync(dir, { recursive: true, force: true });
+  rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
 });
 const cookies = [{ name: "session", value: "s3cr3t-value", domain: ".crm.test", path: "/", expires: -1, httpOnly: true, secure: true, sameSite: "Lax" }];
 const context = /** @type {any} */ ({ cookies: async () => cookies });
@@ -38,6 +38,6 @@ describe("saved cookies", () => {
     });
     await saveCookies(context, other);
     assert.equal(savedCookieFingerprint(other, "crm.test"), "");
-    rmSync(other, { recursive: true, force: true });
+    rmSync(other, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 });

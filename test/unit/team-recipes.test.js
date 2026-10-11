@@ -9,7 +9,7 @@ import { Engine } from "../../src/core.js";
 
 const PETSTORE = fileURLToPath(new URL("../fixtures/petstore.yaml", import.meta.url));
 const root = mkdtempSync(join(tmpdir(), "unwalled-team-"));
-after(() => rmSync(root, { recursive: true, force: true }));
+after(() => rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }));
 const saved = { ...process.env };
 afterEach(() => {
   for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];

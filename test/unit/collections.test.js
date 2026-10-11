@@ -77,7 +77,7 @@ describe("import_file through the engine", () => {
   after(async () => {
     await engine?.close();
     await fixtures?.close();
-    rmSync(home, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   it("imports a Postman collection and calls its tools", async () => {

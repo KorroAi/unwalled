@@ -79,7 +79,7 @@ describe("SOAP tools", () => {
   after(async () => {
     await engine?.close();
     await new Promise((resolve) => server.close(() => resolve(undefined)));
-    rmSync(home, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   it("finds the WSDL from the endpoint, calls operations and reports faults", async () => {

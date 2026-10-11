@@ -25,7 +25,7 @@ describe("realtime streams (browser capture)", TIMEOUT, () => {
   after(async () => {
     await engine?.close();
     await fixture?.close();
-    rmSync(home, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   it("captures the WebSocket protocol and the event stream", TIMEOUT, async () => {

@@ -152,7 +152,7 @@ describe("MQTT", () => {
       assert.equal(listening.isError, false, `listening is a read and still works: ${listening.text}`);
     } finally {
       await engine.close();
-      rmSync(home, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
     }
   });
 });

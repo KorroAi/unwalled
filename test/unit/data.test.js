@@ -9,7 +9,7 @@ import { assertReadOnly, readRecords } from "../../src/data/source.js";
 describe("local data parsing", () => {
   let dir;
   before(() => (dir = mkdtempSync(join(tmpdir(), "umcp-data-"))));
-  after(() => rmSync(dir, { recursive: true, force: true }));
+  after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }));
 
   it("reads CSV, JSON Lines and JSON objects of arrays", () => {
     writeFileSync(join(dir, "sales 2026.csv"), "id,product,amount\n1,lamp,12.5\n2,chair,40\n");
@@ -43,7 +43,7 @@ describe("local data recipes", () => {
   });
   after(async () => {
     await engine?.close();
-    rmSync(home, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   const sql = async (recipe, query, extra = {}) => {

@@ -78,7 +78,7 @@ describe("Excel and iCalendar as SQL tables", () => {
   });
   after(async () => {
     await engine?.close();
-    rmSync(home, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   it("queries workbook sheets and calendar events with SQL", async () => {

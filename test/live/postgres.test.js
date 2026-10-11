@@ -22,7 +22,7 @@ describe("PostgreSQL data source", { skip: !url && "set UNWALLED_PG_URL to run" 
   });
   after(async () => {
     await engine?.close();
-    rmSync(home, { recursive: true, force: true });
+    rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 
   it("connects (TLS when offered, SCRAM), converts types and only reads", async () => {

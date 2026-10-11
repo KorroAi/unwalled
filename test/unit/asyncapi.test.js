@@ -10,7 +10,7 @@ import { AUTH_TOKEN, startRealtimeFixture, WS_TOKEN } from "../e2e/realtime-fixt
 describe("variables files", () => {
   let dir;
   before(() => (dir = mkdtempSync(join(tmpdir(), "umcp-vars-"))));
-  after(() => rmSync(dir, { recursive: true, force: true }));
+  after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }));
 
   it("reads Postman environments, .env files and JSON objects", () => {
     writeFileSync(join(dir, "env.json"), JSON.stringify({ name: "prod", values: [{ key: "baseUrl", value: "https://a.io", enabled: true }, { key: "off", value: "x", enabled: false }] }));
@@ -63,7 +63,7 @@ describe("AsyncAPI", () => {
     after(async () => {
       await engine?.close();
       await fixture?.close();
-      rmSync(home, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
     });
 
     it("creates a stream tool that connects with stored credentials", async () => {
