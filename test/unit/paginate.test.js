@@ -64,7 +64,11 @@ describe("paginated tools against a local API", () => {
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
     base = `http://127.0.0.1:${/** @type {import("node:net").AddressInfo} */ (server.address()).port}`;
   });
-  after(() => new Promise((resolve) => server.close(resolve)));
+  // Close kept-alive connections too: open sockets at exit are a known trigger of a Node crash on Windows (UV_HANDLE_CLOSING).
+  after(() => new Promise((resolve) => {
+    server.close(resolve);
+    server.closeAllConnections();
+  }));
 
   const tools = () => {
     const operation = (id, path, params) => ({ id, method: "GET", path, summary: "", params: params.map((name) => ({ name, in: "query", required: false, schema: { type: "string" } })), body: null });

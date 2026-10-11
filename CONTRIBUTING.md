@@ -34,3 +34,7 @@ Tests against real services are optional:
 
 Open an issue with the command or tool call, the site type (SPA, GraphQL, OpenAPI, HAR), the error output, and your
 Node.js, OS and browser versions. Do not attach recipes, HAR files or profiles that contain personal data or credentials.
+
+## License
+
+By contributing, you agree that your contributions are licensed under the [Apache License 2.0](LICENSE), like the rest of the project.

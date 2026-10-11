@@ -80,7 +80,10 @@ describe("JSON-RPC tools", () => {
   });
   after(async () => {
     await engine?.close();
-    await new Promise((resolve) => server.close(() => resolve(undefined)));
+    await new Promise((resolve) => {
+      server.close(() => resolve(undefined));
+      server.closeAllConnections(); // open sockets at exit can crash Node on Windows (UV_HANDLE_CLOSING)
+    });
     rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
   });
 

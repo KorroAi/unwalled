@@ -117,4 +117,4 @@ each with their own sign-in. See [For teams](docs/FOR-TEAMS.md).
 
 ## License
 
-[MIT](LICENSE) © 2026 Korrocorp
+[Apache License 2.0](LICENSE) © 2026 Korrocorp (see [NOTICE](NOTICE))

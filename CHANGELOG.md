@@ -27,6 +27,7 @@ First steps for people, not only for agents: from nothing to an agent answering 
 - Tool summaries: "Get one order" instead of "Get one order by order", "notes of an order" instead of "of a order".
 - Test files and fixtures are in English; the benchmark report says why its raw answers are in French (the settings of the machine it ran on).
 - README rewritten: what it does and how it works first, then the setup, one table to connect each kind of source, and the measurements.
+- License: Apache License 2.0 (was MIT), with a NOTICE file.
 
 ## 0.4.0 — 2026-10-11
 
