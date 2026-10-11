@@ -1,0 +1,498 @@
+{
+  "environment": {
+    "date": "2026-10-11T01:19:02.314Z",
+    "node": "v24.15.0",
+    "os": "win32 10.0.26300"
+  },
+  "results": [
+    {
+      "id": "crates",
+      "kind": "single-page app",
+      "url": "https://crates.io/search?q=serde",
+      "discoverMs": 4937,
+      "source": "browser capture",
+      "toolNames": [
+        "crates__get_api_v1_site_metadata",
+        "crates__get_api_v1_crates",
+        "crates__request"
+      ],
+      "tools": 3,
+      "answering": 2,
+      "health": {
+        "ok": 2
+      },
+      "dataTool": "crates__get_api_v1_crates",
+      "answered": true,
+      "answerChars": 3004,
+      "answerStart": "HTTP 200 OK — https://crates.io/api/v1/crates?q=tokio&per_page=3\n{\"crates\":[{\"id\":\"tokio\",\"name\":\"tokio\",\"updated_at\":\"2026-10-03T11:18:32.487780Z\",\"versions\":null,\"keywords\":null,\"categories\":null,\"b",
+      "blocked": false,
+      "healthDetail": [
+        "  ok      crates__get_api_v1_site_metadata — HTTP 200",
+        "  ok      crates__get_api_v1_crates — HTTP 200"
+      ]
+    },
+    {
+      "id": "hn",
+      "kind": "search app",
+      "url": "https://hn.algolia.com/?q=sqlite",
+      "discoverMs": 7664,
+      "source": "browser capture",
+      "toolNames": [
+        "hn__post_1_indexes_Item_dev_query",
+        "hn__request"
+      ],
+      "tools": 2,
+      "answering": 0,
+      "health": {},
+      "dataTool": "hn__post_1_indexes_Item_dev_query",
+      "answered": true,
+      "answerChars": 4308,
+      "answerStart": "HTTP 200 OK — https://uj5wyc0l7x-dsn.algolia.net/1/indexes/Item_dev/query?x-algolia-agent=Algolia+for+JavaScript+%284.13.1%29%3B+Browser+%28lite%29&x-algolia-application-id=UJ5WYC0L7X&x-algolia-api-ke",
+      "blocked": false,
+      "healthDetail": []
+    },
+    {
+      "id": "mdn",
+      "kind": "documentation search",
+      "url": "https://developer.mozilla.org/en-US/search?q=fetch",
+      "discoverMs": 10400,
+      "source": "browser capture",
+      "toolNames": [
+        "mdn__get_api_v1_search",
+        "mdn__get_api_v1_whoami",
+        "mdn__post_pong_get",
+        "mdn__request"
+      ],
+      "tools": 4,
+      "answering": 2,
+      "health": {
+        "ok": 2
+      },
+      "dataTool": "mdn__get_api_v1_search",
+      "answered": true,
+      "answerChars": 4154,
+      "answerStart": "HTTP 200 OK — https://developer.mozilla.org/api/v1/search?locale=en-US&q=flexbox\n{\"documents\":[{\"mdn_url\":\"/en-US/docs/Learn_web_development/Core/CSS_layout/Flexbox\",\"score\":66.8791,\"title\":\"Flexbox\",",
+      "blocked": false,
+      "healthDetail": [
+        "  ok      mdn__get_api_v1_search — HTTP 200",
+        "  ok      mdn__get_api_v1_whoami — HTTP 200"
+      ]
+    },
+    {
+      "id": "bluesky",
+      "kind": "social network",
+      "url": "https://bsky.app/profile/bsky.app",
+      "discoverMs": 11125,
+      "source": "browser capture",
+      "toolNames": [
+        "bluesky__get_xrpc_app_bsky_feed_getAuthorFeed",
+        "bluesky__get_config",
+        "bluesky__get_geolocation",
+        "bluesky__get_config_1ebb22",
+        "bluesky__get_xrpc_app_bsky_ageassurance_getConfig",
+        "bluesky__get_gb_api_features_feature",
+        "bluesky__get_xrpc_app_bsky_unspecced_getConfig",
+        "bluesky__get_xrpc_app_bsky_labeler_getServices",
+        "bluesky__get_xrpc_com_atproto_identity_resolveHandle",
+        "bluesky__get_xrpc_app_bsky_unspecced_getTrends",
+        "bluesky__get_xrpc_app_bsky_actor_getProfile",
+        "bluesky__get_xrpc_app_bsky_graph_getSuggestedFollowsByActor",
+        "bluesky__request"
+      ],
+      "tools": 13,
+      "answering": 11,
+      "health": {
+        "ok": 11,
+        "broken": 1
+      },
+      "dataTool": "bluesky__get_xrpc_app_bsky_actor_getProfile",
+      "answered": true,
+      "answerChars": 1331,
+      "answerStart": "HTTP 200 OK — https://public.api.bsky.app/xrpc/app.bsky.actor.getProfile?actor=atproto.com\n{\"did\":\"did:plc:ewvi7nxzyoun6zhxrhs64oiz\",\"handle\":\"atproto.com\",\"displayName\":\"AT Protocol Developers\",\"avat",
+      "blocked": false,
+      "healthDetail": [
+        "  ok      bluesky__get_xrpc_app_bsky_feed_getAuthorFeed — HTTP 200",
+        "  ok      bluesky__get_config — HTTP 200",
+        "  ok      bluesky__get_geolocation — HTTP 200",
+        "  ok      bluesky__get_config_1ebb22 — HTTP 200",
+        "  ok      bluesky__get_xrpc_app_bsky_ageassurance_getConfig — HTTP 200",
+        "  ok      bluesky__get_gb_api_features_feature — HTTP 200",
+        "  ok      bluesky__get_xrpc_app_bsky_unspecced_getConfig — HTTP 200",
+        "  broken  bluesky__get_xrpc_app_bsky_labeler_getServices — HTTP 400 Bad Request — https://public.api.bsky.app/xrpc/app.bsky.labeler.getServices?detailed=true",
+        "  ok      bluesky__get_xrpc_com_atproto_identity_resolveHandle — HTTP 200",
+        "  ok      bluesky__get_xrpc_app_bsky_unspecced_getTrends — HTTP 200",
+        "  ok      bluesky__get_xrpc_app_bsky_actor_getProfile — HTTP 200"
+      ]
+    },
+    {
+      "id": "mastodon",
+      "kind": "social network",
+      "url": "https://mastodon.social/explore",
+      "discoverMs": 47527,
+      "source": "browser capture",
+      "toolNames": [
+        "mastodon__get_api_v2_instance",
+        "mastodon__get_api_v1_trends_tags",
+        "mastodon__get_api_v1_custom_emojis",
+        "mastodon__get_packs_assets_compact--AiP6cX_json",
+        "mastodon__get_packs_assets_iamcal-DP8KB4yM_json",
+        "mastodon__get_packs_assets_cldr-Bo6RVSk_json",
+        "mastodon__get_api_v1_trends_statuses",
+        "mastodon__request"
+      ],
+      "tools": 8,
+      "answering": 7,
+      "health": {
+        "ok": 7
+      },
+      "dataTool": "mastodon__get_api_v1_trends_tags",
+      "answered": true,
+      "answerChars": 1393,
+      "answerStart": "HTTP 200 OK — https://mastodon.social/api/v1/trends/tags?limit=3\n[{\"id\":\"1362\",\"name\":\"Caturday\",\"url\":\"https://mastodon.social/tags/caturday\",\"history\":[{\"day\":\"1791676800\",\"accounts\":\"17\",\"uses\":\"19",
+      "blocked": false,
+      "healthDetail": [
+        "  ok      mastodon__get_api_v2_instance — HTTP 200",
+        "  ok      mastodon__get_api_v1_trends_tags — HTTP 200",
+        "  ok      mastodon__get_api_v1_custom_emojis — HTTP 200",
+        "  ok      mastodon__get_packs_assets_compact--AiP6cX_json — HTTP 200",
+        "  ok      mastodon__get_packs_assets_iamcal-DP8KB4yM_json — HTTP 200",
+        "  ok      mastodon__get_packs_assets_cldr-Bo6RVSk_json — HTTP 200",
+        "  ok      mastodon__get_api_v1_trends_statuses — HTTP 200"
+      ]
+    },
+    {
+      "id": "flathub",
+      "kind": "app store",
+      "url": "https://flathub.org/apps/search?q=editor",
+      "discoverMs": 9336,
+      "source": "browser capture",
+      "toolNames": [
+        "flathub__post_api_v2_search",
+        "flathub__request"
+      ],
+      "tools": 2,
+      "answering": 0,
+      "health": {},
+      "dataTool": "flathub__post_api_v2_search",
+      "answered": true,
+      "answerChars": 4131,
+      "answerStart": "HTTP 200 OK — https://flathub.org/api/v2/search?locale=en\n{\"hits\":[{\"name\":\"GNU Image Manipulation Program\",\"keywords\":[\"GIMP\",\"Photoshop\"],\"localized_keywords\":[\"El GIMP\",\"GIMP\",\"GIMPo\",\"Photoshop\",\"",
+      "blocked": false,
+      "healthDetail": []
+    },
+    {
+      "id": "archive",
+      "kind": "library",
+      "url": "https://archive.org/search?query=apollo",
+      "discoverMs": 20965,
+      "source": "browser capture",
+      "toolNames": [
+        "archive__get_services_search_beta_page_production",
+        "archive__get_services_offshoot_home-page_mediacounts_php",
+        "archive__get_services_donations_banner_php",
+        "archive__get_services_offshoot_details-page_favorite_php",
+        "archive__get_services_offshoot_config_php",
+        "archive__get_services_offshoot_abtest_php",
+        "archive__get_metadata_metadata_metadata",
+        "archive__request"
+      ],
+      "tools": 8,
+      "answering": 7,
+      "health": {
+        "ok": 7
+      },
+      "dataTool": "archive__get_services_search_beta_page_production",
+      "answered": true,
+      "answerChars": 4187,
+      "answerStart": "HTTP 200 OK — https://archive.org/services/search/beta/page_production/?user_query=hubble&hits_per_page=3&page=1\n{\"version\":\"1x7o\",\"session_context\":{\"session_key\":\"guest\",\"created\":\"2026-10-11T01:16:",
+      "blocked": false,
+      "healthDetail": [
+        "  ok      archive__get_services_search_beta_page_production — HTTP 200",
+        "  ok      archive__get_services_offshoot_home-page_mediacounts_php — HTTP 200",
+        "  ok      archive__get_services_donations_banner_php — HTTP 200",
+        "  ok      archive__get_services_offshoot_details-page_favorite_php — HTTP 200",
+        "  ok      archive__get_services_offshoot_config_php — HTTP 200",
+        "  ok      archive__get_services_offshoot_abtest_php — HTTP 200",
+        "  ok      archive__get_metadata_metadata_metadata — HTTP 200"
+      ]
+    },
+    {
+      "id": "vscode",
+      "kind": "extension marketplace",
+      "url": "https://marketplace.visualstudio.com/search?term=python&target=VSCode",
+      "discoverMs": 8599,
+      "source": "browser capture",
+      "toolNames": [
+        "vscode__post_apis_public_gallery_extensionquery",
+        "vscode__get_public_Bundling_DynamicBundles",
+        "vscode__request"
+      ],
+      "tools": 3,
+      "answering": 1,
+      "health": {
+        "ok": 1
+      },
+      "dataTool": "vscode__post_apis_public_gallery_extensionquery",
+      "answered": true,
+      "answerChars": 4161,
+      "answerStart": "HTTP 200 OK — https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery\n{\"results\":[{\"extensions\":[{\"publisher\":{\"publisherId\":\"a321960e-effd-4969-8677-5dd0ffa8270e\",\"publisherName\":\"1Y",
+      "blocked": false,
+      "healthDetail": [
+        "  ok      vscode__get_public_Bundling_DynamicBundles — HTTP 200"
+      ]
+    },
+    {
+      "id": "huggingface",
+      "kind": "model hub",
+      "url": "https://huggingface.co/models?search=whisper",
+      "discoverMs": 1259,
+      "source": "OpenAPI found",
+      "toolNames": [
+        "huggingface__routes",
+        "huggingface__request",
+        "huggingface__operation",
+        "huggingface__call"
+      ],
+      "tools": 4,
+      "answering": 0,
+      "health": {},
+      "dataTool": "huggingface__call",
+      "answered": true,
+      "answerChars": 219,
+      "answerStart": "HTTP 200 OK — https://huggingface.co/api/models/google-bert/bert-base-uncased/refs\n{\"tags\":[],\"branches\":[{\"name\":\"main\",\"ref\":\"refs/heads/main\",\"targetCommit\":\"86b5e0934494bd15c9632b12f734a8a67f72359",
+      "blocked": false,
+      "healthDetail": []
+    },
+    {
+      "id": "openlibrary",
+      "kind": "library",
+      "url": "https://openlibrary.org/search?q=dune",
+      "discoverMs": 2465,
+      "source": "OpenAPI found",
+      "toolNames": [
+        "openlibrary__routes",
+        "openlibrary__request",
+        "openlibrary__operation",
+        "openlibrary__call"
+      ],
+      "tools": 4,
+      "answering": 0,
+      "health": {},
+      "dataTool": "openlibrary__call",
+      "answered": true,
+      "answerChars": 3485,
+      "answerStart": "HTTP 200 OK — https://openlibrary.org/search.json?q=foundation+asimov&limit=3\n{\"numFound\":83,\"start\":0,\"numFoundExact\":true,\"num_found\":83,\"documentation_url\":\"https://openlibrary.org/dev/docs/api/sea",
+      "blocked": false,
+      "healthDetail": []
+    },
+    {
+      "id": "github",
+      "kind": "code hosting",
+      "url": "https://github.com/modelcontextprotocol/servers/issues",
+      "discoverMs": 9186,
+      "source": "browser capture",
+      "toolNames": [
+        "github__get_issues_viewer",
+        "github__get_modelcontextprotocol_param2_deferred_c2e490",
+        "github__get_modelcontextprotocol_param2_views_json_560b98",
+        "github__request"
+      ],
+      "tools": 4,
+      "answering": 3,
+      "health": {
+        "ok": 3
+      },
+      "dataTool": "github__get_modelcontextprotocol_param2_deferred_c2e490",
+      "answered": true,
+      "answerChars": 3503,
+      "answerStart": "HTTP 200 OK — https://github.com/modelcontextprotocol/inspector/issues/deferred?q=is%3Aissue+state%3Aopen&page=1\n{\"meta\":{\"title\":null},\"payload\":{\"issuesIndexSecondaryData\":{\"pageInfo\":{\"openCount\":5",
+      "blocked": false,
+      "healthDetail": [
+        "  ok      github__get_issues_viewer — HTTP 200",
+        "  ok      github__get_modelcontextprotocol_param2_deferred_c2e490 — HTTP 200",
+        "  ok      github__get_modelcontextprotocol_param2_views_json_560b98 — HTTP 200"
+      ]
+    },
+    {
+      "id": "openstreetmap",
+      "kind": "map",
+      "url": "https://www.openstreetmap.org/search?query=Lyon",
+      "discoverMs": 22681,
+      "source": "browser capture",
+      "toolNames": [
+        "openstreetmap__post_search_nominatim_query",
+        "openstreetmap__request"
+      ],
+      "tools": 2,
+      "answering": 0,
+      "health": {},
+      "dataTool": "openstreetmap__post_search_nominatim_query",
+      "answered": true,
+      "answerChars": 432,
+      "answerStart": "HTTP 200 OK — https://www.openstreetmap.org/search/nominatim_query?query=Marseille\n- City Marseille, Bouches-du-Rhône, Provence-Alpes-Côte d'Azur, France métropolitaine, France [/relation/76469]\n\n- Ad",
+      "blocked": false,
+      "healthDetail": []
+    },
+    {
+      "id": "dockerhub",
+      "kind": "server-rendered",
+      "url": "https://hub.docker.com/search?q=postgres",
+      "discoverMs": 8510,
+      "source": "browser capture",
+      "toolNames": [
+        "dockerhub__get_manifest",
+        "dockerhub__get_v2_feature-flags_proxy",
+        "dockerhub__request"
+      ],
+      "tools": 3,
+      "answering": 1,
+      "health": {
+        "broken": 1,
+        "ok": 1
+      },
+      "dataTool": null,
+      "answered": false,
+      "answerChars": 0,
+      "blocked": false,
+      "reason": "no data tool generated",
+      "healthDetail": [
+        "  broken  dockerhub__get_manifest — HTTP 400 Bad Request — https://hub.docker.com/__manifest?version=d09e81fc",
+        "  ok      dockerhub__get_v2_feature-flags_proxy — HTTP 200",
+        "Run check_recipe again with repair=true to rediscover the recipe."
+      ]
+    },
+    {
+      "id": "pypi",
+      "kind": "server-rendered",
+      "url": "https://pypi.org/search/?q=requests",
+      "discoverMs": 6154,
+      "source": "browser capture",
+      "toolNames": [
+        "pypi__request"
+      ],
+      "tools": 1,
+      "answering": 0,
+      "health": {},
+      "dataTool": null,
+      "answered": false,
+      "answerChars": 0,
+      "blocked": true,
+      "reason": "Blocked: the site refused the automated browser (HTTP 200, \"Client Challenge\"): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself",
+      "healthDetail": []
+    },
+    {
+      "id": "wikipedia",
+      "kind": "server-rendered",
+      "url": "https://en.wikipedia.org/wiki/Model_Context_Protocol",
+      "discoverMs": 5416,
+      "source": "browser capture",
+      "toolNames": [
+        "wikipedia__request"
+      ],
+      "tools": 1,
+      "answering": 0,
+      "health": {},
+      "dataTool": null,
+      "answered": false,
+      "answerChars": 0,
+      "blocked": false,
+      "reason": "No API call was observed. The page may be server-rendered, or the data appears only after interaction: pass actions, use interactive mode, or log in first.",
+      "healthDetail": []
+    },
+    {
+      "id": "stackoverflow",
+      "kind": "server-rendered",
+      "url": "https://stackoverflow.com/questions/tagged/node.js",
+      "discoverMs": 7476,
+      "source": "browser capture",
+      "toolNames": [
+        "stackoverflow__request"
+      ],
+      "tools": 1,
+      "answering": 0,
+      "health": {},
+      "dataTool": null,
+      "answered": false,
+      "answerChars": 0,
+      "blocked": true,
+      "reason": "Blocked: the site refused the automated browser (HTTP 403, \"Just a moment\"): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself, o",
+      "healthDetail": []
+    },
+    {
+      "id": "npm",
+      "kind": "protected",
+      "url": "https://www.npmjs.com/search?q=playwright",
+      "discoverMs": 16830,
+      "source": "browser capture",
+      "toolNames": [
+        "npm__request"
+      ],
+      "tools": 1,
+      "answering": 0,
+      "health": {},
+      "dataTool": null,
+      "answered": false,
+      "answerChars": 0,
+      "blocked": true,
+      "reason": "Blocked: the site refused the automated browser (HTTP 403): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself, or import a HAR sa",
+      "healthDetail": []
+    },
+    {
+      "id": "gitlab",
+      "kind": "protected",
+      "url": "https://gitlab.com/explore/projects/trending",
+      "discoverMs": 19800,
+      "source": "browser capture",
+      "toolNames": [
+        "gitlab__request"
+      ],
+      "tools": 1,
+      "answering": 0,
+      "health": {},
+      "dataTool": null,
+      "answered": false,
+      "answerChars": 0,
+      "blocked": true,
+      "reason": "Blocked: the site refused the automated browser (HTTP 403): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself, or import a HAR sa",
+      "healthDetail": []
+    },
+    {
+      "id": "reddit",
+      "kind": "protected",
+      "url": "https://www.reddit.com/r/LocalLLaMA/",
+      "discoverMs": 7218,
+      "source": "browser capture",
+      "toolNames": [
+        "reddit__request"
+      ],
+      "tools": 1,
+      "answering": 0,
+      "health": {},
+      "dataTool": null,
+      "answered": false,
+      "answerChars": 0,
+      "blocked": true,
+      "reason": "Blocked: the site refused the automated browser (HTTP 200, \"Prove your humanity\"): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yours",
+      "healthDetail": []
+    },
+    {
+      "id": "leboncoin",
+      "kind": "protected",
+      "url": "https://www.leboncoin.fr/recherche?text=velo",
+      "discoverMs": 4290,
+      "source": "browser capture",
+      "toolNames": [
+        "leboncoin__request"
+      ],
+      "tools": 1,
+      "answering": 0,
+      "health": {},
+      "dataTool": null,
+      "answered": false,
+      "answerChars": 0,
+      "blocked": true,
+      "reason": "Blocked: the site refused the automated browser (HTTP 403, \"datadome\"): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself, or imp",
+      "healthDetail": []
+    }
+  ]
+}

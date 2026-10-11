@@ -1,6 +1,6 @@
 {
   "name": "unwalled",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Open any website, internal tool, API, file or database to AI agents as typed MCP tools. No API needed.",
   "homepage": "https://github.com/KorroAi/unwalled#readme",
   "bugs": { "url": "https://github.com/KorroAi/unwalled/issues" },

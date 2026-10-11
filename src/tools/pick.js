@@ -59,7 +59,8 @@ function splitSegments(path) {
 /** @param {string} path @returns {Token[]} */
 export function parsePath(path) {
   /** @type {Token[]} */ const tokens = [];
-  for (const part of splitSegments(path)) {
+  // "[]" (every item, as in jq and many agents' habits) means "[*]".
+  for (const part of splitSegments(path.replace(/\[\]/g, "[*]"))) {
     if (part === "") throw new Error(`Invalid pick path "${path}"`);
     const match = /^([^[\]]*)((?:\[(?:-?\d+|\*|-?\d*:-?\d*|\?[^\]]+)\])*)$/.exec(part);
     if (!match) throw new Error(`Invalid pick path segment "${part}"`);

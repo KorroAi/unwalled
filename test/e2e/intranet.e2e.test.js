@@ -51,4 +51,32 @@ describe("example internal app", () => {
     const paid = await call("acme__get_api_v2_orders", { query: { status: "paid", per_page: 3 }, pick: "orders[*].id" });
     assert.match(paid.text, /HTTP 200[\s\S]*\d{4}/, "a query parameter the capture never saw with this value");
   });
+
+  // What a real agent did (bench/agent.js): it guessed the sign-in selectors, passed path values at the top level,
+  // and wrote to a form protected by a Rails-style CSRF token without knowing about the token.
+  it("signs in with guessed selectors, accepts flat arguments and fills a form's CSRF token", { timeout: 180_000 }, async () => {
+    const discovered = await call("discover", {
+      name: "bo", url: `${intranet.url}/login`, mode: "browser",
+      actions: [
+        { fill: "input[name=username]", text: "alice" }, { fill: "#pass", text: "demo" }, { click: "#login-button" },
+        { goto: "/orders/1003" }, { fill: "#note", text: "first" }, { click: "#add-note" }, { wait: 500 },
+      ],
+    });
+    assert.equal(discovered.isError, false, discovered.text);
+    assert.match(discovered.text, /used the page's user field \(#user\)/);
+    assert.match(discovered.text, /used the page's password field \(#password\)/);
+    assert.match(discovered.text, /used the page's submit button/);
+
+    const order = intranet.orders.find((o) => o.id === 1050);
+    const flat = await call("bo__get_api_v2_orders_order", { order: "1050", pick: "total" });
+    assert.match(flat.text, new RegExp(`HTTP 200[\\s\\S]*${order.total}`));
+
+    const note = await call("bo__post_api_v2_orders_order_notes", { path: { order: "1050" }, body: { text: "called the customer" } });
+    assert.match(note.text, /HTTP 200[\s\S]*called the customer/, note.text);
+  });
+
+  it("lists the page's real fields when a step cannot be resolved", { timeout: 120_000 }, async () => {
+    const discovered = await call("discover", { name: "bo2", url: `${intranet.url}/login`, mode: "browser", actions: [{ fill: "#search-box", text: "x" }] });
+    assert.match(discovered.text, /fields on .*\/login: #user \(text "User"\), #password \(password "Password"\), button\[type=submit\] \(button "Sign in"\)/);
+  });
 });

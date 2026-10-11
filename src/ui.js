@@ -2,6 +2,8 @@
 // a compact snapshot of the interactive elements with stable refs (e1, e2...), actions addressed by ref or CSS selector,
 // readable page text and screenshots.
 
+import { botWallSign } from "./discovery/capture.js";
+
 const MAX_ELEMENTS = 250;
 // Clicking these may spend money, delete or send something: held for confirmation like destructive API calls.
 export const RISKY_LABEL = /\b(delete|remove|destroy|erase|pay|buy|purchase|checkout|place order|order now|confirm|submit|send|transfer|unsubscribe|deactivate|close account|supprimer|effacer|payer|acheter|commander|valider|envoyer|confirmer|virement|résilier)\b/i;
@@ -62,6 +64,7 @@ export async function snapshot(page) {
   }, MAX_ELEMENTS);
   return [
     `Page: ${result.title} — ${result.url}`,
+    await wallNotice(page),
     result.headings.length ? `Headings: ${result.headings.join(" | ")}` : "",
     `Interactive elements (${result.lines.length}${result.lines.length >= MAX_ELEMENTS ? ", truncated" : ""}):`,
     ...result.lines,
@@ -141,6 +144,14 @@ export async function act(page, steps, { timeoutMs }) {
 export async function readText(page, { selector, maxChars }) {
   const text = await page.locator(selector ? locatorFor(selector) : "body").first().innerText({ timeout: 10_000 });
   const cleaned = text.replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-  const header = `Page: ${await page.title()} — ${page.url()}`;
+  const header = [`Page: ${await page.title()} — ${page.url()}`, await wallNotice(page)].filter(Boolean).join("\n");
   return `${header}\n${cleaned.length > maxChars ? `${cleaned.slice(0, maxChars)}\n… [truncated: ${cleaned.length} characters]` : cleaned}`;
+}
+
+/** Warns when the page is a bot check (CAPTCHA, challenge) rather than the site. @param {import("playwright-core").Page} page */
+async function wallNotice(page) {
+  const sign = await botWallSign(page, 0);
+  return sign
+    ? `Blocked: this page is a bot check (${sign}), not the site. unwalled does not solve it: call ui with action=open, visible=true and let the user solve it in the window, then continue.`
+    : "";
 }

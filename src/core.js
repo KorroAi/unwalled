@@ -1,7 +1,7 @@
 // Engine shared by the MCP server and the CLI: discovery, recipe management, request execution.
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import { closeProfile, launchProfile, saveCookies } from "./browser.js";
+import { closeProfile, launchProfile, saveCookies, savedCookieFingerprint } from "./browser.js";
 import { captureTraffic, validateActions } from "./discovery/capture.js";
 import { observationsFromHar } from "./discovery/har.js";
 import { inferEndpoints, navigationVariables, responseKeys } from "./discovery/infer.js";
@@ -215,11 +215,13 @@ export class Engine {
     for (const [key, value] of Object.entries(secrets)) {
       if (key.startsWith("{") || key.startsWith("@") || typeof value !== "string") continue; // secret path parameters, OAuth refresh settings
       if (!key.startsWith("?")) headers[key.toLowerCase()] = value;
-      else if (!url.searchParams.has(key.slice(1))) url.searchParams.set(key.slice(1), value); // secret query parameter
+      // Secret query parameter: added to calls of endpoints seen with it (a "key" of one endpoint is not a credential of the host).
+      else if (!url.searchParams.has(key.slice(1)) && (!request.queryNames || request.queryNames.includes(key.slice(1)))) url.searchParams.set(key.slice(1), value);
     }
     // Explicit headers win over stored ones; lowercase keys avoid sending a header twice.
     for (const [key, value] of Object.entries(request.headers ?? {})) headers[key.toLowerCase()] = String(value);
-    return { ...request, url: url.toString(), headers };
+    const { queryNames, ...rest } = request;
+    return { ...rest, url: url.toString(), headers };
   }
 
   /**
@@ -232,6 +234,7 @@ export class Engine {
     return this.withLock(recipe.name, async () => {
       const context = await this.browserFor(recipe.name);
       await refreshCsrfFromCookies(context, outgoing);
+      if (outgoing.csrfField) await this.fillCsrfField(recipe, outgoing, context);
       // Requests leave from Node unless the user opted this recipe into in-page requests ("auto" or "page"):
       // getting past a site's bot protection is the user's decision, for sites they are allowed to automate.
       const mode = policy.transport ?? "node";
@@ -254,6 +257,36 @@ export class Engine {
       await saveCookies(context, this.store.profileDir(recipe.name)); // responses may refresh the session
       return result;
     });
+  }
+
+  /**
+   * Form CSRF token (Rails authenticity_token, Django csrfmiddlewaretoken, Laravel _token): when the call does not give
+   * one, the current token of the session is read from the site's page (meta tag), else from its CSRF cookie.
+   * Call under the recipe lock.
+   * @param {any} recipe @param {import("./tools/http.js").OutgoingRequest} outgoing @param {import("playwright-core").BrowserContext} context
+   */
+  async fillCsrfField(recipe, outgoing, context) {
+    const field = /** @type {string} */ (outgoing.csrfField);
+    delete outgoing.csrfField;
+    if (/^(GET|HEAD)$/i.test(outgoing.method)) return;
+    const body = outgoing.body === undefined || outgoing.body === null ? {} : outgoing.body;
+    if (typeof body !== "object" || Array.isArray(body) || (body[field] && body[field] !== "REDACTED")) return;
+    let token = null;
+    const read = (/** @type {import("playwright-core").Page} */ page) =>
+      page.evaluate(() => document.querySelector('meta[name="csrf-token"], meta[name="_csrf"], meta[name="csrf_token"], meta[name="xsrf-token"]')?.getAttribute("content") || null);
+    try {
+      const page = await this.pageFor(recipe.name);
+      token = await read(page);
+      // The page discovery started from (often the sign-in page) may not carry the token: try the site's home page.
+      if (!token) {
+        await page.goto(new URL("/", outgoing.url).toString(), { waitUntil: "domcontentloaded", timeout: this.config.requestTimeoutMs * 2 });
+        token = await read(page);
+      }
+    } catch (error) {
+      log(`CSRF token: ${error.message}`);
+    }
+    if (!token) token = (await context.cookies(outgoing.url).catch(() => [])).find((c) => /^(csrftoken|csrf_token|_csrf)$/i.test(c.name))?.value ?? null;
+    if (token) outgoing.body = { ...body, [field]: token };
   }
 
   /** Page of the site kept open for in-page requests and UI control. Call under the recipe lock. @param {string} name @param {string} [url] */
@@ -341,7 +374,8 @@ export class Engine {
     this.authAttempts.set(attemptKey, Date.now());
     const pageUrl = this.siteUrl(recipe);
     return /** @type {Promise<"browser" | null>} */ (this.withLock(recipe.name, async () => {
-      await this.closeBrowser(recipe.name);
+      await this.closeBrowser(recipe.name); // saves the cookies
+      const cookiesBefore = savedCookieFingerprint(this.store.profileDir(recipe.name), url.hostname);
       const capture = await captureTraffic(this.config, { url: pageUrl, profileDir: this.store.profileDir(recipe.name), hosts: [url.hostname], onProgress: log }).catch((error) => {
         log(`${recipe.name}: re-authentication failed: ${error.message}`);
         return null;
@@ -350,9 +384,13 @@ export class Engine {
       const fresh = inferEndpoints(capture.observations, { secretCookies: false, maxEndpoints: 1000 }).secrets[url.host];
       const current = this.store.loadSecrets(recipe.name);
       const changed = fresh && Object.entries(fresh).some(([key, value]) => !key.startsWith("{") && current[url.host]?.[key] !== value);
-      if (!changed) return null;
-      current[url.host] = { ...(current[url.host] ?? {}), ...fresh };
-      this.store.saveSecrets(recipe.name, current);
+      // Cookie sessions (Grafana rotates its session cookie): the page load renewed the cookies, not the headers.
+      const cookiesRenewed = savedCookieFingerprint(this.store.profileDir(recipe.name), url.hostname) !== cookiesBefore;
+      if (!changed && !cookiesRenewed) return null;
+      if (changed) {
+        current[url.host] = { ...(current[url.host] ?? {}), ...fresh };
+        this.store.saveSecrets(recipe.name, current);
+      }
       this.authAttempts.delete(attemptKey);
       log(`${recipe.name}: credentials renewed from a fresh page load`);
       return "browser";
@@ -479,7 +517,7 @@ export class Engine {
         graphql: canMerge ? mergeByKey(previous.graphql, inferred.graphql, graphqlKey) : inferred.graphql,
         streams: canMerge ? mergeByKey(previous.streams ?? [], realtime.streams, streamKey) : realtime.streams,
         jsonrpc: canMerge ? mergeByKey(previous.jsonrpc ?? [], rpc.methods, rpcKey) : rpc.methods,
-        warnings: [...capture.actionErrors, ...inferred.warnings],
+        warnings: [...(capture.blocked ? [`Blocked: ${capture.blocked}`] : []), ...capture.actionErrors, ...inferred.warnings.filter((w) => !(capture.blocked && /^No API call was observed/.test(w)))],
         stats: inferred.stats,
         ...(capture.explored.length ? { explored: capture.explored.map((e) => ({ url: redactUrl(e.url), newCalls: e.newCalls })) } : {}),
         ...carryOver(previous),

@@ -26,6 +26,28 @@ export async function saveCookies(context, profileDir) {
   if (process.platform !== "win32") chmodSync(file, 0o600);
 }
 
+/**
+ * Fingerprint of the saved cookies a host receives: tells whether a page load renewed the session (rotated cookies).
+ * @param {string} profileDir @param {string} hostname
+ */
+export function savedCookieFingerprint(profileDir, hostname) {
+  for (const name of [COOKIE_FILE, LEGACY_COOKIE_FILE]) {
+    const file = join(profileDir, name);
+    if (!existsSync(file)) continue;
+    try {
+      const cookies = /** @type {{ name: string, value: string, domain: string }[]} */ (JSON.parse(readFileSync(file, "utf8")));
+      const matches = (/** @type {string} */ domain) => {
+        const bare = domain.replace(/^\./, "");
+        return hostname === bare || hostname.endsWith(`.${bare}`);
+      };
+      return cookies.filter((c) => matches(c.domain)).map((c) => `${c.name}=${c.value}`).sort().join("; ");
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
 /** @param {import("playwright-core").BrowserContext} context @param {string} profileDir */
 async function restoreCookies(context, profileDir) {
   let file = join(profileDir, COOKIE_FILE);

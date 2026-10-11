@@ -24,6 +24,11 @@ describe("inferSchema", () => {
 describe("pick", () => {
   const data = { data: { items: [{ id: 1, name: "a" }, { id: 2, name: "b" }], total: 2 }, meta: { page: 1 } };
 
+  it('reads "[]" as "[*]" (an agent habit seen on Grafana)', () => {
+    assert.deepEqual(pick([{ title: "a" }, { title: "b" }], "[].title"), pick([{ title: "a" }, { title: "b" }], "[*].title"));
+    assert.deepEqual(pick(data, "data.items[].id"), pick(data, "data.items[*].id"));
+  });
+
   it("selects nested values, indexes and wildcards", () => {
     assert.equal(pick(data, "data.total"), 2);
     assert.equal(pick(data, "data.items[1].name"), "b");

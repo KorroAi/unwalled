@@ -2,7 +2,7 @@
 // path templates with named parameters, typed query parameters, inferred body schemas,
 // GraphQL operations, and secrets (auth headers) split away from the shareable recipe.
 import { describeShape, inferSchema } from "../tools/schema.js";
-import { isSecretHeader, isSecretParam, looksLikeSecret, looksSensitive, redact, redactGraphqlQuery, redactText, redactUrl, REDACTED } from "./secrets.js";
+import { isSecretHeader, isSecretParam, isSecretSegment, looksLikeSecret, looksSensitive, redact, redactGraphqlQuery, redactText, redactUrl, REDACTED } from "./secrets.js";
 
 /**
  * @typedef {object} Observation
@@ -19,7 +19,13 @@ const TRACKER_HOSTS =
 const TRACKER_PATHS = /\/(collect|beacon|telemetry|analytics|track|events?|log|metrics|rum|pixel|ping)(\/|$|\?)/i;
 // Telemetry hosts of any vendor, and availability probes, are never part of the API an agent wants.
 const TRACKER_SUBDOMAIN = /^(telemetry|analytics|metrics|tracking|insights)\./i;
+// Error reporting sent to a site's own host (self-hosted Sentry, Bugsnag) and event logging over gRPC-web (found on
+// archive.org and Docker Hub).
+const ERROR_REPORTING_HOST = /(^|[.-])(sentry|bugsnag)([.-]|$)/i;
+const ERROR_REPORTING_URL = /[?&]sentry_(key|version)=|\/api\/\d+\/(envelope|store)\/|\/[\w.]*(LogService|Telemetry)\/\w+/i;
 const PROBE_PATHS = /\/(isalive|is_alive|healthz?|heartbeat|livez|readyz)(\/|$|\?)/i;
+// Infrastructure of the CDN itself (Cloudflare challenges, Fastly insights), never the site's API.
+const CDN_PATHS = /^\/cdn-cgi\/|\/fst-post-back(\/|$)/i;
 
 const DROPPED_HEADER =
   /^(:.*|accept-encoding|accept-language|user-agent|referer|origin|sec-.*|connection|host|content-length|content-type|priority|cache-control|pragma|dnt|upgrade-insecure-requests|te|if-none-match|if-modified-since|range|x-forwarded-.*)$/i;
@@ -31,7 +37,7 @@ export { redact, redactText, redactUrl } from "./secrets.js";
 
 /** @param {string} host */
 export function isTracker(host) {
-  return TRACKER_HOSTS.test(host) || TRACKER_SUBDOMAIN.test(host);
+  return TRACKER_HOSTS.test(host) || TRACKER_SUBDOMAIN.test(host) || ERROR_REPORTING_HOST.test(host);
 }
 
 /** Approximate registrable domain ("api.shop.co.uk" -> "shop.co.uk"). @param {string} hostname */
@@ -245,7 +251,7 @@ function buildTemplates(items, variables) {
   items.forEach((item, index) => {
     // A small number as the first segment is an API version ("/1/indexes/..."), not an id.
     const isVersion = (/** @type {string} */ s, /** @type {number} */ i) => i === item.segments.findIndex(Boolean) && /^\d{1,2}$/.test(s);
-    const segments = item.segments.map((s, i) => (s && !isVersion(s, i) && (looksLikeId(s) || looksLikeSecret(s) || isVariable(item.segments, i, variables)) ? null : s));
+    const segments = item.segments.map((s, i) => (s && !isVersion(s, i) && (looksLikeId(s) || looksLikeSecret(s) || isSecretSegment(s, item.segments[i - 1]) || isVariable(item.segments, i, variables)) ? null : s));
     const id = `${item.key}|${segments.map((s) => s ?? "{}").join("/")}`;
     const existing = patterns.get(id);
     if (existing) existing.members.push(index);
@@ -306,7 +312,7 @@ export function inferEndpoints(observations, { variables = navigationVariables([
   const usable = observations.filter((obs) => {
     try {
       const url = new URL(obs.url);
-      return obs.status > 0 && obs.status < 400 && /^https?:$/.test(url.protocol) && !isTracker(url.hostname) && !PROBE_PATHS.test(url.pathname) && !(TRACKER_PATHS.test(url.pathname) && obs.responseJson === undefined);
+      return obs.status > 0 && obs.status < 400 && /^https?:$/.test(url.protocol) && !isTracker(url.hostname) && !PROBE_PATHS.test(url.pathname) && !CDN_PATHS.test(url.pathname) && !ERROR_REPORTING_URL.test(obs.url) && !(TRACKER_PATHS.test(url.pathname) && obs.responseJson === undefined);
     } catch {
       return false;
     }
@@ -370,9 +376,13 @@ export function inferEndpoints(observations, { variables = navigationVariables([
     let bodyKind = "none";
     /** @type {string[]} */ const fileFields = [];
     const headers = {};
+    /** @type {Set<string>} */ const secretQuery = new Set();
     for (const obs of members) {
       for (const [name, value] of new URL(obs.url).searchParams) {
-        if (isSecretParam(name, value)) continue; // injected from the stored secrets at call time
+        if (isSecretParam(name, value)) {
+          secretQuery.add(name); // injected from the stored secrets at call time, to this endpoint only
+          continue;
+        }
         const example = looksSensitive(value) ? REDACTED : truncate(value, 100);
         const entry = /** @type {{ type: string, example: string, seen: number, values: string[] }} */ (query[name] ?? { type: scalarType(value), example, seen: 0, values: [] });
         if (entry.values && !entry.values.includes(example) && entry.values.length < 8) entry.values.push(example);
@@ -395,7 +405,8 @@ export function inferEndpoints(observations, { variables = navigationVariables([
     const secretPathParams = [];
     params.forEach((param, i) => {
       const values = members.map((obs) => safeDecode(new URL(obs.url).pathname.split("/")[paramPositions[i]] ?? ""));
-      if (values.some((value) => looksLikeSecret(value))) {
+      const before = pattern.segments[paramPositions[i] - 1];
+      if (values.some((value) => looksLikeSecret(value) || isSecretSegment(value, before))) {
         secretPathParams.push(param);
         secrets[url.host] = { ...(secrets[url.host] ?? {}), [`{${first.method} ${template}}${param}`]: values[0] };
       } else if (!looksSensitive(values[0])) pathExamples[param] = values[0];
@@ -409,6 +420,7 @@ export function inferEndpoints(observations, { variables = navigationVariables([
       pathExamples,
       ...(fileFields.length ? { fileFields } : {}),
       ...(secretPathParams.length ? { secretPathParams } : {}),
+      secretQuery: [...secretQuery],
       query,
       bodyKind,
       bodySchema: bodies.length ? inferSchema(bodyKind === "text" ? bodies.map(String) : bodies) : null,

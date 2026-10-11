@@ -136,6 +136,9 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
   const typedTexts = [];
   const actionErrors = [];
   /** @type {{ url: string, newCalls: number }[]} */ let explored = [];
+  /** @type {string | null} */ let blocked = null;
+  /** @type {string[]} */ const actionNotes = [];
+  let fieldsListed = false;
 
   // Responses keep arriving while earlier ones are read: wait until no new one was added.
   const drain = async () => {
@@ -195,13 +198,15 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
       if (frame === page.mainFrame()) pageUrls.push(frame.url());
     });
     onProgress(`Loading ${url}`);
+    let documentStatus = 0;
     try {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: config.requestTimeoutMs * 2 });
+      documentStatus = (await page.goto(url, { waitUntil: "domcontentloaded", timeout: config.requestTimeoutMs * 2 }))?.status() ?? 0;
     } catch (error) {
       if (error?.name !== "TimeoutError") throw error;
       actionErrors.push(`initial load of ${url} timed out; continuing with what was captured`);
     }
     await settle(page, 10_000);
+    blocked = await botWall(page, documentStatus);
     for (let i = 0; i < 3; i++) {
       await page.mouse.wheel(0, 2500);
       await page.waitForTimeout(400);
@@ -212,9 +217,9 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
       onProgress(`Action ${index + 1}/${actions.length}: ${describeAction(action)}`);
       try {
         if (action.goto) await page.goto(new URL(action.goto, page.url()).toString(), { waitUntil: "domcontentloaded", timeout: config.requestTimeoutMs * 2 });
-        else if (action.click) await page.click(action.click, { timeout: 10_000 });
+        else if (action.click) await page.click(await resolveTarget(page, action.click, "click", index, actionNotes), { timeout: 10_000 });
         else if (action.fill) {
-          await page.fill(action.fill, action.text ?? "", { timeout: 10_000 });
+          await page.fill(await resolveTarget(page, action.fill, "fill", index, actionNotes), action.text ?? "", { timeout: 10_000 });
           typedTexts.push(action.text ?? "");
         } else if (action.press) await page.keyboard.press(action.press);
         else if (action.wait) await page.waitForTimeout(Math.min(action.wait, 60_000));
@@ -222,9 +227,16 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
         else if (action.waitFor) await page.waitForSelector(action.waitFor, { timeout: 15_000 });
       } catch (error) {
         actionErrors.push(`actions[${index}] ${describeAction(action)}: ${String(error.message).split("\n")[0]}`);
+        // Tell the agent what the page really has, so it can retry with the right selectors.
+        if (!fieldsListed && (action.fill || action.click)) {
+          fieldsListed = true;
+          const fields = await pageFields(page);
+          if (fields) actionErrors.push(`fields on ${page.url()}: ${fields}`);
+        }
       }
       await settle(page);
     }
+    actionErrors.push(...actionNotes);
 
     if (explorePages > 0) {
       onProgress(`Exploring up to ${explorePages} pages of the site`);
@@ -245,5 +257,93 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
     if (!closedByUser) await closeProfile(context, profileDir);
   }
   await drain();
-  return { observations, streams: realtime.streams, pageUrls, typedTexts, actionErrors, explored };
+  return { observations, streams: realtime.streams, pageUrls, typedTexts, actionErrors, explored, blocked };
+}
+
+// Pages that bot protections show instead of the site (Cloudflare, DataDome, Akamai, PerimeterX, Reddit...).
+const BOT_WALL = /just a moment|attention required|access denied|verify (that )?you are (a )?human|are you a robot|you have been blocked|blocked by network security|captcha-delivery|datadome|px-captcha|cf-chl|unusual traffic|request unsuccessful|pardon our interruption|client challenge|captcha|prove your humanity|let us know you.re a real person|checking (if the site connection is secure|your browser)|vérifi(cation|ez) que vous êtes (un )?humain/i;
+
+/**
+ * Finds a bot protection page shown instead of the site. Never tries to get past it.
+ * @param {import("playwright-core").Page} page @param {number} status HTTP status of the page itself (0 if unknown)
+ * @returns {Promise<string | null>} what gave it away (status, marker), or null when the page looks normal
+ */
+export async function botWallSign(page, status) {
+  const probe = await page
+    .evaluate(() => ({ title: document.title, text: (document.body?.innerText ?? "").slice(0, 2000), html: document.documentElement.outerHTML.slice(0, 20000) }))
+    .catch(() => ({ title: "", text: "", html: "" }));
+  // A protection script in the HTML of a page that loaded normally is not a block: only the visible text counts then.
+  const visible = BOT_WALL.exec(`${probe.title}\n${probe.text}`)?.[0];
+  const marker = visible ?? (status >= 400 ? BOT_WALL.exec(probe.html)?.[0] : undefined);
+  if ([403, 429].includes(status) || (marker && (status >= 400 || probe.text.length < 1500))) {
+    return [status ? `HTTP ${status}` : "", marker ? `"${marker}"` : ""].filter(Boolean).join(", ");
+  }
+  return null;
+}
+
+/**
+ * Tells whether the site answered with a bot protection page instead of its content, with what to do instead.
+ * @param {import("playwright-core").Page} page @param {number} status HTTP status of the page itself
+ * @returns {Promise<string | null>} reason, or null when the page looks normal
+ */
+export async function botWall(page, status) {
+  const sign = await botWallSign(page, status);
+  return sign
+    ? `the site refused the automated browser (${sign}): it uses a bot protection, which unwalled does not bypass. Use interactive=true and browse in the visible window yourself, or import a HAR saved from your own browser (discover_har).`
+    : null;
+}
+
+/**
+ * Selector for a fill or click. The given one when it matches a visible element; otherwise, for the sign-in fields an
+ * agent has to guess without seeing the page (user name, password, submit button), the page's own field of that kind.
+ * @param {import("playwright-core").Page} page @param {string} selector @param {"fill" | "click"} kind
+ * @param {number} index @param {string[]} notes where a substitution is reported
+ */
+export async function resolveTarget(page, selector, kind, index, notes) {
+  const visible = async (/** @type {string} */ css) => {
+    try {
+      return await page.locator(css).first().isVisible();
+    } catch {
+      return false; // invalid selector
+    }
+  };
+  if (await visible(selector)) return selector;
+  const hint = selector.toLowerCase();
+  /** @type {string[]} */ let candidates = [];
+  if (kind === "fill" && /pass|pwd|mot.?de.?passe/.test(hint)) candidates = ["input[type=password] >> visible=true"];
+  else if (kind === "fill" && /user|login|e-?mail|name|account|ident|courriel/.test(hint))
+    candidates = ["form:has(input[type=password]) input:is([type=email], [type=text], :not([type])) >> visible=true", "input:is([type=email], [type=text], :not([type])) >> visible=true"];
+  else if (kind === "click" && /submit|sign|log|connect|button|btn/.test(hint))
+    candidates = ["form:has(input[type=password]) :is(button[type=submit], input[type=submit], button:not([type])) >> visible=true", ":is(button[type=submit], input[type=submit]) >> visible=true"];
+  for (const candidate of candidates) {
+    if (await visible(candidate)) {
+      const label = await page
+        .locator(candidate)
+        .first()
+        .evaluate((el) => (el.id ? `#${el.id}` : el.getAttribute("name") ? `[name=${el.getAttribute("name")}]` : el.tagName.toLowerCase()))
+        .catch(() => "a field");
+      notes.push(`actions[${index}]: "${selector}" is not on the page; used the page's ${kind === "click" ? "submit button" : /pass|pwd|mot.?de.?passe/.test(hint) ? "password field" : "user field"} (${label}) instead`);
+      return candidate;
+    }
+  }
+  return selector;
+}
+
+/** Visible form fields and buttons of the page, with a selector for each. @param {import("playwright-core").Page} page */
+async function pageFields(page) {
+  return page
+    .evaluate(() => {
+      const out = [];
+      for (const el of /** @type {any[]} */ ([...document.querySelectorAll("input, textarea, select, button, [role=button]")])) {
+        const rect = el.getBoundingClientRect();
+        if (!rect.width || !rect.height || el.type === "hidden") continue;
+        const tag = el.tagName.toLowerCase();
+        const css = el.id ? `#${CSS.escape(el.id)}` : el.name ? `${tag}[name="${el.name}"]` : el.type === "submit" ? `${tag}[type=submit]` : null;
+        const label = (el.labels?.[0]?.innerText || el.getAttribute("aria-label") || el.placeholder || el.innerText || el.value || "").trim().slice(0, 30);
+        if (css) out.push(`${css} (${tag === "button" ? "button" : el.type || tag}${label ? ` "${label}"` : ""})`);
+        if (out.length >= 15) break;
+      }
+      return out.join(", ");
+    })
+    .catch(() => "");
 }

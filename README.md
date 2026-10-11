@@ -27,6 +27,18 @@ Every answer on both sides was checked against an independent source: 60/60 corr
 A real browser agent also spends model turns deciding what to do on each page; these numbers leave that out.
 The cost on the unwalled side is one discovery per site (about 5 to 8 seconds here).
 
+**With a real agent** (Claude Code, Sonnet, nothing scripted; [method and every answer](bench/AGENT.md)), on 5 questions, all answered correctly by each side:
+
+| | Behind a sign-in (back office, Grafana) | Public sites (crates.io, Flathub, OpenStreetMap) |
+| --- | --- | --- |
+| unwalled, site already discovered | 3 model turns, $0.020 to $0.025 per question | 3 to 4 turns, $0.019 to $0.027 |
+| Browser agent (Playwright MCP) | 8 to 9 turns, $0.054 to $0.060 | 3 to 4 turns, $0.021 to $0.025 |
+| unwalled, first time (discovery included) | 5 turns, $0.045 to $0.052 | 5 to 6 turns, $0.046 to $0.117 |
+
+So: about 2.5× cheaper per question on apps behind a sign-in once the app is known; no gain on public pages a browser can
+open directly; and the first question on a new site costs more. On [20 real public sites](bench/FIELD.md), one discover
+with default options answered a new question on 12; the 8 others refused automated browsers (6, reported as such) or put their data in the HTML instead of an API call (2).
+
 ## Install
 
 ```bash
@@ -88,14 +100,14 @@ to the tools, and adds what IT asks for ([guide](docs/FOR-TEAMS.md)):
 - **Prefer official integrations when they exist.** If a service has an API, an OpenAPI file or an MCP server, use it (unwalled can import the file).
   Internal APIs change without notice; `check_recipe` detects it and repairs the recipe.
 - **Not everything can be captured**: server-rendered pages without API calls, requests signed by the page's own code, and native windows.
-  Bot protections and CAPTCHAs are not bypassed.
+  Bot protections and CAPTCHAs are not bypassed: they are reported, and you can browse in a visible window instead.
 - **Use it only where you are allowed to.** Calling a service's internal API can break its terms even with your own account. You are responsible for how you use it.
 
 ## Documentation
 
 - [Full reference](docs/REFERENCE.md): how it works, every tool, guides, configuration, data and secrets, limits
 - [For teams](docs/FOR-TEAMS.md): organization policy, shared catalogue, what is logged
-- [Benchmark](bench/RESULTS.md): method, results, how to rerun it
+- Benchmarks: [scripted browser](bench/RESULTS.md), [real agent](bench/AGENT.md), [20 real sites](bench/FIELD.md); method, raw data, how to rerun them
 - [Changelog](CHANGELOG.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
 unwalled was called universal-mcp until version 0.2: the former variable names, data folder and command still work.

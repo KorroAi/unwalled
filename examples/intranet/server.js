@@ -2,7 +2,7 @@
 // a login form and a session cookie). Used by the demo, the benchmark and the end-to-end examples.
 // Run: node examples/intranet/server.js [port]  →  sign in as alice / demo
 import { createServer } from "node:http";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { pathToFileURL } from "node:url";
 
 const STATUSES = ["pending", "paid", "shipped", "delivered", "refunded"];
@@ -34,7 +34,7 @@ function dataset() {
 }
 
 const LAYOUT = (title, body, script = "") => `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>${title} · Acme Back Office</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="csrf-token" content="__CSRF__"><title>${title} · Acme Back Office</title>
 <style>
 body{font-family:system-ui,sans-serif;margin:0;color:#1f2937}header{background:#1e3a5f;color:#fff;padding:12px 24px;display:flex;gap:24px;align-items:center}
 header a{color:#cbd5e1;text-decoration:none}main{padding:24px;max-width:960px}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #e5e7eb;padding:6px 8px;text-align:left}
@@ -52,7 +52,8 @@ const ORDER_PAGE = (id) =>
     `<h1>Order <span id="order-id">${id}</span></h1><p>Status: <span id="order-status" class="badge">loading…</span></p>
 <p>Customer: <a id="customer"></a> · Date: <span id="date"></span> · Total: <strong id="total"></strong></p>
 <table><thead><tr><th>Product</th><th>Qty</th><th>Unit price</th></tr></thead><tbody id="lines"></tbody></table>
-<h2>Actions</h2><button id="refund">Refund order</button> <button id="resend">Resend invoice</button>`,
+<h2>Actions</h2><button id="refund">Refund order</button> <button id="resend">Resend invoice</button>
+<h2>Notes</h2><ul id="notes"></ul><input id="note" aria-label="Note"> <button id="add-note">Add note</button>`,
     `const api = (path, options = {}) => fetch(path, { ...options, headers: { "x-requested-with": "acme-bo", ...(options.headers || {}) } }).then((r) => r.json());
 api("/api/v2/orders/${id}").then(async (o) => {
   document.getElementById("order-status").textContent = o.status;
@@ -62,7 +63,12 @@ api("/api/v2/orders/${id}").then(async (o) => {
   const c = await api("/api/v2/customers/" + o.customerId);
   const link = document.getElementById("customer"); link.textContent = c.company + " (" + c.city + ")"; link.href = "/customers/" + c.id;
 });
-document.getElementById("refund").onclick = () => api("/api/v2/orders/${id}/refund", { method: "POST" }).then(() => location.reload());`,
+document.getElementById("refund").onclick = () => api("/api/v2/orders/${id}/refund", { method: "POST" }).then(() => location.reload());
+// Notes are protected like a Rails form: the page's CSRF token goes in the body.
+const showNotes = () => api("/api/v2/orders/${id}/notes").then((n) => { document.getElementById("notes").innerHTML = n.notes.map((t) => "<li>" + t + "</li>").join(""); });
+showNotes();
+document.getElementById("add-note").onclick = () => api("/api/v2/orders/${id}/notes", { method: "POST", headers: { "content-type": "application/json" },
+  body: JSON.stringify({ authenticity_token: document.querySelector('meta[name="csrf-token"]').content, text: document.getElementById("note").value }) }).then(showNotes);`,
   );
 
 const ORDERS_PAGE = LAYOUT(
@@ -79,10 +85,14 @@ const LOGIN_PAGE = (error = "") => `<!doctype html><html lang="en"><head><meta c
 <form method="post" action="/login"><p><label>User <input id="user" name="user" autocomplete="username"></label></p>
 <p><label>Password <input id="password" name="password" type="password" autocomplete="current-password"></label></p><button type="submit">Sign in</button></form></body></html>`;
 
+/** CSRF token of a session, as a Rails app puts it in its pages. @param {string} session */
+const csrfFor = (session) => createHash("sha256").update(`csrf:${session}`).digest("hex").slice(0, 32);
+
 /** @param {number} [port] */
 export async function startIntranet(port = 0) {
   const { customers, orders } = dataset();
   const sessions = new Set();
+  /** @type {Map<number, string[]>} */ const notes = new Map();
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     const path = url.pathname;
@@ -90,7 +100,7 @@ export async function startIntranet(port = 0) {
     const signedIn = !!session && sessions.has(session);
     const send = (status, type, body, headers = {}) => {
       res.writeHead(status, { "content-type": type, ...headers });
-      res.end(body);
+      res.end(type === "text/html" ? body.replace("__CSRF__", session ? csrfFor(session) : "") : body);
     };
     const json = (status, value) => send(status, "application/json", JSON.stringify(value));
 
@@ -111,6 +121,19 @@ export async function startIntranet(port = 0) {
     if (path.startsWith("/api/")) {
       if (!signedIn) return json(401, { error: "not signed in" });
       if (req.headers["x-requested-with"] !== "acme-bo") return json(400, { error: "missing x-requested-with header" });
+      const notesOf = /^\/api\/v2\/orders\/(\d+)\/notes$/.exec(path);
+      if (notesOf) {
+        const list = notes.get(Number(notesOf[1])) ?? [];
+        if (req.method === "POST") {
+          let raw = "";
+          for await (const chunk of req) raw += chunk;
+          const body = JSON.parse(raw || "{}");
+          if (body.authenticity_token !== csrfFor(String(session))) return json(422, { error: "invalid authenticity token" });
+          list.push(String(body.text ?? ""));
+          notes.set(Number(notesOf[1]), list);
+        }
+        return json(200, { notes: list });
+      }
       const order = /^\/api\/v2\/orders\/(\d+)(\/refund)?$/.exec(path);
       if (order) {
         const found = orders.find((o) => o.id === Number(order[1]));

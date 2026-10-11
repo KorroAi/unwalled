@@ -174,7 +174,8 @@ After a few calls, ask it to `annotate_recipe` the tools it used and to `define_
 | OpenAPI | one tool per operation (up to 60 by default), `<recipe>__routes` to list every route, and `<recipe>__request` |
 | Any | one tool per macro: `<recipe>__m_<id>` |
 
-Generated tools take `path`, `query` and `body` (or `variables` and an optional replacement `query` document for GraphQL), plus:
+Generated tools take `path`, `query` and `body` (or `variables` and an optional replacement `query` document for GraphQL).
+REST tools also accept path and query values at the top level (`{"order": "1042"}` for `{"path": {"order": "1042"}}`), a common agent habit. Plus:
 
 | Argument | Meaning |
 | --- | --- |
@@ -210,6 +211,10 @@ Generated tools take `path`, `query` and `body` (or `variables` and an optional 
 ```
 
 Values you type or navigate to are recognised in API paths and become parameters. Text typed into password-like fields is hidden from progress messages.
+Agents write these selectors without seeing the page: when a `fill` or `click` selector is not on the page and names a sign-in field
+(user, email, login, password, submit...), the page's own field of that kind is used and the substitution is reported. When a step still fails,
+the result lists the page's real fields with a selector for each, so the agent can retry.
+If the site shows a bot protection page instead of its content, the result says so (`Blocked: ...`) rather than reporting an empty page.
 For flows that are hard to script, use `interactive: true`: a window opens, you browse, and the capture ends when you close it.
 `explore_pages: 10` additionally visits up to 10 same-site pages (waiting between pages to respect the rate limit) and reports how many new API calls each page revealed.
 
@@ -226,6 +231,7 @@ ui(name="shop", action="screenshot")   → PNG image (or save_to)
 
 Steps: `click`, `fill` (+`text`), `select` (+`value`), `check`, `uncheck`, `press`, `hover`, `goto`, `wait`, `waitFor`, `scroll`, addressed by ref or CSS selector.
 Clicks on controls labelled delete, pay, buy, send, confirm… are held until `confirm=true`. `visible=true` shows the window.
+When the page is a bot check (CAPTCHA, challenge), snapshots and reads start with a `Blocked:` line: open it with `visible=true` and let a person solve it.
 
 ### Pagination, streams and MQTT
 
@@ -297,6 +303,9 @@ Cookies and credentials found in the file are stored as local secrets and replay
 - **OAuth**: `configure_recipe {"name": "x", "oauth": {"host": "api.example.com", "token_url": "https://auth.example.com/oauth/token", "refresh_token": "...", "client_id": "..."}}`. Access tokens are refreshed on 401 and before expiry; rotated refresh tokens are kept.
 - **Bot challenges**: requests leave from Node by default and a challenge is reported with a hint. If you are allowed to automate the site, `configure_recipe {"policy": {"transport": "auto"}}`
   retries from inside a real page after a challenge (`"page"` always uses the page). If a CAPTCHA still blocks, `login` lets you solve it.
+- **Form CSRF tokens**: when an endpoint was captured with a token field in its body (`authenticity_token`, `csrfmiddlewaretoken`, `_token`, `_csrf`...)
+  and a call does not give one, the session's current token is read from the site's page (`<meta name="csrf-token">`) or its CSRF cookie and added.
+  Rails, Django and Laravel forms work without the agent knowing about the token.
 
 ### When the site changes
 
@@ -411,7 +420,7 @@ What is covered, and how it was checked. "Live" means a real public service in `
 
 | Source | Checked against | Known limits |
 | --- | --- | --- |
-| Browser capture (REST, GraphQL) | live: crates.io, Hacker News search (Algolia); local: login, CSRF, token rotation | Server-rendered pages have no API to capture; bot protections are not bypassed by default |
+| Browser capture (REST, GraphQL) | live: crates.io, Hacker News search (Algolia), and a field test of 20 public sites ([bench/FIELD.md](../bench/FIELD.md)); real Grafana 12 in Docker behind a sign-in, with its session token rotating every minute (`test/live/grafana.test.js`); local: login, CSRF, token rotation | Server-rendered pages have no API to capture; bot protections are reported, not bypassed |
 | OpenAPI 3 / Swagger 2 | live: Petstore, GitHub (about 1,200 operations), presets | |
 | Google Discovery (YouTube, Gmail, Drive...) | live: YouTube Data API description and call (API key needed for answers) | User data needs an OAuth client of your own |
 | OData v2 / v4 | live: Northwind demo service | No `$batch` |
@@ -444,7 +453,7 @@ What is covered, and how it was checked. "Live" means a real public service in `
   Stream replays come from Node, not from the page: servers that require a browser-only handshake may refuse them. Event streams read with `fetch()` are recorded without sample messages.
 - **Approximate protocol coverage**: SOAP without WS-Security or external XSD imports, OData without `$batch`, MQTT 3.1.1 with QoS 0/1. Google APIs need an API key or an OAuth token that you provide.
 - **Bot protections and CAPTCHAs** are not bypassed by default: a challenge is reported, `login` lets a person solve it, and in-page requests are an opt-in per recipe for sites you are allowed to automate.
-- **Secret detection is heuristic**: credentials with an obvious name, a known format or a long random value are caught, but a short, ordinary-looking token in a URL path (e.g. `/hooks/abc123`) looks like any other path segment. Review recipes before sharing them.
+- **Secret detection is heuristic**: credentials with an obvious name, a known format or a long random value are caught, and so are short tokens right after a path segment that announces one (`/hooks/abc123`, `/invite/x7k2`). A short token anywhere else in a path looks like any other segment. Review recipes before sharing them.
 - **Path inference is heuristic**: if a parameter was not detected, call the endpoint through `<recipe>__request` or capture more pages with `merge: true` or `explore_pages`.
 - **Health checks** only call read-only tools that have a recorded example; writes are never probed.
 - **One process per profile**: two servers sharing the same data directory cannot use the same recipe's browser at the same time.
@@ -465,8 +474,12 @@ npm install
 npm run check        # type check + unit tests + end-to-end tests (needs Chrome, Edge or Playwright's Chromium)
 npm test             # unit tests only
 npm run test:live    # optional: real websites (crates.io, Hacker News, Petstore, YouTube feeds...)
-node bench/run.js    # optional: benchmark against a browser (see bench/RESULTS.md)
+node bench/run.js    # optional: benchmark against a scripted browser (see bench/RESULTS.md)
+node bench/field.js  # optional: one discover on 20 real websites (see bench/FIELD.md)
+node bench/agent.js  # optional, uses Claude Code and costs model usage: a real agent with unwalled vs. with a browser (see bench/AGENT.md)
 ```
+
+Real services in Docker (each test file says how to start its container): `test/live/postgres.test.js`, `test/live/mysql.test.js`, `test/live/grafana.test.js`.
 
 Plain JavaScript (ES modules) with JSDoc types checked by TypeScript; no build step. See [CONTRIBUTING.md](../CONTRIBUTING.md).
 
@@ -479,4 +492,4 @@ Plain JavaScript (ES modules) with JSDoc types checked by TypeScript; no build s
 | `src/ui.js`, `src/auth.js`, `src/safety.js` | Interface control, token refresh, guard rails (policy, rate limit, retries, cache, audit) |
 | `test/unit/`, `test/e2e/`, `test/live/` | Unit tests, end-to-end tests against local fixture sites, optional tests against real sites |
 | `examples/intranet/` | A small internal back office behind a login, used by the demo, the benchmark and a test |
-| `bench/` | Benchmark against a scripted browser, and its latest results |
+| `bench/` | Benchmarks (scripted browser, field test on real sites, real agent) and their latest results |

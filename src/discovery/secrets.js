@@ -110,16 +110,30 @@ export function redact(value, depth = 0, sensitiveParent = false) {
 }
 
 /** URL safe to show: no user:password, no fragment, sensitive query values and secret-looking path segments hidden. @param {string} address */
+// Path segments that announce a secret in the next one: "/hooks/abc123", "/invite/x7k2", "/reset/9fe1".
+const SECRET_CONTEXT = /^(hooks?|webhooks?|tokens?|api-?keys?|keys?|secrets?|invites?|invitations?|share[ds]?|reset(-password)?|verify|verification|magic(-link)?|signatures?|sig|activate|activation|unsubscribe|access-?tokens?|private)$/i;
+// Ordinary words found after such segments ("/tokens/new", "/keys/list"): not secrets.
+const COMMON_SEGMENT = /^(list|new|create|all|search|me|mine|current|edit|settings|info|status|latest|default|config|delete|update|revoke|rotate|refresh|validate|verify|check|count|page|index|v\d+|\d{1,6})$/i;
+
+/**
+ * True when a path segment must be treated as a secret: it looks like one, or it is a short token placed right after a
+ * segment that announces one ("/hooks/abc123"), which no value-based check can recognise.
+ * @param {string} segment @param {string | null | undefined} previous the segment before it
+ */
+export function isSecretSegment(segment, previous) {
+  if (typeof segment !== "string" || !segment) return false;
+  if (looksSensitive(segment)) return true;
+  return !!previous && SECRET_CONTEXT.test(previous) && segment.length >= 4 && !COMMON_SEGMENT.test(segment) && /\d/.test(segment) && /[a-z]/i.test(segment);
+}
+
 export function redactUrl(address) {
   const url = new URL(address);
   url.username = "";
   url.password = "";
   url.hash = "";
   for (const [key, value] of [...url.searchParams]) if (SENSITIVE_FIELD.test(key) || looksSensitive(value)) url.searchParams.set(key, REDACTED);
-  url.pathname = url.pathname
-    .split("/")
-    .map((segment) => (looksSensitive(safeDecode(segment)) ? REDACTED : segment))
-    .join("/");
+  const segments = url.pathname.split("/");
+  url.pathname = segments.map((segment, i) => (isSecretSegment(safeDecode(segment), safeDecode(segments[i - 1] ?? "")) ? REDACTED : segment)).join("/");
   return url.toString();
 }
 

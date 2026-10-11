@@ -124,6 +124,12 @@ describe("secret detectors", () => {
     assert.deepEqual(redact({ a: { password: { value: "x" } }, list: { tokens: ["t1", "t2"] }, ok: "fine" }), { a: { password: { value: "REDACTED" } }, list: { tokens: ["REDACTED", "REDACTED"] }, ok: "fine" });
     const url = redactUrl("https://u:p@h.test/hooks/Zx81Lq0Wm3Np5Rt7Vb9Yc2Qa4Sd?token=t&q=lamp#x=1");
     assert.equal(url, "https://h.test/hooks/REDACTED?token=REDACTED&q=lamp");
+    // Short tokens are recognised by the segment before them; ordinary words and ids there are not secrets.
+    assert.equal(redactUrl("https://h.test/hooks/abc123"), "https://h.test/hooks/REDACTED");
+    assert.equal(redactUrl("https://h.test/invite/x7k2/accept"), "https://h.test/invite/REDACTED/accept");
+    assert.equal(redactUrl("https://h.test/api/tokens/new"), "https://h.test/api/tokens/new");
+    assert.equal(redactUrl("https://h.test/keys/42"), "https://h.test/keys/42");
+    assert.equal(redactUrl("https://h.test/orders/ab12cd"), "https://h.test/orders/ab12cd");
     assert.equal(redactText("a=1&pass=secret"), "a=1&pass=REDACTED");
     assert.equal(redactGraphqlQuery('mutation { login(user:"a", password:"p") }'), 'mutation { login(user:"a", password:"REDACTED") }');
     assert.deepEqual(scrubRecipe({ d: "x Bearer abc123def456 y", e: "known-secret-value" }, ["known-secret-value"]), { d: "x REDACTED y", e: "REDACTED" });

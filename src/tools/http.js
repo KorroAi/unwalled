@@ -19,6 +19,8 @@ const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
  * @property {Record<string, string>} [files] multipart file fields: field name -> absolute file path
  * @property {import("../safety.js").Intent} [intent]
  * @property {number} [timeoutMs] per-call timeout overriding the configured one
+ * @property {string} [csrfField] body field that carries the page's CSRF token (Rails, Django, Laravel forms): filled with a fresh token when missing
+ * @property {string[]} [queryNames] query parameters the endpoint was seen with: stored secret parameters are added only if listed
  */
 
 /**

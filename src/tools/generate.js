@@ -61,7 +61,18 @@ export function toolNamer(prefix) {
   /** @param {string} suffix */
   return (suffix) => {
     let name = `${prefix}__${sanitize(suffix) || "call"}`;
-    if (name.length > TOOL_NAME_MAX) name = `${name.slice(0, TOOL_NAME_MAX - 7)}_${shortHash(name)}`;
+    if (name.length > TOOL_NAME_MAX) {
+      // Too long: keep the verb and the end of the path, which tell tools apart ("get_…_issues_deferred"), not the start.
+      const clean = sanitize(suffix);
+      const verb = /^[a-z]{2,7}_/.exec(clean)?.[0] ?? "";
+      const head = `${prefix}__${verb}`;
+      const rest = clean.slice(verb.length);
+      const budget = Math.max(0, TOOL_NAME_MAX - head.length - 7);
+      // Start the kept part on a word boundary when the cut falls inside a word.
+      const cut = rest.slice(-budget);
+      const tail = (cut.length < rest.length && rest[rest.length - budget - 1] !== "_" ? cut.replace(/^[^_]*_/, "") : cut).replace(/^[_-]+/, "");
+      name = `${head}${tail}_${shortHash(name)}`;
+    }
     while (used.has(name)) name = `${name.slice(0, TOOL_NAME_MAX - 7)}_${shortHash(name + used.size)}`;
     used.add(name);
     return name;
@@ -232,6 +243,59 @@ export function summarizeEndpoint(endpoint) {
   }
 }
 
+/**
+ * Example call for health checks: the path values and the query parameters sent on every observed call, with their
+ * observed value (a search tool called without its search term would look broken when it is not).
+ * @param {any} endpoint
+ */
+export function probeArgs(endpoint) {
+  const query = Object.fromEntries(
+    Object.entries(endpoint.query ?? {})
+      .filter(([, q]) => q.seen === endpoint.observed && typeof q.example === "string" && q.example !== "REDACTED" && !q.example.endsWith("…"))
+      .map(([key, q]) => [key, q.example]),
+  );
+  return { ...(endpoint.pathParams.length ? { path: { ...endpoint.pathExamples } } : {}), ...(Object.keys(query).length ? { query } : {}) };
+}
+
+// Arguments that are not path or query values.
+const RESERVED_ARGUMENTS = new Set(["path", "query", "body", "files", "headers", "confirm", "dry_run", "cache_seconds", "timeout_ms", "paginate"]);
+
+/**
+ * Agents often pass path and query values at the top level ({ order: "1042" } instead of { path: { order: "1042" } }):
+ * top-level names of the endpoint's path or query parameters are moved where they belong. Explicit values win.
+ * @param {Record<string, any>} args @param {any} endpoint @returns {Record<string, any>}
+ */
+export function nestFlatArguments(args, endpoint) {
+  // A site parameter may itself be called "query" or "path" (Grafana's search): a plain value there is that parameter.
+  for (const reserved of ["query", "path"]) {
+    const value = args?.[reserved];
+    if (value === undefined || value === null || typeof value === "object") continue;
+    const target = reserved === "path" && endpoint.pathParams.includes("path") ? "path" : "query";
+    args = { ...args, [reserved]: undefined };
+    args[target] = { ...(typeof args[target] === "object" && args[target] ? args[target] : {}), [reserved]: value };
+    if (args.path === undefined) delete args.path;
+    if (args.query === undefined) delete args.query;
+  }
+  const flat = Object.keys(args ?? {}).filter((key) => !RESERVED_ARGUMENTS.has(key) && !(key in OUTPUT_PROPERTIES));
+  if (!flat.length) return args;
+  const out = { ...args, path: { ...(args.path ?? {}) }, query: { ...(args.query ?? {}) } };
+  let moved = 0;
+  for (const key of flat) {
+    if (endpoint.pathParams.includes(key)) {
+      if (out.path[key] === undefined) out.path[key] = args[key];
+    } else if (key in (endpoint.query ?? {}) || endpoint.method === "GET") {
+      // Unknown names on a GET can only be query parameters; on other methods they may belong to the body: left alone.
+      if (out.query[key] === undefined) out.query[key] = args[key];
+    } else continue;
+    delete out[key];
+    moved++;
+  }
+  return moved ? out : args;
+}
+
+// Form fields that carry a per-session CSRF token: replayed stale, they make the server refuse the call.
+const CSRF_FIELD = /^(authenticity_token|csrf_?token|_csrf|_token|csrfmiddlewaretoken|xsrf_?token|__RequestVerificationToken)$/i;
+
 /** @param {{ type: string, example: string, seen: number, values?: string[] }} q */
 function queryDescription(q) {
   const observed = (q.values ?? []).filter((v) => v !== "REDACTED");
@@ -281,22 +345,24 @@ function restTools(recipe, runtime, name) {
     }
     const label = `${endpoint.method} ${endpoint.origin}${endpoint.pathTemplate}`;
     const toolName = name(`${endpoint.method.toLowerCase()}_${endpoint.pathTemplate.replace(/[{}]/g, "")}`);
+    const csrfField = Object.keys(endpoint.bodySchema?.properties ?? {}).find((key) => CSRF_FIELD.test(key));
     const probeable = endpoint.method === "GET" && endpoint.pathParams.every((p) => secretParams.includes(p) || endpoint.pathExamples?.[p] !== undefined);
     return {
       lazy: true,
       name: toolName,
-      ...(probeable ? { probe: { args: endpoint.pathParams.length ? { path: { ...endpoint.pathExamples } } : {}, keys: endpoint.responseKeys ?? [] } } : {}),
+      ...(probeable ? { probe: { args: probeArgs(endpoint), keys: endpoint.responseKeys ?? [] } } : {}),
       description: clip(`${summarizeEndpoint(endpoint)}. [${recipe.name}] ${label} — observed ${endpoint.observed}×. Example: ${endpoint.exampleUrl}. Response: ${endpoint.responseShape}`),
       inputSchema: { type: "object", properties, required },
       annotations: annotationsFor(endpoint.method, label),
-      run: async (args) => {
+      run: async (given) => {
+        const args = nestFlatArguments(given, endpoint);
         const host = new URL(endpoint.origin).host;
         const stored = Object.fromEntries(secretParams.map((p) => [p, runtime.secret?.(recipe, host, `{${endpoint.method} ${endpoint.pathTemplate}}${p}`)]));
         const values = { ...Object.fromEntries(Object.entries(stored).filter(([, v]) => v !== undefined)), ...(args.path ?? {}) };
         const url = new URL(endpoint.origin + fillPath(endpoint.pathTemplate, values, endpoint.pathParams));
         applyQuery(url, { ...queryDefaults, ...(args.query ?? {}) });
         const bodyKind = endpoint.bodyKind === "none" ? "json" : endpoint.bodyKind;
-        return execute(runtime, recipe, { method: endpoint.method, url: url.toString(), headers: endpoint.headers, body: args.body, bodyKind, files: args.files }, args, toolName);
+        return execute(runtime, recipe, { method: endpoint.method, url: url.toString(), headers: endpoint.headers, body: args.body, bodyKind, files: args.files, ...(endpoint.secretQuery ? { queryNames: [...Object.keys(endpoint.query), ...endpoint.secretQuery] } : {}), ...(csrfField ? { csrfField } : {}) }, args, toolName);
       },
     };
   });
