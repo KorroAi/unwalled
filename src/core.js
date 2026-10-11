@@ -17,6 +17,7 @@ import { REMOTE_DATA_KEY } from "./imports.js";
 import { assertHttpUrl, graphqlKey, MAX_FILE_BYTES, mergeByKey, mergeSecrets, pageKey, restKey, rpcKey, streamKey, withJsonRpc } from "./recipe-merge.js";
 import { inferPages, redirectedToSignIn } from "./discovery/pages.js";
 import { inferStreams, SECRET_FRAME_HOST, streamsFromHar } from "./realtime/infer.js";
+import { SECRET_PATH_PREFIX } from "./discovery/jsonrpc.js";
 import { describeStreams } from "./realtime/tools.js";
 import { log } from "./log.js";
 import { assertRecipeName, RECIPE_SCHEMA_VERSION, Store } from "./store.js";
@@ -234,11 +235,14 @@ export class Engine {
     // Order of precedence: recipe headers (configure_recipe), then stored credentials, then the call's own headers.
     /** @type {Record<string, string>} */ const headers = { ...(this.store.loadState(recipe.name).headers ?? {}) };
     for (const [key, value] of Object.entries(secrets)) {
-      if (key.startsWith("{") || key.startsWith("@") || typeof value !== "string") continue; // secret path parameters, OAuth refresh settings
+      if (key.startsWith("{") || key.startsWith("@") || key.startsWith("~") || typeof value !== "string") continue; // path secrets, OAuth settings, stream frames
       if (!key.startsWith("?")) headers[key.toLowerCase()] = value;
       // Secret query parameter: added to calls of endpoints seen with it (a "key" of one endpoint is not a credential of the host).
       else if (!url.searchParams.has(key.slice(1)) && (!request.queryNames || request.queryNames.includes(key.slice(1)))) url.searchParams.set(key.slice(1), value);
     }
+    // A path whose key was hidden in the recipe ("/v3/REDACTED") gets it back, for its own host only.
+    const hiddenPath = secrets[`${SECRET_PATH_PREFIX}${url.pathname}`];
+    if (url.pathname.includes("REDACTED") && typeof hiddenPath === "string") url.pathname = hiddenPath;
     // Explicit headers win over stored ones; lowercase keys avoid sending a header twice.
     for (const [key, value] of Object.entries(request.headers ?? {})) headers[key.toLowerCase()] = String(value);
     const { queryNames, ...rest } = request;
@@ -443,8 +447,10 @@ export class Engine {
     const secrets = this.store.loadSecrets(recipe.name);
     /** @type {Record<string, string>} */ const headers = {};
     /** @type {Record<string, string>} */ const query = {};
+    /** @type {Record<string, string>} */ const paths = {};
     for (const [key, value] of Object.entries(secrets[url.host] ?? {})) {
-      if (key.startsWith("?")) query[key.slice(1)] = value;
+      if (key.startsWith(SECRET_PATH_PREFIX) && typeof value === "string") paths[key.slice(SECRET_PATH_PREFIX.length)] = value;
+      else if (key.startsWith("?")) query[key.slice(1)] = value;
       // "{name}" path secrets, "~frames~" stream secrets and "@oauth" settings are not headers.
       else if (!/^[{~@]/.test(key) && typeof value === "string") headers[key.toLowerCase()] = value;
     }
@@ -455,7 +461,7 @@ export class Engine {
       const cookies = await this.withLock(recipe.name, async () => (await this.browserFor(recipe.name)).cookies(cookieUrl.toString()));
       if (cookies.length) headers.cookie = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
     }
-    return { headers, query, frames: secrets[SECRET_FRAME_HOST(url.host)] ?? {} };
+    return { headers, query, paths, frames: secrets[SECRET_FRAME_HOST(url.host)] ?? {} };
   }
 
   /** @param {any} recipe @param {Record<string, Record<string, any>>} [secrets] @param {string[]} [typedSecrets] text typed into password fields */
@@ -549,7 +555,7 @@ export class Engine {
         ...(capture.explored.length ? { explored: capture.explored.map((e) => ({ url: redactUrl(e.url), newCalls: e.newCalls })) } : {}),
         ...carryOver(previous),
       };
-      return this.saveRecipe(recipe, mergeSecrets(inferred.secrets, realtime.secrets), capture.typedSecrets);
+      return this.saveRecipe(recipe, mergeSecrets(inferred.secrets, realtime.secrets, rpc.secrets), capture.typedSecrets);
     });
   }
 
@@ -582,7 +588,7 @@ export class Engine {
       stats: inferred.stats,
       ...carryOver(previous),
     };
-    return this.withLock(name, async () => this.saveRecipe(recipe, mergeSecrets(inferred.secrets, realtime.secrets)));
+    return this.withLock(name, async () => this.saveRecipe(recipe, mergeSecrets(inferred.secrets, realtime.secrets, rpc.secrets)));
   }
 
   /** Creates a recipe from a local file or folder (see imports.js). @param {Parameters<typeof importFile>[1]} options */

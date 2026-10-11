@@ -122,6 +122,8 @@ export function inferStreams(raw, { secretCookies = false } = {}) {
     const host = url.host;
     const redactedUrl = new URL(redactUrl(url.toString()));
     for (const [name, value] of url.searchParams) if (redactedUrl.searchParams.get(name) === "REDACTED" && value !== "REDACTED") addSecret(host, `?${name}`, value);
+    // A token in the path ("/ws/<token>") is hidden in the recipe and restored on connection, for this host only.
+    if (redactedUrl.pathname !== url.pathname) addSecret(host, `~path:${redactedUrl.pathname}`, url.pathname);
 
     let id = url.pathname.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "root";
     if (main.kind === "sse") id = `sse_${id}`;

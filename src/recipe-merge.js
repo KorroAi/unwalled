@@ -29,10 +29,18 @@ export const rpcKey = (m) => `${m.url} ${m.method}`;
 
 /** JSON-RPC methods of the observations; plain endpoints that only carried JSON-RPC are dropped. */
 export function withJsonRpc(observations, endpoints) {
-  const { methods, rpcUrls } = inferJsonRpc(observations);
-  return { methods, endpoints: endpoints.filter((e) => !(e.method === "POST" && rpcUrls.has(`${e.origin}${e.pathTemplate}`))) };
+  const { methods, rpcUrls, secrets } = inferJsonRpc(observations);
+  // rpcUrls holds real paths; endpoint templates may have turned a key segment into a parameter.
+  const covered = (/** @type {any} */ e) => e.method === "POST" && [...rpcUrls].some((u) => u === `${e.origin}${e.pathTemplate}` || templateMatches(`${e.origin}${e.pathTemplate}`, u));
+  return { methods, secrets, endpoints: endpoints.filter((e) => !covered(e)) };
 }
 export const graphqlKey = (e) => `${e.method} ${e.url} ${e.operationName ?? e.query ?? JSON.stringify(e.extensions)}`;
+
+/** "https://h/v3/{param1}" matches "https://h/v3/abc". @param {string} template @param {string} url */
+function templateMatches(template, url) {
+  const pattern = new RegExp(`^${template.split(/\{[^}]+\}/).map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^/]+")}$`);
+  return pattern.test(url);
+}
 
 /** @param {Record<string, Record<string, string>>[]} sources */
 export function mergeSecrets(...sources) {

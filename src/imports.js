@@ -10,7 +10,7 @@ import { parseHttpFile } from "./discovery/httpfile.js";
 import { inferEndpoints, navigationVariables } from "./discovery/infer.js";
 import { normalizeOpenApi } from "./discovery/openapi.js";
 import { readVariablesFile } from "./discovery/variables.js";
-import { assertHttpUrl, graphqlKey, MAX_FILE_BYTES, mergeByKey, restKey, rpcKey, withJsonRpc } from "./recipe-merge.js";
+import { assertHttpUrl, graphqlKey, MAX_FILE_BYTES, mergeByKey, mergeSecrets, restKey, rpcKey, withJsonRpc } from "./recipe-merge.js";
 import { assertRecipeName, RECIPE_SCHEMA_VERSION } from "./store.js";
 import { dataFiles, DATA_EXTENSIONS, describeTable, openData } from "./data/source.js";
 import { cacheFile, fetchToCache, remoteExtension } from "./data/remote.js";
@@ -259,7 +259,7 @@ export async function recipeFromRequests(engine, { name, observations, warnings,
     warnings: [...warnings, ...inferred.warnings],
     stats: inferred.stats,
   };
-  return engine.withLock(name, async () => engine.saveRecipe(recipe, inferred.secrets));
+  return engine.withLock(name, async () => engine.saveRecipe(recipe, mergeSecrets(inferred.secrets, rpc.secrets)));
 }
 
 /**

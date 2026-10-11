@@ -24,6 +24,32 @@ describe("JSON-RPC inference", () => {
     assert.equal(methods[1].resultShape, "string");
     assert.deepEqual([...rpcUrls], ["https://node.io/rpc"]);
   });
+
+  it("moves an API key written in the path (Infura, Alchemy) to the secrets, and restores it only for its host", async () => {
+    const key = "Qm7xT2vLp9RzW4nK8sYcB3dF6gH1jA5e";
+    const call = { method: "POST", url: `https://eth-mainnet.g.alchemy.com/v2/${key}`, status: 200, requestHeaders: {}, requestBody: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_blockNumber", params: [] }), responseJson: { jsonrpc: "2.0", id: 1, result: "0x1" } };
+    const { methods, secrets } = inferJsonRpc([call]);
+    assert.equal(methods[0].url, "https://eth-mainnet.g.alchemy.com/v2/REDACTED");
+    assert.deepEqual(secrets, { "eth-mainnet.g.alchemy.com": { "~path:/v2/REDACTED": `/v2/${key}` } });
+
+    const dir = mkdtempSync(join(tmpdir(), "umcp-rpc-key-"));
+    process.env.UNWALLED_HOME = dir;
+    const { loadConfig } = await import("../../src/config.js");
+    const { Engine } = await import("../../src/core.js");
+    const engine = new Engine(loadConfig());
+    try {
+      engine.store.saveSecrets("node", secrets);
+      const recipe = { name: "node", kind: "har", baseUrl: "https://eth-mainnet.g.alchemy.com" };
+      const sent = engine.withCredentials(recipe, { method: "POST", url: methods[0].url });
+      assert.equal(sent.url, `https://eth-mainnet.g.alchemy.com/v2/${key}`);
+      assert.equal(Object.keys(sent.headers).some((h) => h.startsWith("~")), false, "the entry is not sent as a header");
+      const elsewhere = engine.withCredentials(recipe, { method: "POST", url: "https://evil.example/v2/REDACTED" });
+      assert.equal(elsewhere.url, "https://evil.example/v2/REDACTED");
+    } finally {
+      await engine.close();
+      rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+    }
+  });
 });
 
 describe("JSON-RPC tools", () => {

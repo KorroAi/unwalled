@@ -27,6 +27,8 @@ and a real agent (`bench/agent.js`, Claude Code against Playwright MCP) showed, 
 - **The organization policy is enforced by the engine**, not only by the MCP server: the command line, presets and `goto` steps of discovery and of the interface tool now follow `allowedHosts` too, and the interface tool no longer returns a page it was led to on a host that is not allowed.
 - **A secret query parameter of one endpoint was added to every call to its host** (archive.org's `config.php?key=...` broke its search). Recipes record which endpoints were called with which secret parameters; only those get them. Free-form `__request` calls and recipes discovered before 0.4 keep the previous behaviour.
 - Short tokens right after a path segment that announces one (`/hooks/abc123`, `/invite/x7k2`) are treated as secrets.
+- **Body and query examples of imported collections** (Postman, Insomnia, Bruno) were copied as they were into tool descriptions, so into the shareable recipe: a password or key in a collection's example now stays out.
+- **API keys in a URL path** (hosted Ethereum nodes such as Infura or Alchemy, `wss://host/ws/<token>` streams) are kept with the secrets and restored for their own host only; the recipe shows the path with `REDACTED`. Before, such a key either stayed in the recipe or was replaced there and broke the tool.
 
 ### Fixes
 
@@ -39,6 +41,8 @@ and a real agent (`bench/agent.js`, Claude Code against Playwright MCP) showed, 
 - `unwalled import <name> postgres://...` (or an https address) turned the address into a local path.
 - Macros read the JSON of page and SOAP tools (they read the raw response before).
 - The server's instructions to the agent ran two sentences together; they now mention page tools and sign-in steps.
+- SOAP tools and the compact-mode `__call` tool accept their arguments at the top level too.
+- Tests retry removing temporary folders: Windows keeps a closed browser's files locked for a moment, which made the end-to-end suite fail now and then (the intermittent failure noted since 0.2).
 
 ## 0.3.0 — 2026-10-11
 

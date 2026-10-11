@@ -179,7 +179,8 @@ export function buildSoapTools(recipe, name, exec, outputProperties) {
       // Anything that is not obviously a reader may change data.
       annotations: { title: `${recipe.name} ${op.name}`, readOnlyHint: isReader(op.name), destructiveHint: !isReader(op.name), openWorldHint: true },
       /** @param {Record<string, any>} args */
-      run: async (args) => exec(request(op, args.params ?? {}), args, toolName, unwrapEnvelope),
+      // Agents often pass the elements at the top level instead of under "params": both are accepted.
+      run: async (args) => exec(request(op, args.params ?? Object.fromEntries(Object.entries(args).filter(([key]) => !(key in outputProperties)))), args, toolName, unwrapEnvelope),
     };
   });
 }

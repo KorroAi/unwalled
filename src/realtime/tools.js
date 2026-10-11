@@ -7,6 +7,7 @@ import { listenMqtt } from "./mqtt.js";
  * @property {Record<string, string>} headers handshake headers (cookies, origin, stored credentials)
  * @property {Record<string, string>} query secret query parameter values, by name
  * @property {Record<string, string>} frames original secret client frames, by "<stream id>#<index>"
+ * @property {Record<string, string>} [paths] original paths of URLs whose path hid a token, by hidden path ("/ws/REDACTED")
  */
 
 /**
@@ -64,11 +65,13 @@ function limits(args) {
 const asFrame = (value) => (typeof value === "string" ? value : JSON.stringify(value));
 
 /**
- * Rebuilds the connection URL: stored secret query values replace "REDACTED", then caller overrides apply.
+ * Rebuilds the connection URL: stored secret path and query values replace "REDACTED", then caller overrides apply.
  * @param {string} template @param {Record<string, string>} secretQuery @param {Record<string, unknown> | undefined} query
+ * @param {Record<string, string>} [secretPaths]
  */
-export function streamUrl(template, secretQuery, query) {
+export function streamUrl(template, secretQuery, query, secretPaths = {}) {
   const url = new URL(template);
+  if (url.pathname.includes("REDACTED") && secretPaths[url.pathname]) url.pathname = secretPaths[url.pathname];
   for (const [name, value] of [...url.searchParams]) if (value === "REDACTED" && secretQuery[name] !== undefined) url.searchParams.set(name, secretQuery[name]);
   for (const [name, value] of Object.entries(query ?? {})) {
     if (value === undefined || value === null) url.searchParams.delete(name);
@@ -137,7 +140,7 @@ export function buildStreamTools(recipe, runtime, name) {
         const held = runtime.guard?.(recipe, stream.url, writes ? "write" : "read", !!args.confirm);
         if (held) return held;
         const auth = await (runtime.streamAuth ?? NO_AUTH)(recipe, stream.url);
-        const url = streamUrl(stream.url, auth.query, args.query);
+        const url = streamUrl(stream.url, auth.query, args.query, auth.paths);
         const { durationMs, maxMessages, filter } = limits(args);
         const result = isMqtt
           ? await listenMqtt(url, { topics: Array.isArray(args.topics) && args.topics.length ? args.topics : (stream.topics ?? ["#"]), qos: args.qos === 1 ? 1 : 0, publish: mqttPublish(args), ...mqttCredentials(auth, new URL(url)), durationMs, maxMessages, filter })

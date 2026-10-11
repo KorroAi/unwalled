@@ -1,6 +1,10 @@
 // JSON-RPC (1.0 / 2.0) support: requests whose body is {"jsonrpc", "method", "params"} (or a batch of them)
 // become one tool per method instead of a single opaque POST endpoint.
 import { redact, redactUrl } from "./infer.js";
+import { isSecretSegment, REDACTED } from "./secrets.js";
+
+/** Secret entry restoring a path whose key was hidden ("/v3/REDACTED" -> "/v3/<key>"), keyed by the hidden path. */
+export const SECRET_PATH_PREFIX = "~path:";
 import { describeShape, inferSchema } from "../tools/schema.js";
 
 /**
@@ -35,9 +39,11 @@ function parse(body) {
 
 /**
  * @param {import("./infer.js").Observation[]} observations
- * @returns {{ methods: RpcMethod[], rpcUrls: Set<string> }} rpcUrls: endpoints that only carried JSON-RPC (their generic REST endpoint is redundant)
+ * @returns {{ methods: RpcMethod[], rpcUrls: Set<string>, secrets: Record<string, Record<string, string>> }} rpcUrls: endpoints that only
+ *   carried JSON-RPC (their generic REST endpoint is redundant); secrets: API keys found in endpoint paths (Infura, Alchemy...)
  */
 export function inferJsonRpc(observations) {
+  /** @type {Record<string, Record<string, string>>} */ const secrets = {};
   /** @type {Map<string, { url: string, method: string, version: "1.0" | "2.0", params: unknown[], results: unknown[], observed: number }>} */ const groups = new Map();
   /** @type {Map<string, boolean>} */ const onlyRpc = new Map();
   for (const obs of observations) {
@@ -56,6 +62,13 @@ export function inferJsonRpc(observations) {
     if (!calls) {
       onlyRpc.set(endpoint, false);
       continue;
+    }
+    // Hosted nodes put the API key in the path ("/v3/<key>"): the recipe keeps "/v3/REDACTED", the key goes to the secrets.
+    const segments = url.pathname.split("/");
+    const hidden = segments.map((segment, i) => (isSecretSegment(decodeSafe(segment), decodeSafe(segments[i - 1] ?? "")) ? REDACTED : segment)).join("/");
+    if (hidden !== url.pathname) {
+      secrets[url.host] = { ...(secrets[url.host] ?? {}), [`${SECRET_PATH_PREFIX}${hidden}`]: url.pathname };
+      url.pathname = hidden;
     }
     if (!onlyRpc.has(endpoint)) onlyRpc.set(endpoint, true);
     const responses = Array.isArray(obs.responseJson) ? obs.responseJson : [obs.responseJson];
@@ -80,7 +93,16 @@ export function inferJsonRpc(observations) {
       observed: g.observed,
     };
   });
-  return { methods: /** @type {RpcMethod[]} */ (methods), rpcUrls: new Set([...onlyRpc].filter(([, only]) => only).map(([endpoint]) => endpoint)) };
+  return { methods: /** @type {RpcMethod[]} */ (methods), rpcUrls: new Set([...onlyRpc].filter(([, only]) => only).map(([endpoint]) => endpoint)), secrets };
+}
+
+/** @param {string} segment */
+function decodeSafe(segment) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
 }
 
 /** Method names do not say whether they write: only obvious readers are read-only. @param {string} method */

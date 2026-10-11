@@ -59,7 +59,9 @@ export function foldTools(recipe, tools, name) {
       run: async (args) => {
         const tool = byName.get(String(args.operation));
         if (!tool) return { text: `Unknown operation "${args.operation}". Call ${recipe.name}__operation to list them.`, isError: true };
-        return tool.run(args.arguments ?? {});
+        // Arguments given next to "operation" instead of under "arguments" are accepted too.
+        const { operation, arguments: given, ...flat } = args;
+        return tool.run(given ?? flat);
       },
     },
   ];

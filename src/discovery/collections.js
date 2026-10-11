@@ -1,5 +1,6 @@
 // Converts API client collections (Postman v2.0/v2.1, Insomnia v4 exports) into OpenAPI 3,
 // so they go through the same normalization as published API descriptions.
+import { isSecretParam, redact, redactText } from "./secrets.js";
 
 /** @param {any} doc */
 export function isPostmanCollection(doc) {
@@ -17,6 +18,15 @@ const snake = (text) => text.replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^a
 /** Replaces {{name}} with known values; unknown ones are kept. @param {string} text @param {Record<string, string>} vars */
 export function substitute(text, vars) {
   return String(text ?? "").replace(/\{\{\s*([^}\s]+)\s*\}\}/g, (match, name) => (vars[name] !== undefined ? vars[name] : match));
+}
+
+/** A body example as it may be shown and saved: sensitive fields (password, token...) and credential-looking values hidden. @param {string} raw */
+function safeExample(raw) {
+  try {
+    return JSON.stringify(redact(JSON.parse(raw)));
+  } catch {
+    return redactText(raw);
+  }
 }
 
 /** @param {unknown} value */
@@ -97,10 +107,11 @@ export function toOpenApi(title, requests) {
       description: request.description ?? "",
       parameters: [
         ...url.pathParams.map((name) => ({ name, in: "path", required: true, schema: { type: "string" } })),
-        ...[...queryNames].map(([name, example]) => ({ name, in: "query", required: false, schema: { type: "string" }, description: example && !/\{\{/.test(example) ? `Example: ${example}` : "" })),
+        // Examples are shown to the agent and saved in the recipe: never a secret one.
+        ...[...queryNames].map(([name, example]) => ({ name, in: "query", required: false, schema: { type: "string" }, description: example && !/\{\{/.test(example) && !isSecretParam(name, example) ? `Example: ${example}` : "" })),
       ],
       ...(request.body
-        ? { requestBody: { required: true, content: { [request.body.contentType]: { schema: { ...exampleSchema(request.body.example), ...(request.body.raw ? { description: `Example: ${request.body.raw.slice(0, 300)}` } : {}) } } } } }
+        ? { requestBody: { required: true, content: { [request.body.contentType]: { schema: { ...exampleSchema(request.body.example), ...(request.body.raw ? { description: `Example: ${safeExample(request.body.raw).slice(0, 300)}` } : {}) } } } } }
         : {}),
       responses: { 200: { description: "OK" } },
     };

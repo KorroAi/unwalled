@@ -35,6 +35,13 @@ describe("stream helpers", () => {
   it("restores secret query values in stream URLs", () => {
     assert.equal(streamUrl("wss://x.io/ws?token=REDACTED&a=1", { token: "s" }, { a: 2, b: "c" }), "wss://x.io/ws?token=s&a=2&b=c");
   });
+  it("hides a token written in a stream's path and restores it on connection", () => {
+    const token = "Zx81Lq0Wm3Np5Rt7Vb9Yc2Qa4Sd";
+    const { streams, secrets } = inferStreams([{ kind: "websocket", url: `wss://feed.example/live/${token}`, requestHeaders: {}, frames: [] }]);
+    assert.equal(streams[0].url, "wss://feed.example/live/REDACTED");
+    assert.equal(secrets["feed.example"]["~path:/live/REDACTED"], `/live/${token}`);
+    assert.equal(streamUrl(streams[0].url, {}, undefined, { "/live/REDACTED": `/live/${token}` }), `wss://feed.example/live/${token}`);
+  });
 });
 
 describe("inferStreams", () => {

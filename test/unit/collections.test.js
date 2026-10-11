@@ -38,6 +38,24 @@ describe("collections", () => {
     assert.match(warnings.join(" "), /other\.example\.com/);
   });
 
+  it("keeps passwords and keys of a collection's examples out of the descriptions", () => {
+    const { spec } = postmanToOpenApi({
+      info: { _postman_id: "x", name: "Login" },
+      item: [{
+        name: "Sign in",
+        request: {
+          method: "POST",
+          url: { raw: "https://api.test/login?api_key=k3y-value-123&page=2", query: [{ key: "api_key", value: "k3y-value-123" }, { key: "page", value: "2" }] },
+          body: { mode: "raw", raw: '{"user":"alice","password":"hunter22"}', options: { raw: { language: "json" } } },
+        },
+      }],
+    });
+    const text = JSON.stringify(spec);
+    assert.doesNotMatch(text, /hunter22|k3y-value-123/);
+    assert.match(text, /"user\\":\\"alice/);
+    assert.match(text, /Example: 2/);
+  });
+
   it("converts an Insomnia export with environment variables", () => {
     const doc = {
       _type: "export", __export_format: 4,
