@@ -137,6 +137,7 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
   /** @type {import("./infer.js").Observation[]} */ const observations = [];
   /** @type {Promise<void>[]} */ const pending = [];
   const pageUrls = [url];
+  /** Addresses opened directly that answered JSON: API endpoints, not pages whose path names a record. @type {Set<string>} */ const jsonDocuments = new Set();
   const typedTexts = [];
   /** Text typed into password fields: removed from the recipe wherever it appears (a body field named "pw" is not recognised otherwise). */
   const typedSecrets = [];
@@ -185,7 +186,7 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
       }
       // Pages whose HTML carries the data (server-rendered tools) become page tools.
       if (request.method() !== "GET" || response.status() !== 200 || request.frame().parentFrame() || documents.length >= 60) return;
-      if (!/html/i.test(response.headers()["content-type"] ?? "")) return;
+      const contentType = response.headers()["content-type"] ?? "";
       let host;
       try {
         host = new URL(response.url()).hostname;
@@ -193,6 +194,20 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
         return;
       }
       if (!allowed(host)) return;
+      // An API address opened directly (the page is JSON): that address is the endpoint.
+      if (/json/i.test(contentType)) {
+        jsonDocuments.add(new URL(response.url()).href);
+        pending.push(
+          (async () => {
+            const body = await response.body();
+            const responseJson = body.length <= MAX_BODY_BYTES ? parseJsonLoose(body.toString("utf8")) : undefined;
+            if (responseJson === undefined) return;
+            observations.push({ method: "GET", url: response.url(), status: 200, requestHeaders: await request.allHeaders().catch(() => request.headers()), requestBody: null, responseJson });
+          })().catch(() => {}),
+        );
+        return;
+      }
+      if (!/html/i.test(contentType)) return;
       pending.push(
         (async () => {
           const html = (await response.body()).subarray(0, MAX_BODY_BYTES).toString("utf8");
@@ -310,7 +325,7 @@ export async function captureTraffic(config, { url, profileDir, actions = [], in
     if (!closedByUser) await closeProfile(context, profileDir);
   }
   await drain();
-  return { observations, streams: realtime.streams, pageUrls, typedTexts, typedSecrets, actionErrors, explored, blocked, documents };
+  return { observations, streams: realtime.streams, pageUrls: pageUrls.filter((u) => !jsonDocuments.has(URL.canParse(u) ? new URL(u).href : u)), typedTexts, typedSecrets, actionErrors, explored, blocked, documents };
 }
 
 // Pages that bot protections show instead of the site (Cloudflare, DataDome, Akamai, PerimeterX, Reddit...).

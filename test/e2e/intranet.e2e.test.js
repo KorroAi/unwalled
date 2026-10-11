@@ -14,10 +14,18 @@ const BIN = fileURLToPath(new URL("../../bin/unwalled.js", import.meta.url));
 let home;
 let intranet;
 /** @type {Client} */ let client;
+/** The server's log: shown when a call fails outright (the server stopped), to find out why. */
+let serverLog = "";
 
 async function call(name, args = {}) {
-  const result = await client.callTool({ name, arguments: args }, undefined, { timeout: 170_000 });
-  return { text: /** @type {any} */ (result.content)[0].text, isError: !!result.isError };
+  try {
+    const result = await client.callTool({ name, arguments: args }, undefined, { timeout: 170_000 });
+    return { text: /** @type {any} */ (result.content)[0].text, isError: !!result.isError };
+  } catch (error) {
+    throw new Error(`${name} failed: ${error?.message ?? error}
+--- server log (end) ---
+${serverLog.slice(-4000)}`);
+  }
 }
 
 describe("example internal app", () => {
@@ -25,7 +33,9 @@ describe("example internal app", () => {
     home = mkdtempSync(join(tmpdir(), "unwalled-intranet-"));
     intranet = await startIntranet();
     client = new Client({ name: "e2e", version: "0.0.0" });
-    await client.connect(new StdioClientTransport({ command: process.execPath, args: [BIN], env: { ...process.env, UNWALLED_HOME: home }, stderr: "ignore" }));
+    const transport = new StdioClientTransport({ command: process.execPath, args: [BIN], env: { ...process.env, UNWALLED_HOME: home }, stderr: "pipe" });
+    transport.stderr?.on("data", (chunk) => (serverLog = (serverLog + chunk).slice(-20_000)));
+    await client.connect(transport);
   });
 
   after(async () => {

@@ -17,25 +17,6 @@ Everything runs on your machine.
 
 <sub>Recorded with [`docs/demo/make-gif.js`](docs/demo/make-gif.js): real calls against the [example back office](examples/intranet/server.js).</sub>
 
-## Is it worth it? Measured, not claimed
-
-Same questions to the same agent (Claude Code, Sonnet), once with unwalled and once with a browser agent (Playwright MCP),
-nothing scripted, every answer checked: 15 runs, 15 right answers ([method and every answer](bench/AGENT.md)).
-
-| Cost per question | Apps behind a sign-in (back office, Grafana) | Public sites (crates.io, Flathub, OpenStreetMap) |
-| --- | --- | --- |
-| **unwalled, app already discovered** | **3 to 4 model turns, $0.022 to $0.030** | 3 to 6 turns, $0.019 to $0.051 |
-| Browser agent | 8 to 9 turns, $0.055 to $0.059 | 3 to 4 turns, $0.021 to $0.025 |
-| unwalled, first question (discovery included) | 5 turns, $0.046 to $0.051 | 5 to 8 turns, $0.049 to $0.060 |
-
-- **Where it pays**: apps you sign in to and use repeatedly. 1.8 to 2.7 times cheaper per question once the app is
-  known, and the first question already costs no more than with a browser.
-- **Where it does not**: a public page a browser can open directly. There, use a browser.
-- On [20 real public websites](bench/FIELD.md), one discovery with default options answered a question about a term it had never seen
-  on 13 of them; 6 refused automated browsers (unwalled says so and does not bypass them) and 1 needed more than one page to generalise.
-- The calls themselves are fast and small: [21 ms and 95 characters](bench/RESULTS.md) to read an order in the example back office,
-  against 54 ms and 1,144 characters for a scripted browser reading the page in the most favourable setup.
-
 ## Get started
 
 In a terminal (Node.js 22 or newer):
@@ -80,6 +61,7 @@ and tells you what to ask: *"Using acme, what is the status and total of order 1
 | --- | --- |
 | An internal app or a site you sign in to | `unwalled add https://erp.example.com --browse` (a window opens: sign in, open the pages your agent will use, close it) |
 | A public website | `unwalled add https://crates.io --explore 10` |
+| A JSON API address | `unwalled add "https://api.open-meteo.com/v1/forecast?latitude=45.76&longitude=4.84&current=temperature_2m"` |
 | A file or folder | `unwalled add ./sales-2026.xlsx` (CSV, Excel, JSON, SQLite, iCalendar, RSS...) |
 | An API description or collection | `unwalled add ./openapi.yaml`, `./team.postman_collection.json`, `./capture.har`, `./curl-commands.txt` |
 | A database (read-only) | `unwalled add postgres://reader:secret@db.example.com/shop` or `mysql://...` |
@@ -112,6 +94,25 @@ every generated tool with an example call, and the agent uses them right away. R
 
 How each source was checked (most against real services, including a real Grafana behind a sign-in) and its known limits:
 [compatibility table](docs/REFERENCE.md#compatibility).
+
+## Is it worth it? Measured, not claimed
+
+Same questions to the same agent (Claude Code, Sonnet), once with unwalled and once with a browser agent (Playwright MCP),
+nothing scripted, every answer checked: 15 runs, 15 right answers ([method and every answer](bench/AGENT.md)).
+
+| Cost per question | Apps behind a sign-in (back office, Grafana) | Public sites (crates.io, Flathub, OpenStreetMap) |
+| --- | --- | --- |
+| **unwalled, app already discovered** | **3 to 4 model turns, $0.022 to $0.030** | 3 to 6 turns, $0.019 to $0.051 |
+| Browser agent | 8 to 9 turns, $0.055 to $0.059 | 3 to 4 turns, $0.021 to $0.025 |
+| unwalled, first question (discovery included) | 5 turns, $0.046 to $0.051 | 5 to 8 turns, $0.049 to $0.060 |
+
+- **Where it pays**: apps you sign in to and use repeatedly. 1.8 to 2.7 times cheaper per question once the app is
+  known, and the first question already costs no more than with a browser.
+- **Where it does not**: a public page a browser can open directly. There, use a browser.
+- On [20 real public websites](bench/FIELD.md), one discovery with default options answered a question about a term it had never seen
+  on 13 of them; 6 refused automated browsers (unwalled says so and does not bypass them) and 1 needed more than one page to generalise.
+- The calls themselves are fast and small: [21 ms and 95 characters](bench/RESULTS.md) to read an order in the example back office,
+  against 54 ms and 1,144 characters for a scripted browser reading the page in the most favourable setup.
 
 ## Built for agents
 

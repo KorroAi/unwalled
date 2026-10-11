@@ -422,6 +422,13 @@ describe("unwalled end to end", () => {
     assert.equal((await stats()).logoutHits, 0, "the logout link was never followed");
   });
 
+  it("turns an API address opened directly (a JSON page) into a tool, its path kept literal", TIMEOUT, async () => {
+    const result = await call("discover", { name: "direct", url: `${fixtures.shopUrl}/api/search?q=lamp`, mode: "browser" });
+    assert.equal(result.isError, false, result.text);
+    assert.ok((await toolNames("direct__")).includes("direct__get_api_search"), result.text);
+    assert.match((await call("direct__get_api_search", { q: "desk" })).text, /"query":"desk"/);
+  });
+
   it("keeps secrets out of recipes, inspect output and the audit log", async () => {
     const recipeFile = readFileSync(join(home, "recipes", "shop.json"), "utf8");
     for (const secret of ["tok-1", "tok-2", "sid=abc"]) assert.ok(!recipeFile.includes(secret), `${secret} must not be written in the recipe`);
