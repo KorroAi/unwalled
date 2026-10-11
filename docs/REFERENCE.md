@@ -116,7 +116,7 @@ The result is saved as a **recipe**. Discovery runs once (seconds); after that t
 ### Guided setup (recommended)
 
 ```bash
-npx -y github:KorroAi/unwalled
+npx -y unwalled
 ```
 
 Started in a terminal, unwalled runs its setup in three steps:
@@ -138,7 +138,7 @@ of Node.js and of `bin/unwalled.js`, which work even for apps that do not see yo
 ### Claude Code
 
 ```bash
-claude mcp add --scope user unwalled -- npx -y github:KorroAi/unwalled
+claude mcp add --scope user unwalled -- npx -y unwalled
 ```
 
 ### Claude Desktop, Cursor, Windsurf and other MCP clients
@@ -148,13 +148,15 @@ claude mcp add --scope user unwalled -- npx -y github:KorroAi/unwalled
   "mcpServers": {
     "unwalled": {
       "command": "npx",
-      "args": ["-y", "github:KorroAi/unwalled"]
+      "args": ["-y", "unwalled"]
     }
   }
 }
 ```
 
-On Windows, some clients cannot start `npx` directly: use `"command": "cmd"` with `"args": ["/c", "npx", "-y", "github:KorroAi/unwalled"]`.
+On Windows, some clients cannot start `npx` directly: use `"command": "cmd"` with `"args": ["/c", "npx", "-y", "unwalled"]`.
+
+The development version (the repository's `main` branch) runs with `npx -y github:KorroAi/unwalled`.
 
 ### From source
 
@@ -170,7 +172,7 @@ node bin/unwalled.js setup
 **Try it in one minute** with the demo back office (orders and customers behind a sign-in, on your machine):
 
 ```bash
-unwalled demo        # or: npx -y github:KorroAi/unwalled demo
+unwalled demo        # or: npx -y unwalled demo
 ```
 
 It starts the back office, discovers it (signing in as alice, opening an order and two customer pages) and prints the question to ask
@@ -413,7 +415,7 @@ instead of one tool per operation; tool schemas are also compacted to `UNWALLED_
 ## Command line
 
 ```bash
-npx -y github:KorroAi/unwalled --help
+npx -y unwalled --help
 unwalled setup                      # guided setup (also what "unwalled" alone does in a terminal)
 unwalled setup --remove             # remove unwalled from every AI app
 unwalled doctor                     # checks: Node.js, browser, data folder, encryption, AI apps

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 — 2026-10-11
+
+- Published on npm: `npx -y unwalled` (setup), `npm install --global unwalled` (command). The guided setup and the documentation use it;
+  the development version still runs with `npx -y github:KorroAi/unwalled`.
+
 ## 0.5.0 — 2026-10-11
 
 First steps for people, not only for agents: from nothing to an agent answering in a few minutes, without editing a configuration file.

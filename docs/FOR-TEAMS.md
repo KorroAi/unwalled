@@ -99,7 +99,7 @@ See [SECURITY.md](../SECURITY.md) for the threat model and how to report a vulne
 
 ## Good to know before rolling it out
 
-- Deploying to many machines: `npm install --global github:KorroAi/unwalled`, then `unwalled setup --yes` adds it to every AI app
+- Deploying to many machines: `npm install --global unwalled`, then `unwalled setup --yes` adds it to every AI app
   found on the machine without questions (Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, Gemini CLI, Codex), and
   `unwalled doctor` reports what is missing (exit code 1 on a blocking problem). Set `UNWALLED_ORG_POLICY` and
   `UNWALLED_TEAM_RECIPES` in the environment the apps start from.

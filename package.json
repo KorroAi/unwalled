@@ -1,6 +1,6 @@
 {
   "name": "unwalled",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Let AI agents use the software that has no API: back offices, intranets, dashboards, plus API files, spreadsheets and databases, as MCP tools.",
   "homepage": "https://github.com/KorroAi/unwalled#readme",
   "bugs": { "url": "https://github.com/KorroAi/unwalled/issues" },

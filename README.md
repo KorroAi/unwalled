@@ -23,7 +23,7 @@ The tools keep working: unwalled stays signed in, renews sessions and retries; w
 You need [Node.js](https://nodejs.org) 22 or newer. In a terminal:
 
 ```bash
-npx -y github:KorroAi/unwalled
+npx -y unwalled
 ```
 
 A guided setup then:
@@ -55,7 +55,7 @@ You can also just ask your agent: *"Discover https://grafana.example.com and tel
 or *"Import this CSV and summarise it"*. It does the same thing through unwalled's tools.
 
 Other commands: `unwalled list` (your recipes), `unwalled doctor` (check everything), `unwalled setup --remove` (uninstall from your AI apps),
-`unwalled --help` (all commands). Without the setup's installation, write `npx -y github:KorroAi/unwalled` instead of `unwalled`.
+`unwalled --help` (all commands). Without the setup's installation, write `npx -y unwalled` instead of `unwalled`.
 
 ## What it connects
 

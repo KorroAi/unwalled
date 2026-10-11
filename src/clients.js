@@ -7,8 +7,8 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-/** What npx installs. Switch to "unwalled" once the package is published on npm. */
-export const PACKAGE_SPEC = "github:KorroAi/unwalled";
+/** What npx and npm install: the package published on npm. */
+export const PACKAGE_SPEC = "unwalled";
 export const SERVER_NAME = "unwalled";
 const BIN = resolve(dirname(fileURLToPath(import.meta.url)), "..", "bin", "unwalled.js");
 
