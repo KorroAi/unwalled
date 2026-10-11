@@ -2,13 +2,11 @@
 
 **Let your AI agent use the software that has no API: your back office, intranet, dashboards and portals, plus your API files, spreadsheets and databases.**
 
+https://github.com/user-attachments/assets/14cbfae4-4984-4ca3-a0b6-37a1b19ff0d4
+
 You show unwalled an app once. It records what the app does behind the screen and turns it into tools your agent
 (Claude, Cursor, Copilot, any MCP client) calls directly: no clicking through pages, no integration code, nothing to change in the app.
 Everything runs on your computer.
-
-![An agent signs in to an internal back office once, then answers questions through generated tools](docs/demo.gif)
-
-<sub>Real calls against the [example back office](examples/intranet/server.js), recorded with [`docs/demo/make-gif.js`](docs/demo/make-gif.js).</sub>
 
 ## How it works
 
@@ -17,6 +15,10 @@ Everything runs on your computer.
 3. **Your agent uses them**: it asks "order 1042?" and gets the answer in one call, already signed in.
 
 The tools keep working: unwalled stays signed in, renews sessions and retries; when the app changes, it detects the broken tools and can repair the recipe.
+
+![An agent signs in to an internal back office once, then answers questions through generated tools](docs/demo.gif)
+
+<sub>Real calls against the [example back office](examples/intranet/server.js), recorded with [`docs/demo/make-gif.js`](docs/demo/make-gif.js).</sub>
 
 ## Get started
 
