@@ -1,6 +1,6 @@
 // Local data as SQL tables: CSV / TSV, JSON (array of records, or an object of arrays), JSON Lines, SQLite databases,
 // and folders of such files (one table per file). Queries are read-only.
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { closeSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { parseCsv } from "../tools/formats.js";
 import { readFeed, readIcs, readXlsx } from "./formats.js";
@@ -35,6 +35,8 @@ function columnType(values) {
     }
     if (typeof value === "boolean") continue;
     if (typeof value !== "string") return "TEXT";
+    // A leading zero is part of the value ("01234" postal codes, "007" references): a number would drop it.
+    if (/^-?0\d/.test(value)) return "TEXT";
     if (/^-?\d{1,15}$/.test(value)) continue;
     if (/^-?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(value)) type = "REAL";
     else return "TEXT";
@@ -62,8 +64,15 @@ export function readRecords(file) {
   const ext = extname(file).toLowerCase();
   // Excel: one table per sheet; iCalendar: events (and to-dos).
   if (ext === ".xlsx") {
-    const sheets = readXlsx(readFileSync(file));
-    return Object.fromEntries(Object.entries(sheets).map(([sheet, rows]) => [Object.keys(sheets).length === 1 ? name : tableName(sheet), rows]));
+    const sheets = Object.entries(readXlsx(readFileSync(file)));
+    /** @type {Record<string, Record<string, unknown>[]>} */ const tables = {};
+    for (const [sheet, rows] of sheets) {
+      // Sheets whose names give the same table name ("Q1 2026", "Q1-2026") must not overwrite each other.
+      let table = sheets.length === 1 ? name : tableName(sheet);
+      for (let n = 2; table in tables; n++) table = `${tableName(sheet)}_${n}`;
+      tables[table] = rows;
+    }
+    return tables;
   }
   const text = readFileSync(file, "utf8").replace(/^﻿/, "");
   if (ext === ".ics") return readIcs(text);
@@ -107,7 +116,18 @@ export function dataFiles(path) {
   return [path];
 }
 
-const isSqliteFile = (/** @type {string} */ file) => /\.(sqlite|sqlite3|db)$/i.test(file) || readFileSync(file).subarray(0, 16).toString("latin1") === "SQLite format 3\u0000";
+/** By extension, or by the 16-byte header (only the header is read). @param {string} file */
+function isSqliteFile(file) {
+  if (/\.(sqlite|sqlite3|db)$/i.test(file)) return true;
+  const fd = openSync(file, "r");
+  try {
+    const header = Buffer.alloc(16);
+    readSync(fd, header, 0, 16, 0);
+    return header.toString("latin1") === "SQLite format 3\u0000";
+  } finally {
+    closeSync(fd);
+  }
+}
 
 /**
  * Opens a data source as a read-only SQLite connection. Text files are loaded into an in-memory database.

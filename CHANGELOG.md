@@ -29,6 +29,8 @@ and a real agent (`bench/agent.js`, Claude Code against Playwright MCP) showed, 
 - Short tokens right after a path segment that announces one (`/hooks/abc123`, `/invite/x7k2`) are treated as secrets.
 - **Body and query examples of imported collections** (Postman, Insomnia, Bruno) were copied as they were into tool descriptions, so into the shareable recipe: a password or key in a collection's example now stays out.
 - **API keys in a URL path** (hosted Ethereum nodes such as Infura or Alchemy, `wss://host/ws/<token>` streams) are kept with the secrets and restored for their own host only; the recipe shows the path with `REDACTED`. Before, such a key either stayed in the recipe or was replaced there and broke the tool.
+- A stream's tool id was built from its path before redaction, so a path token reached the tool name and the recipe; Socket.IO (`42[...]`) and plain-text message samples were saved without redaction.
+- MySQL: `SELECT ... INTO OUTFILE / DUMPFILE` (which writes a file on the database server and is not stopped by a READ ONLY transaction) is refused, including inside executable comments (`/*! ... */`).
 
 ### Fixes
 
@@ -42,6 +44,13 @@ and a real agent (`bench/agent.js`, Claude Code against Playwright MCP) showed, 
 - Macros read the JSON of page and SOAP tools (they read the raw response before).
 - The server's instructions to the agent ran two sentences together; they now mention page tools and sign-in steps.
 - SOAP tools and the compact-mode `__call` tool accept their arguments at the top level too.
+- PostgreSQL and MySQL: parallel calls on one cached connection mixed their replies (each address now runs one statement at a time); a statement allowed to run longer than the request timeout was given up by the client and run twice; a failed sign-in left its socket open; the PostgreSQL TLS request had no time limit.
+- Local data: values with a leading zero (`01234` postal codes) lost it; Excel sheets whose names give the same table name overwrote each other, and so did repeated column headers (Excel and CSV); whole files were read just to check for a SQLite header; an Excel entry's unpacked size is capped.
+- iCalendar: an event's reminder (`VALARM`) overwrote the event's description.
+- OData: 64-bit keys are written bare and v2 GUID keys as `guid'...'`; actions get a request body described from their parameters.
+- AsyncAPI over MQTT: the recipe's base address is `http(s)://host`, and two channels whose names differ only by punctuation get distinct tools.
+- gRPC-web: compressed frames are reported as such instead of being decoded as garbage. MQTT: a broker that closes before accepting the connection gives a clear error.
+- XML: a numeric entity beyond Unicode (`&#99999999;`) threw; an element named `__proto__` was lost. `pick` and schema inference read only an object's own keys (`constructor` no longer resolves to a function), and `pick` reads quoted keys with dots (`$['a.b']`).
 - Tests retry removing temporary folders: Windows keeps a closed browser's files locked for a moment, which made the end-to-end suite fail now and then (the intermittent failure noted since 0.2).
 
 ## 0.3.0 — 2026-10-11

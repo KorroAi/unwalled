@@ -23,4 +23,12 @@ describe("read statements", () => {
     for (const sql of ["SELECT 1", "  /* c */ with x as (select 1) select * from x", "-- note\nSHOW TABLES", "EXPLAIN SELECT 1", "DESCRIBE t"]) assert.doesNotThrow(() => assertReadStatement(sql), sql);
     for (const sql of ["CREATE TABLE t (a INT)", "DROP TABLE t", "/* SELECT */ DELETE FROM t", "SET GLOBAL x = 1", "CALL p()", "LOAD DATA INFILE 'x' INTO TABLE t"]) assert.throws(() => assertReadStatement(sql), /Only read statements/, sql);
   });
+
+  it("refuses SELECT ... INTO OUTFILE, even hidden in an executable comment", async () => {
+    const { assertReadStatement } = await import("../../src/data/mysql.js");
+    for (const sql of ["SELECT * FROM t INTO OUTFILE '/tmp/x'", "SELECT 1 INTO/**/DUMPFILE '/tmp/y'", "SELECT 1 /*!50000 INTO OUTFILE '/tmp/z' */", "SELECT 1 INTO # c\n OUTFILE 'w'"]) {
+      assert.throws(() => assertReadStatement(sql), /writes files/, sql);
+    }
+    for (const sql of ["SELECT 'into outfile' AS t", "SELECT 1 -- into outfile\n", "SELECT a INTO @v FROM t"]) assert.doesNotThrow(() => assertReadStatement(sql), sql);
+  });
 });

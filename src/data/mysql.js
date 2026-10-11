@@ -11,6 +11,10 @@ import { connect as tlsConnect } from "node:tls";
 export function assertReadStatement(sql) {
   const first = sql.replace(/^(\s|--[^\n]*\n|#[^\n]*\n|\/\*[\s\S]*?\*\/)*/, "");
   if (!/^(select|with|show|explain|describe|desc|values|table)\b/i.test(first)) throw new Error("Only read statements are allowed (SELECT, WITH, SHOW, EXPLAIN, DESCRIBE, VALUES, TABLE).");
+  // SELECT ... INTO OUTFILE / DUMPFILE writes a file on the database server, which a READ ONLY transaction does not prevent.
+  // Strings and comments are blanked, except MySQL's executable comments (/*! ... */), which run their content.
+  const code = first.replace(/'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`[^`]*`|\/\*!\d*([\s\S]*?)\*\/|\/\*[\s\S]*?\*\/|(?:#|--\s)[^\n]*/g, (_, executable) => ` ${executable ?? ""} `);
+  if (/\binto\s+(outfile|dumpfile)\b/i.test(code)) throw new Error("SELECT ... INTO OUTFILE / DUMPFILE writes files on the server: not allowed.");
 }
 
 /** @param {string} url */
@@ -178,8 +182,8 @@ export async function connectMysql(url, { timeoutMs = 15_000 } = {}) {
   };
   listen(socket);
   /** @returns {Promise<Buffer>} */
-  const next = async () => {
-    const deadline = Date.now() + timeoutMs;
+  const next = async (waitMs = timeoutMs) => {
+    const deadline = Date.now() + waitMs;
     while (!queue.length) {
       if (failure) throw failure;
       if (Date.now() > deadline) throw new Error("MySQL did not answer in time");
@@ -200,88 +204,92 @@ export async function connectMysql(url, { timeoutMs = 15_000 } = {}) {
   };
 
   // ---------------------------------------------------------------- handshake
-  const hello = await next();
-  if (hello[0] === 0xff) throw mysqlError(hello);
-  let offset = 1;
-  const versionEnd = hello.indexOf(0, offset);
-  const serverVersion = hello.subarray(offset, versionEnd).toString("latin1");
-  offset = versionEnd + 1 + 4; // connection id
-  let nonce = hello.subarray(offset, offset + 8);
-  offset += 9;
-  let capabilities = hello.readUInt16LE(offset);
-  offset += 2 + 1 + 2;
-  capabilities |= hello.readUInt16LE(offset) << 16;
-  offset += 2;
-  const nonceLength = hello[offset];
-  offset += 11;
-  if (capabilities & CLIENT.SECURE_CONNECTION) {
-    const part2 = Math.max(13, nonceLength - 8);
-    nonce = Buffer.concat([nonce, hello.subarray(offset, offset + part2 - 1)]);
-    offset += part2;
-  }
-  let plugin = capabilities & CLIENT.PLUGIN_AUTH ? hello.subarray(offset, hello.indexOf(0, offset)).toString("latin1") : "mysql_native_password";
-
-  let flags = CLIENT.LONG_PASSWORD | CLIENT.PROTOCOL_41 | CLIENT.SECURE_CONNECTION | CLIENT.TRANSACTIONS | CLIENT.MULTI_RESULTS | CLIENT.PLUGIN_AUTH | CLIENT.PLUGIN_AUTH_LENENC_DATA;
-  if (database) flags |= CLIENT.CONNECT_WITH_DB;
-  const fixed = (/** @type {number} */ withFlags) => {
-    const b = Buffer.alloc(32);
-    b.writeUInt32LE(withFlags >>> 0, 0);
-    b.writeUInt32LE(16 * 1024 * 1024, 4);
-    b[8] = 255; // utf8mb4
-    return b;
-  };
-  let secure = false;
-  if (ssl !== "disable" && capabilities & CLIENT.SSL) {
-    flags |= CLIENT.SSL;
-    send(fixed(flags)); // SSLRequest
-    socket.removeListener("data", onData);
-    socket = await new Promise((resolve, reject) => {
-      const tls = tlsConnect({ socket, servername: /^[\d.]+$/.test(target.hostname) ? undefined : target.hostname, rejectUnauthorized: ssl === "verify" || ssl === "verify-full" || ssl === "verify_identity" });
-      tls.once("secureConnect", () => resolve(tls));
-      tls.once("error", (error) => reject(new Error(`TLS with ${target.hostname} failed: ${error.message}`)));
-    });
-    listen(socket);
-    secure = true;
-  } else if (ssl === "require" || ssl.startsWith("verify")) {
-    socket.destroy();
-    throw new Error(`${target.hostname} does not offer TLS (ssl=${ssl}).`);
-  }
-
-  const auth = scramble(plugin, password, nonce);
-  send(Buffer.concat([fixed(flags), Buffer.from(`${user}\0`), Buffer.from([auth.length]), auth, ...(database ? [Buffer.from(`${database}\0`)] : []), Buffer.from(`${plugin}\0`)]));
-
-  for (;;) {
-    const packet = await next();
-    if (packet[0] === 0x00) break; // OK
-    if (packet[0] === 0xff) {
-      socket.destroy();
-      throw mysqlError(packet);
+  // A failed sign-in must not leave the socket open (it would keep the process alive).
+  /** @type {import("node:net").Socket} */ let current = socket;
+  let serverVersion = "";
+  try {
+    const hello = await next();
+    if (hello[0] === 0xff) throw mysqlError(hello);
+    let offset = 1;
+    const versionEnd = hello.indexOf(0, offset);
+    serverVersion = hello.subarray(offset, versionEnd).toString("latin1");
+    offset = versionEnd + 1 + 4; // connection id
+    let nonce = hello.subarray(offset, offset + 8);
+    offset += 9;
+    let capabilities = hello.readUInt16LE(offset);
+    offset += 2 + 1 + 2;
+    capabilities |= hello.readUInt16LE(offset) << 16;
+    offset += 2;
+    const nonceLength = hello[offset];
+    offset += 11;
+    if (capabilities & CLIENT.SECURE_CONNECTION) {
+      const part2 = Math.max(13, nonceLength - 8);
+      nonce = Buffer.concat([nonce, hello.subarray(offset, offset + part2 - 1)]);
+      offset += part2;
     }
-    if (packet[0] === 0xfe) {
-      // AuthSwitchRequest: another plugin with a fresh nonce
-      const nameEnd = packet.indexOf(0, 1);
-      plugin = packet.subarray(1, nameEnd).toString("latin1");
-      nonce = packet.subarray(nameEnd + 1, packet.length - (packet[packet.length - 1] === 0 ? 1 : 0));
-      send(scramble(plugin, password, nonce));
-    } else if (packet[0] === 0x01) {
-      // AuthMoreData (caching_sha2_password): 3 = fast path accepted, 4 = full authentication needed
-      if (packet[1] === 0x03) continue;
-      if (packet[1] === 0x04) {
-        if (secure) send(Buffer.from(`${password}\0`));
-        else send(Buffer.from([0x02])); // ask for the server's RSA public key
-      } else {
-        const key = packet.subarray(1).toString("latin1");
-        const encrypted = publicEncrypt({ key, padding: constants.RSA_PKCS1_OAEP_PADDING }, xor(Buffer.from(`${password}\0`), nonce));
-        send(encrypted);
-      }
-    } else throw new Error(`Unexpected MySQL authentication packet 0x${packet[0].toString(16)}`);
+    let plugin = capabilities & CLIENT.PLUGIN_AUTH ? hello.subarray(offset, hello.indexOf(0, offset)).toString("latin1") : "mysql_native_password";
+
+    let flags = CLIENT.LONG_PASSWORD | CLIENT.PROTOCOL_41 | CLIENT.SECURE_CONNECTION | CLIENT.TRANSACTIONS | CLIENT.MULTI_RESULTS | CLIENT.PLUGIN_AUTH | CLIENT.PLUGIN_AUTH_LENENC_DATA;
+    if (database) flags |= CLIENT.CONNECT_WITH_DB;
+    const fixed = (/** @type {number} */ withFlags) => {
+      const b = Buffer.alloc(32);
+      b.writeUInt32LE(withFlags >>> 0, 0);
+      b.writeUInt32LE(16 * 1024 * 1024, 4);
+      b[8] = 255; // utf8mb4
+      return b;
+    };
+    let secure = false;
+    if (ssl !== "disable" && capabilities & CLIENT.SSL) {
+      flags |= CLIENT.SSL;
+      send(fixed(flags)); // SSLRequest
+      socket.removeListener("data", onData);
+      socket = current = await new Promise((resolve, reject) => {
+        const tls = tlsConnect({ socket, servername: /^[\d.]+$/.test(target.hostname) ? undefined : target.hostname, rejectUnauthorized: ssl === "verify" || ssl === "verify-full" || ssl === "verify_identity" });
+        tls.once("secureConnect", () => resolve(tls));
+        tls.once("error", (error) => reject(new Error(`TLS with ${target.hostname} failed: ${error.message}`)));
+      });
+      listen(socket);
+      secure = true;
+    } else if (ssl === "require" || ssl.startsWith("verify")) {
+      throw new Error(`${target.hostname} does not offer TLS (ssl=${ssl}).`);
+    }
+
+    const auth = scramble(plugin, password, nonce);
+    send(Buffer.concat([fixed(flags), Buffer.from(`${user}\0`), Buffer.from([auth.length]), auth, ...(database ? [Buffer.from(`${database}\0`)] : []), Buffer.from(`${plugin}\0`)]));
+
+    for (;;) {
+      const packet = await next();
+      if (packet[0] === 0x00) break; // OK
+      if (packet[0] === 0xff) throw mysqlError(packet);
+      if (packet[0] === 0xfe) {
+        // AuthSwitchRequest: another plugin with a fresh nonce
+        const nameEnd = packet.indexOf(0, 1);
+        plugin = packet.subarray(1, nameEnd).toString("latin1");
+        nonce = packet.subarray(nameEnd + 1, packet.length - (packet[packet.length - 1] === 0 ? 1 : 0));
+        send(scramble(plugin, password, nonce));
+      } else if (packet[0] === 0x01) {
+        // AuthMoreData (caching_sha2_password): 3 = fast path accepted, 4 = full authentication needed
+        if (packet[1] === 0x03) continue;
+        if (packet[1] === 0x04) {
+          if (secure) send(Buffer.from(`${password}\0`));
+          else send(Buffer.from([0x02])); // ask for the server's RSA public key
+        } else {
+          const key = packet.subarray(1).toString("latin1");
+          const encrypted = publicEncrypt({ key, padding: constants.RSA_PKCS1_OAEP_PADDING }, xor(Buffer.from(`${password}\0`), nonce));
+          send(encrypted);
+        }
+      } else throw new Error(`Unexpected MySQL authentication packet 0x${packet[0].toString(16)}`);
+    }
+  } catch (error) {
+    current.destroy();
+    throw error;
   }
 
-  /** Runs one statement; returns its rows (if any). @param {string} sql @param {number} maxRows */
-  const run = async (sql, maxRows = Infinity) => {
+  /** Runs one statement; returns its rows (if any). @param {string} sql @param {number} maxRows @param {number} [waitMs] */
+  const run = async (sql, maxRows = Infinity, waitMs = timeoutMs) => {
     sequence = 0;
     send(Buffer.concat([Buffer.from([0x03]), Buffer.from(sql, "utf8")]));
-    const first = await next();
+    const first = await next(waitMs);
     if (first[0] === 0xff) throw mysqlError(first);
     if (first[0] === 0x00) return { columns: [], rows: [], truncated: false };
     const [count] = readLenenc(first, 0);
@@ -305,7 +313,7 @@ export async function connectMysql(url, { timeoutMs = 15_000 } = {}) {
     /** @type {Record<string, unknown>[]} */ const rows = [];
     let truncated = false;
     for (;;) {
-      const row = await next();
+      const row = await next(waitMs);
       if (row[0] === 0xff) throw mysqlError(row);
       if (row[0] === 0xfe && row.length < 9) break;
       if (rows.length >= maxRows) {
@@ -345,7 +353,8 @@ export async function connectMysql(url, { timeoutMs = 15_000 } = {}) {
       await run("SET SESSION TRANSACTION READ ONLY");
       await run("START TRANSACTION READ ONLY");
       try {
-        return await run(statement, maxRows);
+        // The server ends a slow statement itself (execution time limit): wait for that before giving up on the connection.
+        return await run(statement, maxRows, ms + timeoutMs);
       } finally {
         await run("ROLLBACK").catch(() => {});
       }

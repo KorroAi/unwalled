@@ -4,6 +4,9 @@ import { xmlToJson } from "../tools/formats.js";
 
 // ---------------------------------------------------------------- ZIP (enough for .xlsx)
 
+/** Largest decompressed entry read from an archive. */
+const MAX_ENTRY_BYTES = 512 * 1024 * 1024;
+
 /**
  * Entries of a ZIP archive, read through its central directory (stored or deflated entries).
  * @param {Buffer} zip @returns {Map<string, () => Buffer>}
@@ -35,7 +38,8 @@ export function unzip(zip) {
       const start = localOffset + 30 + localName + localExtra;
       const data = zip.subarray(start, start + compressedSize);
       if (method === 0) return Buffer.from(data);
-      if (method === 8) return inflateRawSync(data);
+      // Bounded: a crafted archive ("zip bomb") must not exhaust memory.
+      if (method === 8) return inflateRawSync(data, { maxOutputLength: MAX_ENTRY_BYTES });
       throw new Error(`Unsupported ZIP compression method ${method} for ${name}.`);
     });
     offset += 46 + nameLength + extraLength + commentLength;
@@ -107,6 +111,8 @@ export function readXlsx(file) {
     const header = rows[headerIndex].map((v, i) => (v === null || v === undefined || v === "" ? `column${i + 1}` : String(v)));
     const width = Math.max(header.length, ...rows.map((r) => r.length));
     for (let i = header.length; i < width; i++) header[i] = `column${i + 1}`;
+    // Two columns with the same title ("Total", "Total") would overwrite each other: the second becomes "Total_2".
+    for (let i = 0; i < header.length; i++) if (header.indexOf(header[i]) < i) header[i] = `${header[i]}_${i + 1}`;
     result[name] = rows
       .slice(headerIndex + 1)
       .filter((r) => r.some((v) => v !== null && v !== undefined && v !== ""))
@@ -196,7 +202,16 @@ export function readIcs(text) {
   /** @type {Record<string, Record<string, unknown>[]>} */ const result = { events: [], todos: [] };
   /** @type {Record<string, unknown> | null} */ let current = null;
   let kind = "";
+  let nested = 0; // components inside an event (VALARM...) have their own DESCRIPTION, SUMMARY...: they are skipped
   for (const line of lines) {
+    if (current && /^BEGIN:/i.test(line) && !/^BEGIN:(VEVENT|VTODO)$/i.test(line)) {
+      nested++;
+      continue;
+    }
+    if (nested) {
+      if (/^END:/i.test(line)) nested--;
+      continue;
+    }
     if (/^BEGIN:(VEVENT|VTODO)$/i.test(line)) {
       kind = line.slice(6).toUpperCase();
       current = {};

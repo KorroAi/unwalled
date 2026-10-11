@@ -102,7 +102,23 @@ export async function connectPostgres(url, { timeoutMs = 15_000 } = {}) {
 
   if (sslmode !== "disable") {
     socket.write(Buffer.concat([int32(8), int32(80877103)])); // SSLRequest
-    const answer = await new Promise((resolve) => socket.once("data", (chunk) => resolve(String.fromCharCode(chunk[0]))));
+    const answer = await new Promise((resolve, reject) => {
+      const fail = (/** @type {Error} */ error) => {
+        clearTimeout(timer);
+        socket.off("close", closed);
+        socket.destroy();
+        reject(error);
+      };
+      const closed = () => fail(new Error(`${target.hostname}:${port} closed the connection`));
+      const timer = setTimeout(() => fail(new Error(`${target.hostname}:${port} did not answer the TLS request within ${timeoutMs} ms`)), timeoutMs);
+      socket.on("error", fail); // stays: later errors of the plain socket are reported by the reader below
+      socket.once("close", closed);
+      socket.once("data", (chunk) => {
+        clearTimeout(timer);
+        socket.off("close", closed);
+        resolve(String.fromCharCode(chunk[0]));
+      });
+    });
     if (answer === "S") {
       socket = await new Promise((resolve, reject) => {
         const secure = tlsConnect({ socket, servername: /^[\d.]+$/.test(target.hostname) ? undefined : target.hostname, rejectUnauthorized: sslmode === "verify-full" || sslmode === "verify-ca" });
@@ -139,8 +155,8 @@ export async function connectPostgres(url, { timeoutMs = 15_000 } = {}) {
     wake?.();
   });
   /** @returns {Promise<{ type: string, body: Buffer }>} */
-  const next = async () => {
-    const deadline = Date.now() + timeoutMs;
+  const next = async (waitMs = timeoutMs) => {
+    const deadline = Date.now() + waitMs;
     while (!queue.length) {
       if (failure) throw failure;
       if (Date.now() > deadline) throw new Error("PostgreSQL did not answer in time");
@@ -158,45 +174,49 @@ export async function connectPostgres(url, { timeoutMs = 15_000 } = {}) {
   const params = Buffer.concat([cstring("user"), cstring(user), cstring("database"), cstring(database), cstring("application_name"), cstring("unwalled"), cstring("client_encoding"), cstring("UTF8"), Buffer.from([0])]);
   send(Buffer.concat([int32(params.length + 8), int32(196608), params]));
   /** @type {{ nonce: string, clientFirstBare: string, saltedPassword?: Buffer, authMessage?: string }} */ let scram = { nonce: "", clientFirstBare: "" };
-  for (;;) {
-    const { type, body } = await next();
-    if (type === "E") {
-      socket.destroy();
-      throw pgError(body);
+  // A failed sign-in must not leave the socket open (it would keep the process alive).
+  try {
+    for (;;) {
+      const { type, body } = await next();
+      if (type === "E") throw pgError(body);
+      if (type === "Z") break;
+      if (type !== "R") continue; // ParameterStatus, BackendKeyData, NoticeResponse
+      const kind = body.readInt32BE(0);
+      if (kind === 0) continue; // AuthenticationOk
+      if (kind === 3) send(message("p", [cstring(password)]));
+      else if (kind === 5) {
+        const inner = createHash("md5").update(password + user).digest("hex");
+        send(message("p", [cstring(`md5${createHash("md5").update(Buffer.concat([Buffer.from(inner), body.subarray(4, 8)])).digest("hex")}`)]));
+      } else if (kind === 10) {
+        const mechanisms = body.subarray(4).toString("utf8").split("\0").filter(Boolean);
+        if (!mechanisms.includes("SCRAM-SHA-256")) throw new Error(`Unsupported SASL mechanisms: ${mechanisms.join(", ")}`);
+        scram = { nonce: randomBytes(18).toString("base64"), clientFirstBare: "" };
+        scram.clientFirstBare = `n=,r=${scram.nonce}`;
+        const first = Buffer.from(`n,,${scram.clientFirstBare}`);
+        send(message("p", [cstring("SCRAM-SHA-256"), int32(first.length), first]));
+      } else if (kind === 11) {
+        const serverFirst = body.subarray(4).toString("utf8");
+        const attrs = Object.fromEntries(serverFirst.split(",").map((p) => [p[0], p.slice(2)]));
+        if (!attrs.r?.startsWith(scram.nonce)) throw new Error("SCRAM: server nonce does not extend the client nonce");
+        scram.saltedPassword = pbkdf2Sync(password.normalize("NFKC"), Buffer.from(attrs.s, "base64"), Number(attrs.i), 32, "sha256");
+        const clientKey = createHmac("sha256", scram.saltedPassword).update("Client Key").digest();
+        const storedKey = createHash("sha256").update(clientKey).digest();
+        const clientFinalWithoutProof = `c=biws,r=${attrs.r}`;
+        scram.authMessage = `${scram.clientFirstBare},${serverFirst},${clientFinalWithoutProof}`;
+        const signature = createHmac("sha256", storedKey).update(scram.authMessage).digest();
+        const proof = Buffer.from(clientKey.map((b, i) => b ^ signature[i])).toString("base64");
+        send(message("p", [Buffer.from(`${clientFinalWithoutProof},p=${proof}`)]));
+      } else if (kind === 12) {
+        const verifier = Object.fromEntries(body.subarray(4).toString("utf8").split(",").map((p) => [p[0], p.slice(2)])).v;
+        const serverKey = createHmac("sha256", /** @type {Buffer} */ (scram.saltedPassword)).update("Server Key").digest();
+        const expected = createHmac("sha256", serverKey).update(/** @type {string} */ (scram.authMessage)).digest();
+        const received = Buffer.from(verifier ?? "", "base64");
+        if (received.length !== expected.length || !timingSafeEqual(expected, received)) throw new Error("SCRAM: the server signature does not match (not the expected server)");
+      } else throw new Error(`Unsupported PostgreSQL authentication method (${kind})`);
     }
-    if (type === "Z") break;
-    if (type !== "R") continue; // ParameterStatus, BackendKeyData, NoticeResponse
-    const kind = body.readInt32BE(0);
-    if (kind === 0) continue; // AuthenticationOk
-    if (kind === 3) send(message("p", [cstring(password)]));
-    else if (kind === 5) {
-      const inner = createHash("md5").update(password + user).digest("hex");
-      send(message("p", [cstring(`md5${createHash("md5").update(Buffer.concat([Buffer.from(inner), body.subarray(4, 8)])).digest("hex")}`)]));
-    } else if (kind === 10) {
-      const mechanisms = body.subarray(4).toString("utf8").split("\0").filter(Boolean);
-      if (!mechanisms.includes("SCRAM-SHA-256")) throw new Error(`Unsupported SASL mechanisms: ${mechanisms.join(", ")}`);
-      scram = { nonce: randomBytes(18).toString("base64"), clientFirstBare: "" };
-      scram.clientFirstBare = `n=,r=${scram.nonce}`;
-      const first = Buffer.from(`n,,${scram.clientFirstBare}`);
-      send(message("p", [cstring("SCRAM-SHA-256"), int32(first.length), first]));
-    } else if (kind === 11) {
-      const serverFirst = body.subarray(4).toString("utf8");
-      const attrs = Object.fromEntries(serverFirst.split(",").map((p) => [p[0], p.slice(2)]));
-      if (!attrs.r?.startsWith(scram.nonce)) throw new Error("SCRAM: server nonce does not extend the client nonce");
-      scram.saltedPassword = pbkdf2Sync(password.normalize("NFKC"), Buffer.from(attrs.s, "base64"), Number(attrs.i), 32, "sha256");
-      const clientKey = createHmac("sha256", scram.saltedPassword).update("Client Key").digest();
-      const storedKey = createHash("sha256").update(clientKey).digest();
-      const clientFinalWithoutProof = `c=biws,r=${attrs.r}`;
-      scram.authMessage = `${scram.clientFirstBare},${serverFirst},${clientFinalWithoutProof}`;
-      const signature = createHmac("sha256", storedKey).update(scram.authMessage).digest();
-      const proof = Buffer.from(clientKey.map((b, i) => b ^ signature[i])).toString("base64");
-      send(message("p", [Buffer.from(`${clientFinalWithoutProof},p=${proof}`)]));
-    } else if (kind === 12) {
-      const verifier = Object.fromEntries(body.subarray(4).toString("utf8").split(",").map((p) => [p[0], p.slice(2)])).v;
-      const serverKey = createHmac("sha256", /** @type {Buffer} */ (scram.saltedPassword)).update("Server Key").digest();
-      const expected = createHmac("sha256", serverKey).update(/** @type {string} */ (scram.authMessage)).digest();
-      if (!verifier || !timingSafeEqual(expected, Buffer.from(verifier, "base64"))) throw new Error("SCRAM: the server signature does not match (not the expected server)");
-    } else throw new Error(`Unsupported PostgreSQL authentication method (${kind})`);
+  } catch (error) {
+    socket.destroy();
+    throw error;
   }
 
   /** Runs one simple statement (no result rows expected). @param {string} sql */
@@ -235,7 +255,8 @@ export async function connectPostgres(url, { timeoutMs = 15_000 } = {}) {
         /** @type {Error | null} */ let error = null;
         let truncated = false;
         for (;;) {
-          const { type, body } = await next();
+          // The server ends a slow statement itself (statement_timeout): wait for that before giving up on the connection.
+          const { type, body } = await next(statementTimeoutMs + timeoutMs);
           if (type === "E") error = pgError(body);
           else if (type === "T") {
             const count = body.readInt16BE(0);

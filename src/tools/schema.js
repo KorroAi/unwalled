@@ -36,9 +36,10 @@ export function inferSchema(samples, depth = 0) {
     if (type === "object") {
       const keys = [];
       for (const obj of group) for (const key of Object.keys(obj)) if (!keys.includes(key) && keys.length < MAX_KEYS) keys.push(key);
-      const properties = {};
-      for (const key of keys) properties[key] = inferSchema(group.map((obj) => obj[key]), depth + 1);
-      const required = keys.filter((key) => group.every((obj) => key in obj));
+      // Own keys only: "constructor" or "toString" missing from a sample must not be read from Object.prototype.
+      const own = (/** @type {any} */ obj, /** @type {string} */ key) => (Object.hasOwn(obj, key) ? obj[key] : undefined);
+      const properties = Object.fromEntries(keys.map((key) => [key, inferSchema(group.map((obj) => own(obj, key)), depth + 1)]));
+      const required = keys.filter((key) => group.every((obj) => Object.hasOwn(obj, key)));
       return { type: "object", properties, ...(required.length ? { required } : {}) };
     }
     if (type === "array") return { type: "array", items: inferSchema(group.flat(), depth + 1) };

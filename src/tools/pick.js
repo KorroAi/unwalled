@@ -13,7 +13,7 @@
  * @typedef {string | number | SliceToken | FilterToken} Token
  */
 
-const BRACKET = /\[(-?\d+|\*|-?\d*:-?\d*|\?[^\]]+)\]/g;
+const BRACKET = /\[(-?\d+|\*|-?\d*:-?\d*|\?[^\]]+|'[^']*')\]/g;
 
 /**
  * Translates a JSONPath expression into this module's syntax.
@@ -23,7 +23,11 @@ export function fromJsonPath(expression) {
   let path = expression.trim().slice(1);
   if (/&&|\|\||\bin\b|=~|\(\s*@\s*\)/.test(path)) throw new Error(`Unsupported JSONPath expression "${expression}": use a single comparison per filter.`);
   path = path
-    .replace(/\[\s*'([^']*)'\s*\]|\[\s*"([^"]*)"\s*\]/g, (_, single, double) => `.${single ?? double}`)
+    // Keys with dots or brackets stay quoted ("$['a.b']"); others become plain segments.
+    .replace(/\[\s*'([^']*)'\s*\]|\[\s*"([^"]*)"\s*\]/g, (_, single, double) => {
+      const key = single ?? double;
+      return /[.[\]]/.test(key) ? `['${key}']` : `.${key}`;
+    })
     .replace(/\[\?\(\s*@\.?([^)]*?)\s*(===|==|!==|!=|>=|<=|>|<)\s*([^)]*?)\s*\)\]/g, (_, field, op, value) => `[?${field}${op.startsWith("!") ? "!=" : op.startsWith("=") ? "=" : op}${value}]`)
     .replace(/\[\?\(\s*@\.?([^)]*?)\s*\)\]/g, (_, field) => `[?${field}]`)
     .replace(/\.\.([^.[]+)/g, ".**$1")
@@ -39,14 +43,16 @@ function parseFilter(body) {
   return { filter: { path: match[1].trim().split("."), op: match[2], value: match[3].trim().replace(/^["']|["']$/g, "") } };
 }
 
-/** Splits on dots that are not inside brackets. @param {string} path */
+/** Splits on dots that are not inside brackets or quoted keys. @param {string} path */
 function splitSegments(path) {
   const parts = [];
   let depth = 0;
+  let quoted = false;
   let current = "";
   for (const char of path) {
-    if (char === "[") depth++;
-    if (char === "]") depth--;
+    if (char === "'" && depth > 0) quoted = !quoted;
+    if (char === "[" && !quoted) depth++;
+    if (char === "]" && !quoted) depth--;
     if (char === "." && depth === 0) {
       parts.push(current);
       current = "";
@@ -62,11 +68,12 @@ export function parsePath(path) {
   // "[]" (every item, as in jq and many agents' habits) means "[*]".
   for (const part of splitSegments(path.replace(/\[\]/g, "[*]"))) {
     if (part === "") throw new Error(`Invalid pick path "${path}"`);
-    const match = /^([^[\]]*)((?:\[(?:-?\d+|\*|-?\d*:-?\d*|\?[^\]]+)\])*)$/.exec(part);
+    const match = /^([^[\]]*)((?:\[(?:-?\d+|\*|-?\d*:-?\d*|\?[^\]]+|'[^']*')\])*)$/.exec(part);
     if (!match) throw new Error(`Invalid pick path segment "${part}"`);
     if (match[1]) tokens.push(match[1]);
     for (const [, index] of match[2].matchAll(BRACKET)) {
       if (index === "*") tokens.push("*");
+      else if (index.startsWith("'")) tokens.push(index.slice(1, -1));
       else if (index.startsWith("?")) tokens.push(parseFilter(index.slice(1)));
       else if (index.includes(":")) {
         const [start, end] = index.split(":").map((n) => (n === "" ? undefined : Number(n)));
@@ -80,7 +87,7 @@ export function parsePath(path) {
 /** @param {unknown} item @param {FilterToken["filter"]} filter */
 function matches(item, { path, op, value }) {
   let current = item;
-  for (const key of path) current = current && typeof current === "object" ? current[key] : undefined;
+  for (const key of path) current = current && typeof current === "object" && Object.hasOwn(current, key) ? current[key] : undefined;
   if (op === "exists") return current !== undefined && current !== null && current !== false && current !== "";
   if (current === undefined || current === null) return op === "!=";
   const text = typeof current === "object" ? JSON.stringify(current) : String(current);
@@ -118,7 +125,7 @@ function select(value, tokens) {
     const found = [];
     const visit = (/** @type {unknown} */ node, depth = 0) => {
       if (!node || typeof node !== "object" || depth > 50 || found.length > 10_000) return;
-      if (!Array.isArray(node) && key in node) found.push(node[key]);
+      if (!Array.isArray(node) && Object.hasOwn(node, key)) found.push(node[key]);
       for (const child of Array.isArray(node) ? node : Object.values(node)) visit(child, depth + 1);
     };
     visit(value);
@@ -142,7 +149,8 @@ function select(value, tokens) {
     if (remaining[0] === "#") return items.length;
     return items.map((item) => select(item, remaining)).filter((v) => v !== undefined);
   }
-  return select(value[/** @type {string | number} */ (token)], rest);
+  // Own properties only: "constructor" or "__proto__" must not reach Object.prototype.
+  return Object.hasOwn(value, token) ? select(value[/** @type {string | number} */ (token)], rest) : undefined;
 }
 
 /**

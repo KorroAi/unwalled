@@ -33,17 +33,30 @@ async function dbConnection(url, engine = "postgres") {
 }
 
 /** Runs fn on a cached connection, reconnecting once if the connection was lost. @template T @param {string} url @param {(pg: any) => Promise<T>} fn @param {keyof typeof ENGINES} [engine] @returns {Promise<T>} */
-async function withDatabase(url, fn, engine = "postgres") {
-  try {
-    return await fn(await dbConnection(url, engine));
-  } catch (error) {
-    if (!/connection closed|ECONNRESET|EPIPE|did not answer/i.test(String(error?.message))) throw error;
-    const stale = databases.get(url);
-    databases.delete(url);
-    (await stale?.pg.catch(() => null))?.close();
-    return fn(await dbConnection(url, engine));
-  }
+function withDatabase(url, fn, engine = "postgres") {
+  // One statement at a time per connection: the server answers in order, and parallel calls would mix their replies.
+  const previous = queues.get(url) ?? Promise.resolve();
+  const task = previous.then(async () => {
+    try {
+      return await fn(await dbConnection(url, engine));
+    } catch (error) {
+      if (!/connection closed|ECONNRESET|EPIPE|did not answer/i.test(String(error?.message))) throw error;
+      const stale = databases.get(url);
+      databases.delete(url);
+      (await stale?.pg.catch(() => null))?.close();
+      return fn(await dbConnection(url, engine));
+    } finally {
+      databases.get(url)?.timer?.refresh(); // idle time counts from the end of the statement
+    }
+  });
+  const settled = task.then(() => {}, () => {});
+  queues.set(url, settled);
+  settled.then(() => queues.get(url) === settled && queues.delete(url));
+  return task;
 }
+
+/** Last pending statement by address. @type {Map<string, Promise<void>>} */
+const queues = new Map();
 
 const IDLE_MS = 5 * 60 * 1000;
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -18,6 +18,24 @@ describe("local data parsing", () => {
     assert.equal(readRecords(join(dir, "events.jsonl")).events.length, 2);
     writeFileSync(join(dir, "shop.json"), JSON.stringify({ users: [{ id: 1 }], orders: [{ id: 9, user: 1 }], meta: { v: 1 } }));
     assert.deepEqual(Object.keys(readRecords(join(dir, "shop.json"))), ["users", "orders"]);
+  });
+
+  it("keeps leading zeros and recognises SQLite files by their header", async () => {
+    const { openData } = await import("../../src/data/source.js");
+    writeFileSync(join(dir, "codes.csv"), "zip,n\n01234,1\n75001,2\n");
+    const data = await openData(join(dir, "codes.csv"));
+    assert.deepEqual(data.db.prepare("SELECT zip, n FROM codes ORDER BY n").all().map((r) => ({ ...r })), [{ zip: "01234", n: 1 }, { zip: "75001", n: 2 }]);
+    data.close();
+    const db = new DatabaseSync(join(dir, "store.bin"));
+    db.exec("CREATE TABLE t (a INTEGER); INSERT INTO t VALUES (7)");
+    db.close();
+    const folder = join(dir, "single");
+    mkdirSync(folder);
+    const renamed = join(folder, "store.json");
+    writeFileSync(renamed, readFileSync(join(dir, "store.bin")));
+    const opened = await openData(renamed);
+    assert.deepEqual(opened.tables, ["t"]);
+    opened.close();
   });
 
   it("only accepts single read statements", () => {

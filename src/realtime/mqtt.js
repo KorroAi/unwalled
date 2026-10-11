@@ -1,4 +1,4 @@
-// Minimal MQTT 3.1.1 client (QoS 0): connect, subscribe to topics, optionally publish, collect messages for a bounded time.
+// Minimal MQTT 3.1.1 client (QoS 0 and 1): connect, subscribe to topics, optionally publish, collect messages for a bounded time.
 // Transports: mqtt:// (TCP), mqtts:// (TLS), ws:// and wss:// (WebSocket, "mqtt" subprotocol).
 import { connect as tcpConnect } from "node:net";
 import { connect as tlsConnect } from "node:tls";
@@ -177,7 +177,8 @@ export function listenMqtt(url, { topics, qos = 0, publish = [], username, passw
     socket.on(secure ? "secureConnect" : "connect", () => write(connectFrame));
     socket.on("data", onData);
     socket.on("error", (error) => finish(result.opened ? undefined : `connection failed: ${error.message}`));
-    socket.on("close", () => finish(undefined));
+    // A broker that hangs up before its CONNACK refused the connection: say so instead of returning an empty result.
+    socket.on("close", () => finish(result.opened ? undefined : "the broker closed the connection before accepting it"));
   });
 }
 

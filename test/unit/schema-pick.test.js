@@ -9,6 +9,13 @@ describe("inferSchema", () => {
     assert.deepEqual(schema, { type: "object", properties: { a: { type: "number" }, b: { type: "string" }, c: { type: "null" } }, required: ["a"] });
   });
 
+  it("reads only the samples' own keys (constructor, __proto__)", () => {
+    const schema = inferSchema([{ constructor: "x" }, {}, JSON.parse('{"__proto__": 1}')]);
+    assert.deepEqual(Object.keys(schema.properties), ["constructor", "__proto__"]);
+    assert.deepEqual(schema.properties.constructor, { type: "string" });
+    assert.equal(schema.required, undefined);
+  });
+
   it("describes arrays and unions", () => {
     assert.deepEqual(inferSchema([[1, 2], [3]]), { type: "array", items: { type: "integer" } });
     assert.deepEqual(inferSchema(["x", 1]), { type: ["string", "integer"] });
@@ -34,6 +41,15 @@ describe("pick", () => {
     assert.equal(pick(data, "data.items[1].name"), "b");
     assert.deepEqual(pick(data, "data.items[*].id"), [1, 2]);
     assert.deepEqual(pick(data, "data.items.*.name"), ["a", "b"]);
+  });
+
+  it("reads quoted keys with dots and never inherited properties", () => {
+    const data = /** @type {any} */ ({ "a.b": { c: 1 }, items: [{ "x.y": 2, constructor: 3 }, { n: 4 }], meta: {} });
+    assert.equal(pick(data, "$['a.b'].c"), 1);
+    assert.deepEqual(pick(data, "$.items[*]['x.y']"), [2]);
+    assert.equal(pick(data, "meta.constructor"), undefined);
+    assert.deepEqual(pick(data, "items[*].constructor"), [3]);
+    assert.deepEqual(pick(data, "**constructor"), [3]);
   });
 
   it("selects several paths at once", () => {

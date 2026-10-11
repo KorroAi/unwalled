@@ -20,6 +20,11 @@ describe("Excel and iCalendar readers", () => {
     assert.deepEqual(sheets.Clients, [{ id: 1, nom: "Acme" }, { id: 2, nom: "Globex" }], "leading empty rows are skipped");
   });
 
+  it("does not let an event's reminder (VALARM) overwrite its description", () => {
+    const { events } = readIcs("BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:Board\r\nDESCRIPTION:Quarterly numbers\r\nBEGIN:VALARM\r\nDESCRIPTION:Reminder\r\nEND:VALARM\r\nLOCATION:Room 4\r\nEND:VEVENT\r\nEND:VCALENDAR");
+    assert.deepEqual(events, [{ summary: "Board", description: "Quarterly numbers", location: "Room 4" }]);
+  });
+
   it("reads events and to-dos of an iCalendar file", () => {
     const { events, todos } = readIcs(readFileSync(fixture("sample.ics"), "utf8"));
     assert.equal(events.length, 2);

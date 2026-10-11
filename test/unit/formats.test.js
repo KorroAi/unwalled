@@ -14,6 +14,16 @@ describe("CSV", () => {
   });
 });
 
+describe("hostile or unusual input", () => {
+  it("keeps repeated CSV headers, invalid XML code points and __proto__ elements harmless", () => {
+    assert.deepEqual(parseCsv("id,name,name\n1,a,b\n"), [{ id: "1", name: "a", name_3: "b" }]);
+    assert.deepEqual(xmlToJson("<a>&#99999999;</a>"), { a: "&#99999999;" });
+    const json = /** @type {any} */ (xmlToJson("<r><__proto__>x</__proto__><__proto__>y</__proto__></r>"));
+    assert.deepEqual(Object.getOwnPropertyDescriptor(json.r, "__proto__")?.value, ["x", "y"]);
+    assert.equal(Object.getPrototypeOf(json.r), Object.prototype);
+  });
+});
+
 describe("XML", () => {
   it("converts elements, attributes, repeated elements, CDATA and entities", () => {
     const rss = `<?xml version="1.0"?><!-- feed --><rss version="2.0"><channel><title>News &amp; more</title>

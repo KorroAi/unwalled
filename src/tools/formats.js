@@ -44,7 +44,8 @@ export function parseCsv(text) {
   }
   const [header, ...body] = rows;
   if (!header) return [];
-  const names = header.map((name, index) => name.trim() || `column${index + 1}`);
+  // A repeated header must not hide the first column's values.
+  const names = header.map((name, index) => name.trim() || `column${index + 1}`).map((name, index, all) => (all.indexOf(name) < index ? `${name}_${index + 1}` : name));
   return body.map((values) => Object.fromEntries(names.map((name, index) => [name, values[index] ?? ""])));
 }
 
@@ -55,7 +56,7 @@ function decodeEntities(text) {
   return text.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (match, entity) => {
     if (entity[0] === "#") {
       const code = entity[1].toLowerCase() === "x" ? Number.parseInt(entity.slice(2), 16) : Number.parseInt(entity.slice(1), 10);
-      return Number.isFinite(code) ? String.fromCodePoint(code) : match;
+      return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : match;
     }
     return ENTITIES[/** @type {keyof typeof ENTITIES} */ (entity.toLowerCase())] ?? match;
   });
@@ -99,10 +100,9 @@ function close(parent, { name, node, text }) {
   /** @type {unknown} */ let value = node;
   if (!Object.keys(node).length) value = trimmed;
   else if (trimmed) node["#text"] = trimmed;
-  if (name in parent) {
-    const existing = parent[name];
-    parent[name] = Array.isArray(existing) ? [...existing, value] : [existing, value];
-  } else parent[name] = value;
+  // Own properties only, defined rather than assigned: an element named "__proto__" stays an ordinary key.
+  const merged = Object.hasOwn(parent, name) ? (Array.isArray(parent[name]) ? [.../** @type {unknown[]} */ (parent[name]), value] : [parent[name], value]) : value;
+  Object.defineProperty(parent, name, { value: merged, enumerable: true, writable: true, configurable: true });
 }
 
 /** Anti-hijacking prefixes some APIs put before JSON (Google, Angular, Facebook...). */

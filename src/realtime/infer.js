@@ -125,7 +125,8 @@ export function inferStreams(raw, { secretCookies = false } = {}) {
     // A token in the path ("/ws/<token>") is hidden in the recipe and restored on connection, for this host only.
     if (redactedUrl.pathname !== url.pathname) addSecret(host, `~path:${redactedUrl.pathname}`, url.pathname);
 
-    let id = url.pathname.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "root";
+    // From the redacted path: the id names tools and is shared, a path token must not end up in it.
+    let id = redactedUrl.pathname.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "root";
     if (main.kind === "sse") id = `sse_${id}`;
     for (let n = 2; usedIds.has(id); n++) id = `${id.replace(/_\d+$/, "")}_${n}`;
     usedIds.add(id);
@@ -174,8 +175,8 @@ export function inferStreams(raw, { secretCookies = false } = {}) {
       messageTypes: [...types].filter(([, counts]) => counts.size > 0).map(([k, counts]) => ({ key: k, values: Object.fromEntries(counts) })).slice(0, 3),
       messageShape: parsed.length ? describeShape(inferSchema(parsed.slice(0, 200).map((v) => redact(v)))) : receivedFrames.length ? "text messages" : "no message observed",
       samples: receivedFrames.slice(0, MAX_SAMPLES).map((f) => {
-        const json = parseJson(f.data);
-        const text = json === undefined ? f.data : JSON.stringify(redact(json));
+        // Redacted like client frames, including Socket.IO ("42[...]") and plain-text messages.
+        const { text } = redactFrame(f.data);
         return text.length > SAMPLE_CHARS ? `${text.slice(0, SAMPLE_CHARS)}…` : text;
       }),
       observed: group.length,

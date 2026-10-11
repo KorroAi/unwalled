@@ -50,6 +50,15 @@ describe("AsyncAPI", () => {
     assert.match(warnings.join(" "), /mqtt/);
   });
 
+  it("gives MQTT recipes an http base address and distinct stream ids", () => {
+    const { baseUrl, streams } = asyncApiToStreams({
+      asyncapi: "2.6.0", info: { title: "Plant" }, servers: { broker: { url: "mqtt://broker.plant.test:1883", protocol: "mqtt" } },
+      channels: { "line/3": { subscribe: { message: { payload: { type: "object" } } } }, "line.3": { subscribe: { message: { payload: { type: "object" } } } } },
+    });
+    assert.equal(baseUrl, "http://broker.plant.test:1883");
+    assert.deepEqual(streams.map((s) => s.id), ["line_3", "line_3_2"]);
+  });
+
   describe("import_file with a live WebSocket server", () => {
     let fixture, home, engine;
     before(async () => {

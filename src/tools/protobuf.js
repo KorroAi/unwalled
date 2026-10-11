@@ -102,7 +102,8 @@ export function decodeGrpcWeb(body, contentType) {
         const colon = line.indexOf(":");
         if (colon > 0) trailers[line.slice(0, colon).trim().toLowerCase()] = line.slice(colon + 1).trim();
       }
-    } else messages.push(decodeMessage(frame) ?? `base64:${frame.toString("base64")}`);
+    } else if (flag & 0x01) messages.push(`compressed frame (${frame.length} bytes, not decoded): base64:${frame.toString("base64").slice(0, 2000)}`);
+    else messages.push(decodeMessage(frame) ?? `base64:${frame.toString("base64")}`);
   }
   return { messages, trailers };
 }

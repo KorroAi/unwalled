@@ -89,10 +89,14 @@ export function asyncApiToStreams(doc) {
   }
 
   const base = new URL(server.url);
+  const usedIds = new Set();
   /** @type {import("../realtime/infer.js").Stream[]} */ const streams = channels.map((channel, index) => {
     const url = new URL(base.toString());
     if (!mqtt && channel.address && !channel.address.includes("{")) url.pathname = `${base.pathname.replace(/\/$/, "")}${channel.address}`;
-    const id = (channel.id.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || `channel_${index + 1}`).slice(0, 40);
+    // Ids name tools and key stored secrets: two channels ("a/b", "a.b") must not share one.
+    let id = (channel.id.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "") || `channel_${index + 1}`).slice(0, 40);
+    for (let n = 2; usedIds.has(id); n++) id = `${id.slice(0, 36)}_${n}`;
+    usedIds.add(id);
     const examples = channel.send.map(exampleOf).filter(Boolean);
     const receivePayloads = channel.receive.map((m) => resolveSchema(doc, m.payload)).filter(Boolean);
     const names = channel.receive.map((m) => m.name ?? m.title).filter(Boolean);
@@ -108,7 +112,7 @@ export function asyncApiToStreams(doc) {
       observed: 0, received: 0,
     };
   });
-  const httpBase = new URL(base.toString());
-  httpBase.protocol = base.protocol === "wss:" || base.protocol === "mqtts:" ? "https:" : "http:";
-  return { title: doc.info?.title ?? "AsyncAPI", baseUrl: httpBase.origin, streams, warnings };
+  // Built as text: the URL standard ignores a protocol change from "mqtt:" (not a special scheme) to "http:".
+  const httpBase = `${base.protocol === "wss:" || base.protocol === "mqtts:" ? "https:" : "http:"}//${base.host}`;
+  return { title: doc.info?.title ?? "AsyncAPI", baseUrl: httpBase, streams, warnings };
 }

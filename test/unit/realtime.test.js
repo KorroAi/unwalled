@@ -81,6 +81,15 @@ describe("inferStreams", () => {
     assert.equal(streams[0].send[0].data, "40");
   });
 
+  it("keeps path tokens out of stream ids and redacts Socket.IO samples", () => {
+    const token = "9f8e7d6c5b4a39281706f5e4d3c2b1a0";
+    const { streams, secrets } = inferStreams([{ kind: "websocket", url: `wss://x.io/ws/${token}`, frames: [{ direction: "received", data: '42["auth",{"token":"sk_live_abcdefghijklmnopqrstuvwx"}]', receivedBefore: 0 }] }]);
+    assert.equal(streams[0].id, "ws_REDACTED");
+    assert.deepEqual(streams[0].samples, ['42["auth",{"token":"REDACTED"}]']);
+    assert.ok(!JSON.stringify(streams).includes(token));
+    assert.equal(secrets["x.io"]["~path:/ws/REDACTED"], `/ws/${token}`);
+  });
+
   it("reads WebSocket messages and event streams from a HAR file", () => {
     const har = {
       log: {

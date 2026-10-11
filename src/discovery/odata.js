@@ -70,10 +70,11 @@ export function odataToOpenApi(xml, serviceRoot) {
         const setName = set["@Name"];
         const type = entityTypes.get(set["@EntityType"]);
         if (!setName || !type) continue;
-        const properties = Object.fromEntries(list(type.Property).map((p) => [p["@Name"], { ...schemaOf(p["@Type"]), ...(p["@Nullable"] === "false" ? {} : {}) }]));
+        const properties = Object.fromEntries(list(type.Property).map((p) => [p["@Name"], schemaOf(p["@Type"])]));
+        const edmType = Object.fromEntries(list(type.Property).map((p) => [p["@Name"], p["@Type"]]));
         components[type["@Name"]] = { type: "object", properties };
         const keys = list(type.Key?.PropertyRef).map((k) => k["@Name"]).filter(Boolean);
-        const keyPath = keys.length === 1 ? `(${quoteFor(properties[keys[0]])}{${keys[0]}}${quoteFor(properties[keys[0]])})` : `(${keys.map((k) => `${k}=${quoteFor(properties[k])}{${k}}${quoteFor(properties[k])}`).join(",")})`;
+        const keyPath = keys.length === 1 ? `(${keyLiteral(keys[0], edmType[keys[0]], version)})` : `(${keys.map((k) => `${k}=${keyLiteral(k, edmType[k], version)}`).join(",")})`;
         const keyParams = keys.map((k) => ({ name: k, in: "path", required: true, schema: { type: "string" }, description: `Key ${k} (${properties[k]?.type ?? "string"})` }));
         const ref = { $ref: `#/components/schemas/${type["@Name"]}` };
         paths[`/${setName}`] = {
@@ -96,7 +97,9 @@ export function odataToOpenApi(xml, serviceRoot) {
         if (!name) continue;
         const isAction = !!fn["@Action"] || fn["@m:HttpMethod"] === "POST" || fn["@HttpMethod"] === "POST";
         const params = list(fn.Parameter).map((p) => ({ name: p["@Name"], in: "query", required: false, schema: schemaOf(p["@Type"]) }));
-        paths[`/${name}`] = { [isAction ? "post" : "get"]: { operationId: `call_${name}`, summary: `${isAction ? "Action" : "Function"} ${name}`, parameters: isAction ? [] : params } };
+        // Action parameters travel in a JSON body; function parameters in the query string.
+        const body = { content: { "application/json": { schema: { type: "object", properties: Object.fromEntries(params.map((p) => [p.name, p.schema])), additionalProperties: true } } } };
+        paths[`/${name}`] = { [isAction ? "post" : "get"]: { operationId: `call_${name}`, summary: `${isAction ? "Action" : "Function"} ${name}`, parameters: isAction ? [] : params, ...(isAction ? { requestBody: body } : {}) } };
       }
     }
   }
@@ -109,7 +112,13 @@ export function odataToOpenApi(xml, serviceRoot) {
   };
 }
 
-/** String keys are quoted in OData URLs ('ALFKI'), numbers and GUIDs (v4) are not. @param {any} schema */
-function quoteFor(schema) {
-  return !schema || schema.type === "string" && schema.format !== "uuid" ? "'" : "";
+/**
+ * Key placeholder as OData writes it: strings quoted ('ALFKI'), numbers bare (42, including 64-bit ones), GUIDs bare in
+ * v4 and as guid'...' in v2.
+ * @param {string} name @param {string | undefined} type EDM type of the key property @param {number} version
+ */
+function keyLiteral(name, type, version) {
+  if (!type || type === "Edm.String") return `'{${name}}'`;
+  if (type === "Edm.Guid") return version === 2 ? `guid'{${name}}'` : `{${name}}`;
+  return `{${name}}`;
 }
