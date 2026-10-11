@@ -36,10 +36,27 @@ nothing scripted, every answer checked: 15 runs, 15 right answers ([method and e
 - The calls themselves are fast and small: [21 ms and 95 characters](bench/RESULTS.md) to read an order in the example back office,
   against 54 ms and 1,144 characters for a scripted browser reading the page in the most favourable setup.
 
-## Install
+## Get started
+
+In a terminal (Node.js 22 or newer):
 
 ```bash
-claude mcp add unwalled -- npx -y github:KorroAi/unwalled
+npx -y github:KorroAi/unwalled
+```
+
+A short guided setup:
+
+1. **checks your computer** (Node.js, the browser, where data and encrypted secrets are kept);
+2. **adds unwalled to the AI apps it finds**, asking for each: Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, Gemini CLI, Codex
+   (a backup of each configuration file is kept);
+3. **connects your first source**, or a **demo back office** to try it in one minute.
+
+Then open your AI app and ask. `unwalled doctor` checks everything again; `unwalled setup --remove` takes it out of every app.
+
+<details><summary>Manual configuration</summary>
+
+```bash
+claude mcp add --scope user unwalled -- npx -y github:KorroAi/unwalled
 ```
 
 Other MCP clients (Claude Desktop, Cursor, Windsurf...):
@@ -48,12 +65,27 @@ Other MCP clients (Claude Desktop, Cursor, Windsurf...):
 { "mcpServers": { "unwalled": { "command": "npx", "args": ["-y", "github:KorroAi/unwalled"] } } }
 ```
 
-Needs Node.js 22+, and Chrome or Edge for browser capture (or `npx playwright-core install chromium` with `UNWALLED_BROWSER=chromium`).
 On Windows, some clients need `"command": "cmd"` with `"args": ["/c", "npx", "-y", "github:KorroAi/unwalled"]`.
+Websites need Chrome or Edge (or `npx playwright-core install chromium` with `UNWALLED_BROWSER=chromium`); files, APIs and databases do not.
+</details>
 
 ## Use it
 
-Ask your agent in plain language:
+**Try the demo**: `unwalled demo` starts a sample back office on your machine (orders and customers behind a sign-in), discovers it,
+and tells you what to ask: *"Using acme, what is the status and total of order 1042? And which customers are in Lyon?"*
+
+**Connect your sources from the terminal**, one command each; the kind of source is detected:
+
+| You have | Command |
+| --- | --- |
+| An internal app or a site you sign in to | `unwalled add https://erp.example.com --browse` (a window opens: sign in, open the pages your agent will use, close it) |
+| A public website | `unwalled add https://crates.io --explore 10` |
+| A file or folder | `unwalled add ./sales-2026.xlsx` (CSV, Excel, JSON, SQLite, iCalendar, RSS...) |
+| An API description or collection | `unwalled add ./openapi.yaml`, `./team.postman_collection.json`, `./capture.har`, `./curl-commands.txt` |
+| A database (read-only) | `unwalled add postgres://reader:secret@db.example.com/shop` or `mysql://...` |
+| A ready-made service | `unwalled add preset:github`, then `unwalled key github` (the token is typed without being shown) |
+
+**Or just ask your agent in plain language:**
 
 > Our back office is at https://erp.example.internal (user alice, password in my vault: I'll type it). Show me the open orders of customer 530.
 
@@ -61,8 +93,10 @@ Ask your agent in plain language:
 
 > Import this Postman collection / OpenAPI file / CSV / postgres://… and answer from it.
 
-The agent calls `discover` once (with the sign-in steps, or `login` to let you sign in in a visible window). The answer lists every
-generated tool with an example call, and the agent uses them right away. Recipes are saved: the tools are there in every later session.
+The agent calls `discover` or `import_file` once (with the sign-in steps, or `login` to let you sign in in a visible window). The answer lists
+every generated tool with an example call, and the agent uses them right away. Recipes are saved: the tools are there in every later session.
+
+`unwalled` without a global installation: prefix the commands with `npx -y github:KorroAi/unwalled` (the setup offers to install the command).
 
 ## What it connects
 

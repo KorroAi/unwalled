@@ -99,6 +99,27 @@ function launchCandidates(browser) {
 }
 
 const MISSING_BROWSER = /executable doesn't exist|is not found|not installed|no such file|distribution .* is not found|ENOENT/i;
+const NO_BROWSER = 'No usable browser found. Install Google Chrome or Microsoft Edge, or run "npx playwright-core install chromium" and set UNWALLED_BROWSER=chromium.';
+
+/**
+ * Starts the browser unwalled would use (headless, without a profile) and closes it: which one, and its version.
+ * @param {import("./config.js").Config} config @returns {Promise<{ name: string, version: string }>}
+ */
+export async function checkBrowser(config) {
+  for (const candidate of launchCandidates(config.browser)) {
+    try {
+      const browser = await chromium.launch({ ...candidate, headless: true });
+      const version = browser.version();
+      await browser.close();
+      const name = candidate.channel === "chrome" ? "Google Chrome" : candidate.channel === "msedge" ? "Microsoft Edge" : (candidate.executablePath ?? "Chromium");
+      return { name, version };
+    } catch (error) {
+      const message = String(error?.message ?? error);
+      if (!MISSING_BROWSER.test(message)) throw error;
+    }
+  }
+  throw new Error(NO_BROWSER);
+}
 
 /**
  * @param {import("./config.js").Config} config
@@ -128,7 +149,5 @@ export async function launchProfile(config, profileDir, { headless = true } = {}
       errors.push(`${candidate.channel ?? candidate.executablePath ?? "bundled chromium"}: ${message.split("\n")[0]}`);
     }
   }
-  throw new Error(
-    `No usable browser found. Install Google Chrome or Microsoft Edge, or run "npx playwright-core install chromium" and set UNWALLED_BROWSER=chromium.\n${errors.join("\n")}`,
-  );
+  throw new Error(`${NO_BROWSER}\n${errors.join("\n")}`);
 }

@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.5.0 — 2026-10-11
+
+First steps for people, not only for agents: from nothing to an agent answering in a few minutes, without editing a configuration file.
+
+### New
+
+- **Guided setup**: `npx -y github:KorroAi/unwalled` in a terminal (or `unwalled setup`) checks the computer, offers to install the
+  `unwalled` command, adds unwalled to the AI apps it finds (Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, Gemini CLI, Codex)
+  and connects a first source: a website or internal app (in a window where you sign in and open the pages your agent will use), a file
+  or folder, a database, a ready-made service, or the demo. Configuration files are changed only when they are plain JSON, with a backup;
+  `--yes` configures every app without questions, `--remove` takes unwalled out of all of them. MCP clients still start the server
+  (they start it with pipes; a terminal gets the setup).
+- **`unwalled add <source>`**: one command for every kind of source (website, file, folder, API description, collection, HAR, cURL list,
+  database, preset), with a name taken from the source; it never replaces an existing recipe (`--merge` adds to it).
+  `--browse` opens a window to sign in and click through the app.
+- **`unwalled demo`**: starts the sample back office and discovers it, then gives the question to ask the agent.
+  Checked with a real Claude Code (Sonnet) starting from an empty data folder: right answer, 4 turns, $0.043.
+- **`unwalled key <name>`**: stores the key or token a ready-made service needs, typed without being shown (or piped).
+- **`unwalled doctor`**: Node.js, the browser (started once), the data folder, encryption of secrets, and which AI apps start unwalled.
+- The agent is told about files, databases and presets in the server's instructions, and an empty `list_recipes` says what to connect and how.
+
+### Fixes
+
+- Tool summaries: "Get one order" instead of "Get one order by order", "notes of an order" instead of "of a order".
+- Test files and fixtures are in English; the benchmark report says why its raw answers are in French (the settings of the machine it ran on).
+
 ## 0.4.0 — 2026-10-11
 
 Built from what testing on 20 real websites (`bench/field.js`), a real Grafana behind a sign-in (`test/live/grafana.test.js`)

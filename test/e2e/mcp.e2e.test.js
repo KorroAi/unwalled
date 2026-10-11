@@ -121,7 +121,7 @@ describe("unwalled end to end", () => {
   it("describes tools in plain language", async () => {
     const { tools } = await client.listTools();
     const describe = (name) => tools.find((t) => t.name === name)?.description ?? "";
-    assert.match(describe("shop__get_api_products_product"), /^Get one product by product\./);
+    assert.match(describe("shop__get_api_products_product"), /^Get one product\./);
     assert.match(describe("shop__get_api_search"), /^Search\./);
     assert.match(describe("shop__gql_GetCart"), /^Read data with the GetCart GraphQL query/);
   });

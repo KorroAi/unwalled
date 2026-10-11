@@ -367,8 +367,9 @@ export async function startServer(config) {
     {
       capabilities: { tools: { listChanged: true } },
       instructions:
-        "unwalled turns websites, HAR captures and OpenAPI descriptions into tools. Call list_recipes to see what is already available. " +
+        "unwalled turns websites and internal apps, API descriptions and collections, data files and databases into tools. Call list_recipes to see what is already available. " +
         "To use a new site, call discover with a name and URL (add actions to reach the data, explore_pages to cover more of the site, or interactive=true to let the user browse), then call the generated <name>__* tools. " +
+        "For a file, a folder, a data address or a postgres:// / mysql:// database, call import_file; for a ready-made service, discover \"preset:<id>\". " +
         "For sites behind a sign-in, pass the sign-in steps as discover actions, or call login so the user signs in in a visible window. " +
         "Server-rendered pages become <name>__page_* tools (tables, fields and links as JSON); if a site still has no usable tool, use the ui tool. When not every generated tool is listed, find them with search_tools and run them with call_tool. " +
         "Generated tools accept pick (to trim JSON), max_chars, save_to (downloads), dry_run (preview) and confirm (for calls held by the safety policy). " +
@@ -492,7 +493,13 @@ export async function startServer(config) {
         }
         case "list_recipes": {
           if (await engine.reloadRecipes()) notifyToolsChanged();
-          if (!engine.recipes.size) return text("No recipe yet. Call discover (or discover_har) to create one.");
+          if (!engine.recipes.size) {
+            return text(
+              "No recipe yet. Ask the user what to connect, then: discover(name, url) for a website or internal app (with sign-in actions, or interactive=true so the user signs in and browses); " +
+                `import_file(name, path) for a file, a folder, a data address or a database (postgres://, mysql://); discover(name, "preset:<id>") for a ready-made service (${listPresets()}). ` +
+                'To try unwalled first, the user can run "unwalled demo" in a terminal (a sample back office, then ask about order 1042).',
+            );
+          }
           const describeOne = (r) => `${engine.store.isTeamRecipe(r.name) ? "[team catalogue] " : ""}${describeRecipe(r, toolNames(r.name))}`;
           return text([...engine.recipes.values()].map(describeOne).join("\n\n") + listingNote());
         }

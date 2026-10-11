@@ -36,5 +36,6 @@ every built-in tool that could reach the web or the disk is disabled.
 ## Limits
 
 - 5 questions, one run each: an indication, not a statistic. Model behaviour varies between runs; rerun to compare.
+- Claude Code runs with the settings of the machine it runs on (its CLAUDE.md files, answer language): the raw answers of the published run are in French for that reason. Answers are scored on their values, not their wording.
 - Cost is what Claude Code reports for the run (`total_cost_usd`), including its own system prompt.
 - Live sites change; the expected answers are fetched or known independently (see `bench/agent.js`).

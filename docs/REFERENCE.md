@@ -113,10 +113,32 @@ The result is saved as a **recipe**. Discovery runs once (seconds); after that t
 
 ## Installation
 
+### Guided setup (recommended)
+
+```bash
+npx -y github:KorroAi/unwalled
+```
+
+Started in a terminal, unwalled runs its setup in three steps:
+
+1. **Checks this computer**: Node.js, the browser it will use, the data folder, how secrets are encrypted.
+2. **Adds unwalled to the AI apps it finds**, after asking for each one: Claude Code (through `claude mcp add --scope user`),
+   Claude Desktop, Cursor, Windsurf, VS Code (`mcp.json`, used by Copilot's agent mode), Gemini CLI and Codex CLI.
+   Configuration files are changed only when they are plain JSON (a file with comments is left as it is, and the entry to paste is shown);
+   a copy of each file is kept next to it as `<file>.unwalled-backup`. It then says how each app loads the change (a new session, a restart).
+3. **Connects a first source**: a website or internal app (in a window where you sign in and open the pages your agent will use),
+   a file or folder, a database, a ready-made service (it asks for the key without showing it), or the demo back office.
+
+`unwalled setup --yes` adds unwalled to every app found without questions (for scripts); `unwalled setup --remove` removes it from all of them
+(recipes and secrets stay in the data folder). `unwalled doctor` runs the checks again at any time.
+
+The apps start unwalled the way you ran it: through `npx` when you ran it with `npx` (with `cmd /c` on Windows), otherwise by the full paths
+of Node.js and of `bin/unwalled.js`, which work even for apps that do not see your shell's `PATH` (Claude Desktop on macOS).
+
 ### Claude Code
 
 ```bash
-claude mcp add unwalled -- npx -y github:KorroAi/unwalled
+claude mcp add --scope user unwalled -- npx -y github:KorroAi/unwalled
 ```
 
 ### Claude Desktop, Cursor, Windsurf and other MCP clients
@@ -140,12 +162,35 @@ On Windows, some clients cannot start `npx` directly: use `"command": "cmd"` wit
 git clone https://github.com/KorroAi/unwalled.git
 cd unwalled
 npm install
-claude mcp add unwalled -- node /absolute/path/to/unwalled/bin/unwalled.js
+node bin/unwalled.js setup
 ```
 
 ## Quick start
 
-Ask your agent in plain language:
+**Try it in one minute** with the demo back office (orders and customers behind a sign-in, on your machine):
+
+```bash
+unwalled demo        # or: npx -y github:KorroAi/unwalled demo
+```
+
+It starts the back office, discovers it (signing in as alice, opening an order and two customer pages) and prints the question to ask
+your agent: *"Using acme, what is the status and total of order 1042? And which customers are in Lyon?"*. Keep it running while you try.
+
+**Connect your own sources** from the terminal with one command; the kind of source is detected:
+
+```bash
+unwalled add https://erp.example.com --browse     # a window opens: sign in, open the pages your agent will use, close it
+unwalled add https://crates.io --explore 10       # public site: no window, follows up to 10 links
+unwalled add ./sales-2026.xlsx                    # a file or folder (CSV, Excel, JSON, SQLite, iCalendar...)
+unwalled add ./openapi.yaml --base-url https://api.example.com   # API descriptions, Postman, Insomnia, Bruno, HAR, cURL lists
+unwalled add postgres://reader:secret@db.example.com/shop        # a database, read-only
+unwalled add preset:github && unwalled key github # a ready-made service, then its token (typed without being shown)
+```
+
+The name of the recipe comes from the source (`erp`, `sales-2026`, `shop`...; `--name` sets another one), and an existing recipe is never
+replaced by `add` (use `--merge` to add to it).
+
+**Or ask your agent in plain language:**
 
 > Use unwalled to discover https://example.com, search for "lamp" and open the first product, then tell me its price.
 
@@ -369,6 +414,12 @@ instead of one tool per operation; tool schemas are also compacted to `UNWALLED_
 
 ```bash
 npx -y github:KorroAi/unwalled --help
+unwalled setup                      # guided setup (also what "unwalled" alone does in a terminal)
+unwalled setup --remove             # remove unwalled from every AI app
+unwalled doctor                     # checks: Node.js, browser, data folder, encryption, AI apps
+unwalled demo --port 8099           # demo back office, discovered as the "acme" recipe
+unwalled add <address | file | folder | database | preset:<id>> [--name <name>] [--browse] [--explore <pages>] [--base-url <url>] [--merge]
+unwalled key github                 # store the token a service needs (not shown; or piped: echo "$TOKEN" | unwalled key github)
 unwalled discover crates "https://crates.io/search?q=serde" --actions '[{"goto":"/crates/serde"}]'
 unwalled discover shop https://shop.example --explore 10
 unwalled har myapp ./capture.har --host api.myapp.com
@@ -382,7 +433,8 @@ unwalled inspect crates
 unwalled forget crates --delete-profile
 ```
 
-Without a command, `unwalled` runs the MCP server on stdio (what MCP clients launch).
+Without a command, `unwalled` runs the guided setup when it is started from a terminal, and the MCP server on stdio otherwise
+(MCP clients start it with pipes). `unwalled serve` always runs the server.
 
 ## Configuration
 

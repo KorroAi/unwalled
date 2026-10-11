@@ -11,13 +11,13 @@ const fixture = (name) => fileURLToPath(new URL(`../fixtures/${name}`, import.me
 describe("Excel and iCalendar readers", () => {
   it("reads every sheet of a workbook written by openpyxl", () => {
     const sheets = readXlsx(readFileSync(fixture("sample.xlsx")));
-    assert.deepEqual(Object.keys(sheets), ["Ventes 2026", "Clients"]);
-    assert.deepEqual(sheets["Ventes 2026"], [
-      { produit: "lampe", quantité: 3, prix: 12.5, payé: true, note: "rouge & bleu" },
-      { produit: "chaise", quantité: 1, prix: 40, payé: false, note: null },
-      { produit: "table", quantité: 2, prix: 99.99, payé: true, note: "<fragile>" },
+    assert.deepEqual(Object.keys(sheets), ["Sales 2026", "Customers"]);
+    assert.deepEqual(sheets["Sales 2026"], [
+      { product: "lamp", quantity: 3, price: 12.5, paid: true, note: "red & blue" },
+      { product: "chair", quantity: 1, price: 40, paid: false, note: null },
+      { product: "table", quantity: 2, price: 99.99, paid: true, note: "<fragile>" },
     ]);
-    assert.deepEqual(sheets.Clients, [{ id: 1, nom: "Acme" }, { id: 2, nom: "Globex" }], "leading empty rows are skipped");
+    assert.deepEqual(sheets.Customers, [{ id: 1, name: "Acme" }, { id: 2, name: "Zürich Café GmbH" }], "leading empty rows are skipped");
   });
 
   it("does not let an event's reminder (VALARM) overwrite its description", () => {
@@ -32,11 +32,11 @@ describe("Excel and iCalendar readers", () => {
       { ...events[0] },
       {
         uid: "1@test", dtstart: "2026-10-12T09:00:00", timezone: "Europe/Paris", dtend: "2026-10-12T10:00:00", summary: "Project review, Q4 roadmap",
-        description: "Ordre du jour :\n1. backtest", location: "Visio", organizer: "me@example.com", attendees: "a@example.com, b@example.com", rrule: "FREQ=WEEKLY;BYDAY=MO",
+        description: "Agenda:\n1. budget", location: "Video call", organizer: "me@example.com", attendees: "a@example.com, b@example.com", rrule: "FREQ=WEEKLY;BYDAY=MO",
       },
     );
     assert.equal(events[1].dtstart, "2026-10-15");
-    assert.deepEqual(todos, [{ uid: "3@test", due: "2026-10-20T17:00:00Z", summary: "Envoyer la vidéo", status: "NEEDS-ACTION" }]);
+    assert.deepEqual(todos, [{ uid: "3@test", due: "2026-10-20T17:00:00Z", summary: "Send the café menu", status: "NEEDS-ACTION" }]);
   });
 });
 
@@ -90,16 +90,16 @@ describe("Excel and iCalendar as SQL tables", () => {
     const xlsx = join(home, "ventes.xlsx");
     copyFileSync(fixture("sample.xlsx"), xlsx);
     const recipe = await engine.importFile({ name: "ventes", path: xlsx });
-    assert.deepEqual(recipe.tables.map((t) => t.name).sort(), ["Clients", "Ventes_2026"]);
+    assert.deepEqual(recipe.tables.map((t) => t.name).sort(), ["Customers", "Sales_2026"]);
     const sql = /** @type {any} */ (engine.tools.get("ventes__sql"));
-    const total = await sql.run({ sql: 'SELECT sum("quantité" * prix) AS ca FROM Ventes_2026 WHERE "payé" = 1' });
-    assert.equal(JSON.parse(total.text).rows[0].ca, 237.48);
+    const total = await sql.run({ sql: 'SELECT sum(quantity * price) AS revenue FROM Sales_2026 WHERE paid = 1' });
+    assert.equal(JSON.parse(total.text).rows[0].revenue, 237.48);
 
     const ics = join(home, "agenda.ics");
     copyFileSync(fixture("sample.ics"), ics);
     await engine.importFile({ name: "agenda", path: ics });
     const next = await /** @type {any} */ (engine.tools.get("agenda__sql")).run({ sql: "SELECT summary, dtstart FROM events WHERE dtstart >= '2026-10-13' ORDER BY dtstart" });
-    assert.deepEqual(JSON.parse(next.text).rows, [{ summary: "Journée entière", dtstart: "2026-10-15" }]);
+    assert.deepEqual(JSON.parse(next.text).rows, [{ summary: "Company day – all day", dtstart: "2026-10-15" }]);
   });
 
   it("imports feeds, skips other XML in folders and still recognises WSDL files", async () => {

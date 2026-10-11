@@ -73,12 +73,14 @@ describe("macros", () => {
 describe("plain-language summaries", () => {
   const e = (method, pathTemplate, query = {}) => ({ method, pathTemplate, query });
   it("names endpoints by verb and resource", () => {
-    assert.equal(summarizeEndpoint(e("GET", "/api/v1/crates/{crate}")), "Get one crate by crate");
+    assert.equal(summarizeEndpoint(e("GET", "/api/v1/crates/{crate}")), "Get one crate");
     assert.equal(summarizeEndpoint(e("GET", "/api/products")), "List or get products");
     assert.equal(summarizeEndpoint(e("GET", "/api/search", { q: {} })), "Search");
     assert.equal(summarizeEndpoint(e("GET", "/api/products/{product}/reviews")), "List or get reviews of a product");
     assert.equal(summarizeEndpoint(e("POST", "/api/orders")), "Create or submit order");
-    assert.equal(summarizeEndpoint(e("DELETE", "/api/orders/{order}")), "Delete a order by order");
+    assert.equal(summarizeEndpoint(e("DELETE", "/api/orders/{order}")), "Delete an order");
+    assert.equal(summarizeEndpoint(e("GET", "/api/orders/{order}/notes")), "List or get notes of an order");
+    assert.equal(summarizeEndpoint(e("PUT", "/api/users/{id}")), "Update a user by id");
   });
 });
 

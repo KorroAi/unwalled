@@ -246,20 +246,22 @@ export function summarizeEndpoint(endpoint) {
   const literals = parts.filter((p) => !/^\{.+\}$/.test(p));
   const resource = (literals.at(-1) ?? "resource").replace(/[-_]/g, " ");
   const parentItem = !isItem && parts.length >= 3 && /^\{.+\}$/.test(parts.at(-2) ?? "") ? singular(literals.at(-2) ?? "").replace(/[-_]/g, " ") : null;
-  const by = isItem ? ` by ${last.slice(1, -1)}` : "";
-  const of = parentItem ? ` of a ${parentItem}` : "";
   const noun = isItem ? singular(resource) : resource;
+  // "Get one order", not "Get one order by order"; "notes of an order", not "of a order".
+  const by = isItem && last.slice(1, -1).replace(/[-_]/g, " ") !== noun ? ` by ${last.slice(1, -1)}` : "";
+  const article = (/** @type {string} */ word) => (/^([aeio]|u(?!s|ni|ti|r))/i.test(word) ? "an" : "a");
+  const of = parentItem ? ` of ${article(parentItem)} ${parentItem}` : "";
   switch (endpoint.method) {
     case "GET":
       return isItem ? `Get one ${noun}${by}` : `${Object.keys(endpoint.query ?? {}).some((q) => /^(q|query|search|term|keyword)s?$/i.test(q)) ? "Search" : "List or get"} ${/^search(es)?$/i.test(noun) ? "" : noun}${of}`.replace(/\s+$/, "");
     case "POST":
       if (isSearchEndpoint(endpoint)) return `Search${parts.length > 1 ? ` ${singular(literals.at(-2) ?? "").replace(/[-_]/g, " ")}` : ""}`.trimEnd();
-      return isItem ? `Act on a ${noun}${by}` : `Create or submit ${singular(noun)}${of}`;
+      return isItem ? `Act on ${article(noun)} ${noun}${by}` : `Create or submit ${singular(noun)}${of}`;
     case "PUT":
     case "PATCH":
-      return `Update ${isItem ? "a " : ""}${noun}${by}${of}`;
+      return `Update ${isItem ? `${article(noun)} ` : ""}${noun}${by}${of}`;
     case "DELETE":
-      return `Delete ${isItem ? "a " : ""}${noun}${by}${of}`;
+      return `Delete ${isItem ? `${article(noun)} ` : ""}${noun}${by}${of}`;
     default:
       return `${endpoint.method} ${noun}`;
   }

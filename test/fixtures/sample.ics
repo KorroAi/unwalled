@@ -6,8 +6,8 @@ UID:1@test
 DTSTART;TZID=Europe/Paris:20261012T090000
 DTEND;TZID=Europe/Paris:20261012T100000
 SUMMARY:Project review\, Q4 roadmap
-DESCRIPTION:Ordre du jour :\n1. backtest
-LOCATION:Visio
+DESCRIPTION:Agenda:\n1. budget
+LOCATION:Video call
 ORGANIZER:mailto:me@example.com
 ATTENDEE:mailto:a@example.com
 ATTENDEE:mailto:b@example.com
@@ -16,12 +16,12 @@ END:VEVENT
 BEGIN:VEVENT
 UID:2@test
 DTSTART;VALUE=DATE:20261015
-SUMMARY:Journée entière
+SUMMARY:Company day – all day
 END:VEVENT
 BEGIN:VTODO
 UID:3@test
 DUE:20261020T170000Z
-SUMMARY:Envoyer la vidéo
+SUMMARY:Send the café menu
 STATUS:NEEDS-ACTION
 END:VTODO
 END:VCALENDAR

@@ -247,6 +247,7 @@ function report(environment, results) {
     "",
     `- ${new Set(results.map((r) => r.task)).size} questions, one run each: an indication, not a statistic. Model behaviour varies between runs; rerun to compare.`,
     ...(environment.rechecked ? [`- The answers were re-scored on ${environment.rechecked.slice(0, 10)} with corrected checks (\`--recheck\`); no run was repeated. The raw answers are in the JSON file.`] : []),
+    "- Claude Code runs with the settings of the machine it runs on (its CLAUDE.md files, answer language), so answers may come in another language than the question. Answers are scored on their values, not their wording.",
     "- Cost is what Claude Code reports for the run (`total_cost_usd`), including its own system prompt.",
     "- Live sites change; the expected answers are fetched or known independently (see `bench/agent.js`).",
     "",

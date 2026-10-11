@@ -4,12 +4,34 @@ import { loadConfig } from "./config.js";
 import { describeRecipe, Engine } from "./core.js";
 import { describeOrgPolicy } from "./safety.js";
 import { disabledTools, startServer } from "./server.js";
+import { addSource, DEMO_PORT, exampleQuestion, formatChecks, keyNeeded, plainIo, removeEverywhere, runDoctor, runSetup, startDemo, storeKey, suggestName, summarize, terminalIo, waitForCtrlC } from "./setup.js";
 import { VERSION } from "./version.js";
 
 const HELP = `unwalled ${VERSION} — open any website, app, API, file or database to AI agents, as MCP tools.
 
-Usage:
-  unwalled [serve]                              Run the MCP server on stdio (what MCP clients launch)
+Getting started:
+  unwalled setup                                Guided setup: checks this computer, adds unwalled to your AI apps
+                                                (Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, Gemini CLI, Codex)
+                                                and connects a first source. Also runs when you start unwalled in a terminal.
+      --yes                         add unwalled to every app found, without questions, and stop there
+      --remove                      remove unwalled from every app (recipes and secrets are kept)
+  unwalled add <source> [--name <name>] [--browse] [--explore <pages>] [--base-url <url>] [--merge]
+                                                Connect anything; its kind is detected:
+                                                  a website or app     https://erp.example.com   (--browse: sign in and click
+                                                                       through it in a window; --explore: follow its links)
+                                                  a file or folder     ./sales.xlsx, ./api.yaml, ./postman.json, ./capture.har
+                                                  a database           postgres://user:pass@host/db, mysql://...
+                                                  a ready-made service preset:github, preset:stripe, preset:open-meteo...
+  unwalled key <name>                           Store the API key or token a service needs (asked without echo)
+  unwalled demo [--port <port>]                 Run the demo back office (orders and customers behind a sign-in) to try it
+  unwalled doctor                               Check Node.js, the browser, the data folder, encryption and your AI apps
+  unwalled list                                 List recipes and their tools
+
+Server:
+  unwalled serve                                Run the MCP server on stdio (what MCP clients launch; the default
+                                                when unwalled is not started from a terminal)
+
+Advanced:
   unwalled discover <name> <url> [options]      Discover an API from the terminal
       --mode auto|openapi|browser   --interactive   --duration <seconds>
       --actions '<json array>'      --host <host> (repeatable)   --include <regex>   --merge
@@ -24,7 +46,6 @@ Usage:
   unwalled curl <name> <file.txt> [--merge]     Create tools from cURL commands saved in a text file
   unwalled export <name> <file.json>            Write a recipe (no secrets) to share it; import it with "import"
   unwalled policy                               Check and show the organization policy (UNWALLED_ORG_POLICY)
-  unwalled list                                 List recipes
   unwalled inspect <name>                       Show a recipe as JSON
   unwalled forget <name> [--delete-profile]
   unwalled --help | --version
@@ -61,7 +82,19 @@ const OPTIONS = /** @type {const} */ ({
   repair: { type: "boolean" },
   "base-url": { type: "string" },
   "delete-profile": { type: "boolean" },
+  yes: { type: "boolean", short: "y" },
+  remove: { type: "boolean" },
+  name: { type: "string" },
+  browse: { type: "boolean" },
+  port: { type: "string" },
 });
+
+/** Text piped into the command (a key given with "echo $TOKEN | unwalled key github"). */
+async function readStdin() {
+  let text = "";
+  for await (const chunk of process.stdin) text += chunk;
+  return text.trim();
+}
 
 /** @param {string[]} positionals @param {number} count @param {string} usage */
 function expect(positionals, count, usage) {
@@ -75,18 +108,76 @@ export async function main(argv) {
   const positionals = parsed.positionals;
   if (values.help) return void process.stdout.write(HELP);
   if (values.version) return void process.stdout.write(`${VERSION}\n`);
-  const [command = "serve", ...rest] = positionals;
+  // MCP clients start unwalled with pipes: it serves. A person typing "unwalled" in a terminal gets the guided setup.
+  const terminal = !!(process.stdin.isTTY && process.stdout.isTTY);
+  const [command = terminal ? "setup" : "serve", ...rest] = positionals;
   const config = loadConfig();
   if (command === "serve") {
     await startServer(config);
+    return;
+  }
+  if (command === "setup") {
+    if (values.remove) return removeEverywhere(terminalIo());
+    if (!terminal && !values.yes) throw new Error("unwalled setup asks questions: run it in a terminal, or add --yes to configure every AI app found without questions.");
+    await runSetup(config, { yes: values.yes, ...(values.yes && !terminal ? { io: plainIo() } : {}) });
+    return;
+  }
+  if (command === "doctor") {
+    process.stdout.write("Checking this computer…\n");
+    const checks = await runDoctor(config);
+    console.log(formatChecks(checks));
+    if (checks.some((c) => c.status === "fail")) process.exitCode = 1;
     return;
   }
 
   const engine = new Engine(config);
   const toolNames = (name) => engine.toolsOf(name).map((t) => t.name);
   const duration = values.duration ? Number(values.duration) : undefined;
+  const progress = (/** @type {string} */ message) => process.stderr.write(`… ${message}\n`);
   try {
     switch (command) {
+      case "add": {
+        expect(rest, 1, "add <source> [--name <name>] [--browse] [--explore <pages>] [--merge]");
+        const name = values.name ?? suggestName(rest[0], values.merge ? [] : engine.recipes.keys());
+        if (values.browse) process.stderr.write("A browser window opens: sign in if needed, open the pages your agent will use (a list, a record, a search), then close it.\n");
+        const recipe = await addSource(
+          engine,
+          { source: rest[0], name, interactive: values.browse, durationSeconds: duration ?? (values.browse ? 600 : undefined), explorePages: values.explore ? Number(values.explore) : 0, merge: values.merge, baseUrl: values["base-url"] },
+          progress,
+        );
+        console.log(summarize(engine, recipe));
+        console.log(`\nAsk your agent, for example:\n  "${exampleQuestion(recipe)}"`);
+        break;
+      }
+      case "key": {
+        expect(rest, 1, "key <name>");
+        const recipe = engine.recipe(rest[0]);
+        const hint = keyNeeded(engine, recipe) ?? null;
+        let token;
+        if (terminal) {
+          const io = terminalIo();
+          try {
+            token = await io.secret(`API key or token for "${recipe.name}"${hint ? ` (sent to ${hint.host} only)` : ""}, not shown: `);
+          } finally {
+            io.close();
+          }
+        } else token = await readStdin();
+        if (!token) throw new Error("No key given.");
+        const stored = storeKey(engine, recipe.name, token);
+        console.log(`✔ Key stored, encrypted, for ${stored.host}.`);
+        break;
+      }
+      case "demo": {
+        const port = values.port ? Number(values.port) : DEMO_PORT;
+        const { intranet, recipe } = await startDemo(engine, { port, onProgress: progress });
+        console.log(summarize(engine, recipe));
+        console.log(`\nThe demo back office runs at ${intranet.url} (user alice, password demo).`);
+        console.log(`Now ask your agent:\n  "${exampleQuestion(recipe)}"`);
+        console.log("\nKeep this window open while you try it. Press Ctrl+C to stop the demo.");
+        await engine.close();
+        await waitForCtrlC(() => intranet.close());
+        break;
+      }
       case "discover": {
         expect(rest, 2, "discover <name> <url> [options]");
         let actions;

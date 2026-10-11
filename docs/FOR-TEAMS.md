@@ -12,7 +12,8 @@ rules that agents cannot change, a shared catalogue of recipes, and what is logg
 
 ## Try it on the example back office
 
-`examples/intranet` is a small back office behind a login form, like many internal tools.
+`examples/intranet` is a small back office behind a login form, like many internal tools. `unwalled demo` starts it and
+discovers it for you; to see the agent do the discovery itself, start only the back office:
 
 ```bash
 node examples/intranet/server.js 8099        # sign in as alice / demo
@@ -97,6 +98,11 @@ UNWALLED_TEAM_RECIPES=/shared/unwalled-recipes           # in each person's MCP 
 See [SECURITY.md](../SECURITY.md) for the threat model and how to report a vulnerability.
 
 ## Good to know before rolling it out
+
+- Deploying to many machines: `npm install --global github:KorroAi/unwalled`, then `unwalled setup --yes` adds it to every AI app
+  found on the machine without questions (Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, Gemini CLI, Codex), and
+  `unwalled doctor` reports what is missing (exit code 1 on a blocking problem). Set `UNWALLED_ORG_POLICY` and
+  `UNWALLED_TEAM_RECIPES` in the environment the apps start from.
 
 - Captured internal APIs change when the tool is updated: `unwalled check <recipe> --repair` (or the `check_recipe` tool)
   detects broken tools and rediscovers them.
