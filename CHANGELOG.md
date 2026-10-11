@@ -26,6 +26,7 @@ First steps for people, not only for agents: from nothing to an agent answering 
 - An API address opened directly (the page is JSON, e.g. `unwalled add "https://api.open-meteo.com/v1/forecast?..."`) gave no tool: that address is now the endpoint, and its path is kept literal.
 - Tool summaries: "Get one order" instead of "Get one order by order", "notes of an order" instead of "of a order".
 - Test files and fixtures are in English; the benchmark report says why its raw answers are in French (the settings of the machine it ran on).
+- README rewritten: what it does and how it works first, then the setup, one table to connect each kind of source, and the measurements.
 
 ## 0.4.0 — 2026-10-11
 
