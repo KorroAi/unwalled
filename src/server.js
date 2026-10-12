@@ -183,14 +183,15 @@ export const MANAGEMENT_TOOLS = [
     description:
       "Local settings of a recipe. policy: readOnly (refuse writes), confirm ('none' | 'destructive' | 'writes': calls that need confirm=true), allowedHosts, rateLimit (requests/second/host), " +
       "transport ('node' default | 'auto' | 'page': opt-in, browser recipes send requests from inside a real page with 'page', or after a bot challenge with 'auto'; only for sites the user may automate). oauth: refresh settings so expired access tokens renew themselves " +
-      "({host, token_url, refresh_token, client_id?, client_secret?, scope?, encoding?: 'form'|'json'}; stored with the secrets). headers: non-secret headers added to every call. policy=null resets the policy.",
+      "({host, token_url, refresh_token, client_id?, client_secret?, scope?, encoding?: 'form'|'json'}; stored with the secrets). headers: non-secret headers added to every call. policy={reset: true} clears the policy first (null works too).",
     inputSchema: {
       type: "object",
       properties: {
         name: NAME,
         policy: {
-          type: ["object", "null"],
+          type: "object",
           properties: {
+            reset: { type: "boolean", description: "true clears the current policy before applying the other fields." },
             readOnly: { type: "boolean" },
             confirm: { type: "string", enum: ["none", "destructive", "writes"] },
             allowedHosts: { type: "array", items: { type: "string" } },
@@ -200,7 +201,7 @@ export const MANAGEMENT_TOOLS = [
           },
         },
         oauth: { type: "object", additionalProperties: { type: "string" } },
-        headers: { type: "object", additionalProperties: { type: ["string", "null"] }, description: "Non-secret headers sent with every call of the recipe (e.g. accept-language, an API version); null removes one." },
+        headers: { type: "object", additionalProperties: { type: "string" }, description: "Non-secret headers sent with every call of the recipe (e.g. accept-language, an API version); an empty string removes one." },
       },
       required: ["name"],
     },
@@ -211,10 +212,10 @@ export const MANAGEMENT_TOOLS = [
     description:
       "Give a recipe's tools meaningful names and descriptions (saved in the recipe, shared with it). After inspecting what the generated tools return, write for each tool: " +
       'name (new suffix, e.g. "search_products"), description, title, params (e.g. {"query.q": "Search text"}), defaults (arguments used when the call omits them, e.g. {"query": {"lang": "fr"}}), ' +
-      "hidden=true to hide noise. A null value removes a tool's annotations.",
+      "hidden=true to hide noise. reset=true removes a tool's annotations (a null value too).",
     inputSchema: {
       type: "object",
-      properties: { name: NAME, annotations: { type: "object", additionalProperties: { type: ["object", "null"] }, description: "Keyed by current tool name." } },
+      properties: { name: NAME, annotations: { type: "object", additionalProperties: { type: "object" }, description: "Keyed by current tool name." } },
       required: ["name", "annotations"],
     },
     annotations: { title: "Annotate tools", readOnlyHint: false, destructiveHint: false, openWorldHint: false },

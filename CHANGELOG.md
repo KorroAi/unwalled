@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Tool schemas portable to every model provider: `configure_recipe` and `annotate_recipe` no longer use type lists
+  (`["object", "null"]`), which the Gemini API rejects. `policy: {reset: true}` clears a policy, an empty header value removes a header,
+  `{reset: true}` removes a tool's annotations; `null` is still accepted. A unit test checks every management and generated tool schema.
+- README: configuration for any MCP client, and a word on models.
+
 ## 0.5.1 — 2026-10-11
 
 - Published on npm: `npx -y unwalled` (setup), `npm install --global unwalled` (command). The guided setup and the documentation use it;

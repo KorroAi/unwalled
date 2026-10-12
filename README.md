@@ -34,6 +34,16 @@ A guided setup then:
 2. adds unwalled to the AI apps it finds, asking for each one: Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, Gemini CLI, Codex;
 3. connects your first source, or a demo.
 
+**Any other MCP client** (Zed, Cline, Continue, OpenCode, your own agent...) starts it the standard way:
+
+```json
+{ "mcpServers": { "unwalled": { "command": "npx", "args": ["-y", "unwalled"] } } }
+```
+
+On Windows, some clients need `"command": "cmd"` with `"args": ["/c", "npx", "-y", "unwalled"]`. unwalled is a plain stdio MCP server:
+it works with any model your client uses (Claude, GPT, Gemini, local models), and its tool schemas avoid the JSON Schema features
+some providers reject. More clients: [installation](docs/REFERENCE.md#installation).
+
 **Try it in one minute:** choose the demo, or run `unwalled demo`. It starts a sample back office on your computer (orders and customers
 behind a sign-in) and connects it. Then ask your agent:
 

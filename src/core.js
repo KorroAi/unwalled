@@ -791,7 +791,7 @@ export class Engine {
 
   /**
    * Stores agent-written names and descriptions for a recipe's tools (shared with the recipe).
-   * @param {string} name @param {Record<string, { name?: string, description?: string, title?: string, hidden?: boolean, params?: Record<string, string>, defaults?: Record<string, any> | null } | null>} notes
+   * @param {string} name @param {Record<string, { reset?: boolean, name?: string, description?: string, title?: string, hidden?: boolean, params?: Record<string, string>, defaults?: Record<string, any> | null } | null>} notes
    */
   annotateRecipe(name, notes) {
     const recipe = this.recipe(name);
@@ -802,8 +802,9 @@ export class Engine {
       // A renamed tool can be addressed by its new name too.
       const target = original.includes(key) ? key : Object.keys(current).find((k) => current[k]?.name && `${name}__${current[k].name}` === key);
       if (!target) throw new Error(`Unknown tool "${key}" in recipe "${name}". Known: ${original.slice(0, 30).join(", ")}`);
-      if (note === null) delete current[target];
-      else {
+      // reset=true (or null, for clients that send it) removes the tool's annotations before applying the rest.
+      if (note === null || note?.reset === true) delete current[target];
+      if (note !== null && typeof note === "object") {
         const clean = {};
         if (typeof note.name === "string") {
           if (!/^[a-zA-Z][a-zA-Z0-9_-]{0,40}$/.test(note.name)) throw new Error(`Invalid tool name "${note.name}": letters, digits, _ and -`);
@@ -820,7 +821,7 @@ export class Engine {
           if (refused.length) throw new Error(`defaults cannot contain ${refused.join(", ")}: a shared recipe must not confirm calls, write or upload local files`);
           clean.defaults = note.defaults ?? undefined;
         }
-        current[target] = { ...(current[target] ?? {}), ...clean };
+        if (Object.keys(clean).length || current[target]) current[target] = { ...(current[target] ?? {}), ...clean };
       }
     }
     return this.saveRecipe({ ...recipe, annotations: current, updatedAt: new Date().toISOString() });
@@ -891,7 +892,11 @@ export class Engine {
           clean.transport = policy.transport;
         }
       }
-      const state = this.store.updateState(name, (s) => ({ ...s, policy: policy === null ? undefined : { ...(s.policy ?? {}), ...clean } }));
+      const reset = policy === null || policy.reset === true;
+      const state = this.store.updateState(name, (s) => {
+        const next = { ...(reset ? {} : (s.policy ?? {})), ...clean };
+        return { ...s, policy: Object.keys(next).length ? next : undefined };
+      });
       result.policy = state.policy ?? {};
     }
     if (oauth) {

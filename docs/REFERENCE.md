@@ -156,6 +156,11 @@ claude mcp add --scope user unwalled -- npx -y unwalled
 
 On Windows, some clients cannot start `npx` directly: use `"command": "cmd"` with `"args": ["/c", "npx", "-y", "unwalled"]`.
 
+The key differs in a few apps: VS Code's `mcp.json` uses `"servers"` instead of `"mcpServers"`; Codex CLI reads TOML
+(`[mcp_servers.unwalled]`, `command = "npx"`, `args = ["-y", "unwalled"]`). Any client that can start a stdio MCP server works the same way
+(Zed, Cline, Continue, OpenCode, an agent built on an MCP SDK), whatever model it runs: the tools are plain MCP, and their schemas avoid
+the JSON Schema features some model providers reject (`$ref`, `allOf`, type lists...).
+
 The development version (the repository's `main` branch) runs with `npx -y github:KorroAi/unwalled`.
 
 ### From source
